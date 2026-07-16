@@ -15,7 +15,11 @@
     "dev": "turbo run dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "db:generate": "pnpm --filter @flakemetry/db db:generate",
+    "db:migrate": "pnpm --filter @flakemetry/db db:migrate",
+    "db:reset": "pnpm --filter @flakemetry/db db:reset",
+    "db:seed": "pnpm --filter @flakemetry/db db:seed"
   },
   "devDependencies": {
     "eslint": "^9.17.0",
