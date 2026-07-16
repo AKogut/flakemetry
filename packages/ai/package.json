@@ -1,8 +1,10 @@
 {
   "name": "@flakemetry/ai",
   "version": "0.0.0",
-  "private": true,
   "description": "LLM provider abstraction and root-cause analysis",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
