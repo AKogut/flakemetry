@@ -21,11 +21,16 @@
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
+    "test": "vitest run",
     "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@flakemetry/eslint-config": "workspace:*",
     "@flakemetry/tsconfig": "workspace:*",
-    "@flakemetry/tsup-config": "workspace:*"
+    "@flakemetry/tsup-config": "workspace:*",
+    "vitest": "^3.2.4"
   }
 }
