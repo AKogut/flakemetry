@@ -1,0 +1,227 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TestStatus {
+  pass
+  fail
+  skip
+  flaky
+}
+
+enum RunStatus {
+  running
+  passed
+  failed
+  canceled
+}
+
+enum CiProvider {
+  github_actions
+  gitlab_ci
+  circleci
+  jenkins
+  local
+  other
+}
+
+enum RunTrigger {
+  push
+  pull_request
+  schedule
+  manual
+  other
+}
+
+model Org {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String    @unique
+  createdAt DateTime  @default(now()) @map("created_at")
+  projects  Project[]
+
+  @@map("org")
+}
+
+model Project {
+  id            String   @id @default(uuid()) @db.Uuid
+  orgId         String   @map("org_id") @db.Uuid
+  name          String
+  slug          String
+  defaultBranch String   @default("main") @map("default_branch")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  org             Org              @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  testIdentities  TestIdentity[]
+  runs            Run[]
+  executions      TestExecution[]
+  flakyScores     FlakyScore[]
+  errorSignatures ErrorSignature[]
+  rcaReports      RcaReport[]
+
+  @@unique([orgId, slug])
+  @@index([orgId])
+  @@map("project")
+}
+
+model TestIdentity {
+  id               String    @id @default(uuid()) @db.Uuid
+  orgId            String    @map("org_id") @db.Uuid
+  projectId        String    @map("project_id") @db.Uuid
+  fingerprint      String
+  filePath         String    @map("file_path")
+  suite            String
+  title            String
+  paramsHash       String?   @map("params_hash")
+  aliases          String[]
+  quarantined      Boolean   @default(false)
+  quarantineReason String?   @map("quarantine_reason")
+  firstSeenAt      DateTime  @default(now()) @map("first_seen_at")
+  lastSeenAt       DateTime  @default(now()) @map("last_seen_at")
+
+  project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  executions TestExecution[]
+  flakyScore FlakyScore?
+
+  @@unique([projectId, fingerprint])
+  @@index([orgId])
+  @@index([projectId, lastSeenAt(sort: Desc)])
+  @@map("test_identity")
+}
+
+model Run {
+  id             String     @id @default(uuid()) @db.Uuid
+  orgId          String     @map("org_id") @db.Uuid
+  projectId      String     @map("project_id") @db.Uuid
+  idempotencyKey String     @map("idempotency_key")
+  commitSha      String     @map("commit_sha")
+  branch         String
+  prNumber       Int?       @map("pr_number")
+  ciProvider     CiProvider @map("ci_provider")
+  ciRunId        String?    @map("ci_run_id")
+  trigger        RunTrigger
+  status         RunStatus
+  startedAt      DateTime   @map("started_at")
+  finishedAt     DateTime?  @map("finished_at")
+  durationMs     Int?       @map("duration_ms")
+  gitDiffStat    Json?      @map("git_diff_stat")
+  otelTraceId    String?    @map("otel_trace_id")
+
+  project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  executions TestExecution[]
+
+  @@unique([projectId, idempotencyKey])
+  @@index([orgId])
+  @@index([projectId, startedAt(sort: Desc)])
+  @@index([projectId, branch, startedAt(sort: Desc)])
+  @@index([projectId, commitSha])
+  @@map("run")
+}
+
+model TestExecution {
+  id               String     @id @default(uuid()) @db.Uuid
+  orgId            String     @map("org_id") @db.Uuid
+  projectId        String     @map("project_id") @db.Uuid
+  runId            String     @map("run_id") @db.Uuid
+  testIdentityId   String     @map("test_identity_id") @db.Uuid
+  attempt          Int        @default(1)
+  retryOf          String?    @map("retry_of") @db.Uuid
+  status           TestStatus
+  durationMs       Int        @map("duration_ms")
+  errorMessage     String?    @map("error_message")
+  errorSignatureId String?    @map("error_signature_id") @db.Uuid
+  otelTraceId      String?    @map("otel_trace_id")
+  otelSpanId       String?    @map("otel_span_id")
+  artifactsRef     Json?      @map("artifacts_ref")
+  attributes       Json?
+  startedAt        DateTime   @map("started_at")
+
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  run            Run             @relation(fields: [runId], references: [id], onDelete: Cascade)
+  identity       TestIdentity    @relation(fields: [testIdentityId], references: [id], onDelete: Cascade)
+  errorSignature ErrorSignature? @relation(fields: [errorSignatureId], references: [id], onDelete: SetNull)
+  rcaReport      RcaReport?
+
+  @@index([orgId])
+  @@index([runId])
+  @@index([testIdentityId, startedAt(sort: Desc)])
+  @@index([projectId, startedAt(sort: Desc)])
+  @@index([errorSignatureId])
+  @@map("test_execution")
+}
+
+model FlakyScore {
+  testIdentityId      String    @id @map("test_identity_id") @db.Uuid
+  orgId               String    @map("org_id") @db.Uuid
+  projectId           String    @map("project_id") @db.Uuid
+  score               Float
+  flipRate            Float     @map("flip_rate")
+  passOnRerunRate     Float     @map("pass_on_rerun_rate")
+  sameShaVariance     Float     @map("same_sha_variance")
+  entropy             Float
+  failIsolation       Float     @map("fail_isolation")
+  reasonCodes         Json      @map("reason_codes")
+  quarantineCandidate Boolean   @default(false) @map("quarantine_candidate")
+  lastFlakedAt        DateTime? @map("last_flaked_at")
+  modelVersion        String    @map("model_version")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  identity TestIdentity @relation(fields: [testIdentityId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([projectId, score(sort: Desc)])
+  @@map("flaky_score")
+}
+
+model ErrorSignature {
+  id              String   @id @default(uuid()) @db.Uuid
+  orgId           String   @map("org_id") @db.Uuid
+  projectId       String   @map("project_id") @db.Uuid
+  normalizedHash  String   @map("normalized_hash")
+  sampleMessage   String   @map("sample_message")
+  stackTemplate   String   @map("stack_template")
+  clusterId       String?  @map("cluster_id") @db.Uuid
+  occurrenceCount Int      @default(1) @map("occurrence_count")
+  knownIssueRef   String?  @map("known_issue_ref")
+  firstSeenAt     DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt      DateTime @default(now()) @map("last_seen_at")
+
+  project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  executions TestExecution[]
+  rcaReports RcaReport[]
+
+  @@unique([projectId, normalizedHash])
+  @@index([orgId])
+  @@map("error_signature")
+}
+
+model RcaReport {
+  id              String   @id @default(uuid()) @db.Uuid
+  orgId           String   @map("org_id") @db.Uuid
+  projectId       String   @map("project_id") @db.Uuid
+  executionId     String   @unique @map("execution_id") @db.Uuid
+  signatureId     String   @map("signature_id") @db.Uuid
+  summary         String
+  likelyCause     String   @map("likely_cause")
+  suggestedAction String   @map("suggested_action")
+  confidence      Float
+  similarPast     Json     @map("similar_past")
+  llmModel        String   @map("llm_model")
+  tokenCost       Int      @map("token_cost")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  execution TestExecution  @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  signature ErrorSignature @relation(fields: [signatureId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([signatureId])
+  @@map("rca_report")
+}

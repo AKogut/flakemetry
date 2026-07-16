@@ -1,6 +1,10 @@
-export const PACKAGE = '@flakemetry/db' as const
+import { PrismaClient } from '@prisma/client'
 
-export const db = {
-  name: PACKAGE,
-  version: '0.0.0',
-} as const
+export * from '@prisma/client'
+
+let client: PrismaClient | undefined
+
+export const getPrismaClient = (): PrismaClient => {
+  client ??= new PrismaClient()
+  return client
+}

@@ -15,17 +15,32 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "prisma"
   ],
   "scripts": {
-    "build": "tsup",
-    "typecheck": "tsc -p tsconfig.json",
+    "build": "prisma generate && tsup",
+    "typecheck": "prisma generate && tsc -p tsconfig.json",
     "lint": "eslint .",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:reset": "prisma migrate reset --force",
+    "db:seed": "tsx prisma/seed.ts",
     "clean": "rm -rf dist .turbo"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.2.1"
   },
   "devDependencies": {
     "@flakemetry/eslint-config": "workspace:*",
     "@flakemetry/tsconfig": "workspace:*",
-    "@flakemetry/tsup-config": "workspace:*"
+    "@flakemetry/tsup-config": "workspace:*",
+    "@types/node": "^22.10.5",
+    "prisma": "^6.2.1",
+    "tsx": "^4.19.2"
   }
 }
