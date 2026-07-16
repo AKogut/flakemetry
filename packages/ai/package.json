@@ -2,6 +2,15 @@
   "name": "@flakemetry/ai",
   "version": "0.0.0",
   "description": "LLM provider abstraction and root-cause analysis",
+  "license": "MIT",
+  "author": "Andrii Kohut",
+  "homepage": "https://github.com/AKogut/flakemetry#readme",
+  "bugs": "https://github.com/AKogut/flakemetry/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AKogut/flakemetry.git",
+    "directory": "packages/ai"
+  },
   "publishConfig": {
     "access": "public"
   },

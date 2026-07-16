@@ -2,6 +2,15 @@
   "name": "@flakemetry/sdk",
   "version": "0.0.0",
   "description": "OpenTelemetry test instrumentation and ingest client",
+  "license": "MIT",
+  "author": "Andrii Kohut",
+  "homepage": "https://github.com/AKogut/flakemetry#readme",
+  "bugs": "https://github.com/AKogut/flakemetry/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AKogut/flakemetry.git",
+    "directory": "packages/sdk"
+  },
   "publishConfig": {
     "access": "public"
   },

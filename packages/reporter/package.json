@@ -2,6 +2,15 @@
   "name": "@flakemetry/playwright-reporter",
   "version": "0.0.0",
   "description": "Playwright reporter emitting OpenTelemetry test spans",
+  "license": "MIT",
+  "author": "Andrii Kohut",
+  "homepage": "https://github.com/AKogut/flakemetry#readme",
+  "bugs": "https://github.com/AKogut/flakemetry/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AKogut/flakemetry.git",
+    "directory": "packages/reporter"
+  },
   "publishConfig": {
     "access": "public"
   },
