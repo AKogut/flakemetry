@@ -1,8 +1,10 @@
 {
   "name": "@flakemetry/contracts",
   "version": "0.0.0",
-  "private": true,
   "description": "Shared zod schemas and inferred types across ingestion, api, worker and web",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
