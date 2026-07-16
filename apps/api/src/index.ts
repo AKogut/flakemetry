@@ -1,6 +1,17 @@
-export const PACKAGE = '@flakemetry/api' as const
+import { createServer } from 'node:http'
 
-export const api = {
-  name: PACKAGE,
-  version: '0.0.0',
-} as const
+const port = Number(process.env.PORT ?? 4000)
+
+const server = createServer((req, res) => {
+  if (req.url === '/health') {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ status: 'ok', service: 'api' }))
+    return
+  }
+  res.writeHead(404, { 'content-type': 'application/json' })
+  res.end(JSON.stringify({ error: 'not_found' }))
+})
+
+server.listen(port, () => {
+  process.stdout.write(`api listening on :${port}\n`)
+})

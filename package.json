@@ -19,7 +19,11 @@
     "db:generate": "pnpm --filter @flakemetry/db db:generate",
     "db:migrate": "pnpm --filter @flakemetry/db db:migrate",
     "db:reset": "pnpm --filter @flakemetry/db db:reset",
-    "db:seed": "pnpm --filter @flakemetry/db db:seed"
+    "db:seed": "pnpm --filter @flakemetry/db db:seed",
+    "stack:up": "docker compose up -d --build",
+    "stack:down": "docker compose down",
+    "stack:logs": "docker compose logs -f",
+    "stack:reset": "docker compose down -v && docker compose up -d --build"
   },
   "devDependencies": {
     "eslint": "^9.17.0",
