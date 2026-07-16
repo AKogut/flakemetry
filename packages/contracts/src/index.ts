@@ -1,4 +1,5 @@
 export * from './common'
+export * from './config'
 export * from './entities/error-signature'
 export * from './entities/flaky-score'
 export * from './entities/org'

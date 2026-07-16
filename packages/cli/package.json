@@ -9,6 +9,9 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "flakemetry": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -23,11 +26,19 @@
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@flakemetry/eslint-config": "workspace:*",
     "@flakemetry/tsconfig": "workspace:*",
-    "@flakemetry/tsup-config": "workspace:*"
+    "@flakemetry/tsup-config": "workspace:*",
+    "@types/node": "^22.10.5",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@flakemetry/contracts": "workspace:*",
+    "commander": "^13.0.0",
+    "yaml": "^2.7.0"
   }
 }
