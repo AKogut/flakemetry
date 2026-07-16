@@ -4,18 +4,14 @@
   "private": true,
   "description": "Next.js dashboard",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "files": ["dist"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
     "clean": "rm -rf dist .turbo"
+  },
+  "devDependencies": {
+    "@flakemetry/eslint-config": "workspace:*",
+    "@flakemetry/tsconfig": "workspace:*"
   }
 }

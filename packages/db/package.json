@@ -4,18 +4,28 @@
   "private": true,
   "description": "Prisma schema, migrations and generated client",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
     "clean": "rm -rf dist .turbo"
+  },
+  "devDependencies": {
+    "@flakemetry/eslint-config": "workspace:*",
+    "@flakemetry/tsconfig": "workspace:*",
+    "@flakemetry/tsup-config": "workspace:*"
   }
 }
