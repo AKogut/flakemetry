@@ -32,8 +32,15 @@ importers:
       '@flakemetry/tsconfig':
         specifier: workspace:*
         version: link:../../packages/tsconfig
+      '@types/node':
+        specifier: ^22.10.5
+        version: 22.20.1
 
   apps/web:
+    dependencies:
+      '@flakemetry/db':
+        specifier: workspace:*
+        version: link:../../packages/db
     devDependencies:
       '@flakemetry/eslint-config':
         specifier: workspace:*
@@ -41,8 +48,15 @@ importers:
       '@flakemetry/tsconfig':
         specifier: workspace:*
         version: link:../../packages/tsconfig
+      '@types/node':
+        specifier: ^22.10.5
+        version: 22.20.1
 
   apps/worker:
+    dependencies:
+      '@flakemetry/db':
+        specifier: workspace:*
+        version: link:../../packages/db
     devDependencies:
       '@flakemetry/eslint-config':
         specifier: workspace:*
@@ -50,6 +64,9 @@ importers:
       '@flakemetry/tsconfig':
         specifier: workspace:*
         version: link:../../packages/tsconfig
+      '@types/node':
+        specifier: ^22.10.5
+        version: 22.20.1
 
   packages/ai:
     devDependencies:
