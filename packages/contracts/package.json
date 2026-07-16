@@ -2,6 +2,15 @@
   "name": "@flakemetry/contracts",
   "version": "0.0.0",
   "description": "Shared zod schemas and inferred types across ingestion, api, worker and web",
+  "license": "MIT",
+  "author": "Andrii Kohut",
+  "homepage": "https://github.com/AKogut/flakemetry#readme",
+  "bugs": "https://github.com/AKogut/flakemetry/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AKogut/flakemetry.git",
+    "directory": "packages/contracts"
+  },
   "publishConfig": {
     "access": "public"
   },
