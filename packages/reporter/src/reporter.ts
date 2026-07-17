@@ -148,7 +148,11 @@ export default class FlakemetryReporter implements Reporter {
       this.options.transport ?? (this.env.FLAKEMETRY_TRANSPORT === 'json' ? 'json' : 'otlp')
     if (transport === 'otlp') {
       try {
-        await exportRunOverOtlp(recorder, idempotencyKey, { endpoint, token })
+        await exportRunOverOtlp(recorder, idempotencyKey, {
+          endpoint,
+          token,
+          compression: this.env.FLAKEMETRY_COMPRESSION === 'gzip',
+        })
         return
       } catch (error) {
         process.stderr.write(

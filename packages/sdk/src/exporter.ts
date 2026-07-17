@@ -1,4 +1,5 @@
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
+import { CompressionAlgorithm } from '@opentelemetry/otlp-exporter-base'
 import { resourceFromAttributes } from '@opentelemetry/resources'
 import {
   BasicTracerProvider,
@@ -14,6 +15,7 @@ export interface OtlpExporterOptions {
   endpoint: string
   token: string
   timeoutMillis?: number
+  compression?: boolean
 }
 
 export const OTLP_TRACES_PATH = '/v1/traces'
@@ -49,6 +51,7 @@ export const exportRunOverOtlp = async (
     url: `${endpoint}${OTLP_TRACES_PATH}`,
     headers: { authorization: `Bearer ${options.token}` },
     timeoutMillis: options.timeoutMillis ?? 10_000,
+    compression: options.compression ? CompressionAlgorithm.GZIP : CompressionAlgorithm.NONE,
   })
 
   try {

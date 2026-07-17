@@ -73,6 +73,17 @@ Unknown keys are rejected with an error naming the offending path — typos fail
 | `FLAKEMETRY_TRANSPORT` | `otlp` (default) or `json` |
 | `FLAKEMETRY_BUFFER_DIR` | Directory to buffer runs to when delivery fails; replayed on the next run |
 | `FLAKEMETRY_SAMPLE_RATE` | Fraction (0–1) of **passing** runs to deliver; runs containing a failure or flake are always delivered |
+| `FLAKEMETRY_COMPRESSION` | `gzip` to compress OTLP export (the ingestion API decompresses gzip request bodies) |
+
+### Ingestion API service
+
+| Variable | Effect |
+|---|---|
+| `LOG_LEVEL` | Structured (pino) log level; `authorization` header is redacted |
+| `FLAKEMETRY_MAX_QUEUE_DEPTH` | Backpressure threshold — return `503` once pending jobs reach it |
+| `FLAKEMETRY_SELF_OTEL_ENDPOINT` | OTLP endpoint to export the API's own metrics to (dogfooding); metrics are no-ops when unset |
+
+The API also rate-limits per project token (fixed window) and returns `429` with `Retry-After` when exceeded.
 
 ## Inspecting the resolved configuration
 
