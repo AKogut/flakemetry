@@ -1,6 +1,6 @@
 import { context, SpanStatusCode, trace, type Tracer } from '@opentelemetry/api'
 
-import { RESOURCE_ATTR, SPAN_ATTR, SPAN_NAMES } from './conventions'
+import { CONVENTIONS_VERSION, RESOURCE_ATTR, SPAN_ATTR, SPAN_NAMES } from './conventions'
 import type { TestRunRecorder } from './recorder'
 
 const spanStatusFor = (status: string): SpanStatusCode => {
@@ -9,7 +9,15 @@ const spanStatusFor = (status: string): SpanStatusCode => {
   return SpanStatusCode.OK
 }
 
-export const emitRunSpans = (tracer: Tracer, recorder: TestRunRecorder): void => {
+export interface EmitRunSpansOptions {
+  idempotencyKey?: string
+}
+
+export const emitRunSpans = (
+  tracer: Tracer,
+  recorder: TestRunRecorder,
+  options: EmitRunSpansOptions = {},
+): void => {
   const { context: runContext, recorded } = recorder
   const runStart = recorded[0]?.startedAt ?? new Date()
 
@@ -20,6 +28,9 @@ export const emitRunSpans = (tracer: Tracer, recorder: TestRunRecorder): void =>
       [RESOURCE_ATTR.commitSha]: runContext.commitSha,
       [RESOURCE_ATTR.branch]: runContext.branch,
       [RESOURCE_ATTR.ciProvider]: runContext.ciProvider,
+      [RESOURCE_ATTR.trigger]: runContext.trigger,
+      [RESOURCE_ATTR.contractVersion]: CONVENTIONS_VERSION,
+      ...(options.idempotencyKey ? { [RESOURCE_ATTR.idempotencyKey]: options.idempotencyKey } : {}),
       ...(runContext.ciRunId ? { [RESOURCE_ATTR.ciRunId]: runContext.ciRunId } : {}),
       ...(runContext.prNumber ? { [RESOURCE_ATTR.prNumber]: runContext.prNumber } : {}),
     },

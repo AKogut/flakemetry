@@ -22,5 +22,11 @@ Test executions are modelled as OpenTelemetry spans from day one. Reporters emit
 
 - Reporters reuse mature OTel SDKs instead of a bespoke client; batching, retry and export semantics come for free.
 - Test telemetry can join application traces — a failing E2E test links to the backend spans it triggered.
-- OTLP is more complex than a flat JSON POST; the ingestion api must handle protobuf and span-tree normalization, paid once in the worker.
+- OTLP is more complex than a flat JSON POST; the ingestion api must handle span-tree normalization, paid once at the edge.
 - Flakemetry becomes a citizen of the observability ecosystem rather than a silo.
+
+## Implementation status
+
+- **Live**: `POST /v1/traces` accepts OTLP/HTTP **JSON** (`ExportTraceServiceRequest`). The SDK exports real spans through `@opentelemetry/exporter-trace-otlp-http`; the reporter uses OTLP by default with a JSON fallback that buffers to disk.
+- The receiver normalizes OTLP spans (`test.run` + `test.case`) into the internal `ingestRunBatch` at the API edge (`otlpToIngestBatch`), then enqueues that normalized form. Keeping a single normalized queue payload means the worker, identity engine and scoring stay transport-agnostic. `POST /v1/ingest` remains as the direct normalized-JSON entry point (used internally and in tests).
+- **Deferred**: OTLP **protobuf** encoding (`application/x-protobuf`) and gRPC. The span/resource semantic model is identical across encodings, so this is an exporter/parser addition, not a model change.

@@ -1,5 +1,6 @@
 export * from './client'
 export * from './conventions'
+export * from './exporter'
 export * from './fingerprint'
 export * from './recorder'
 export * from './spans'

@@ -51,7 +51,7 @@ If every test execution is modelled as an **OpenTelemetry span**, then historica
 
 ```
  reporter / OTLP / GitHub Action
-              │  OTLP-HTTP, zstd, idempotency-key
+              │  OTLP-HTTP (JSON), idempotency-key
               ▼
    Ingestion API (Fastify) ── validate + enqueue ─▶ 202 (never blocks CI)
               │

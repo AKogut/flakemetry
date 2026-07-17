@@ -9,7 +9,7 @@ Flakemetry is a layered, event-driven platform with one governing constraint: **
 │  INGESTION EDGE                                                        │
 │  @flakemetry/playwright-reporter · OTLP endpoint · GitHub Action       │
 └────────────┬───────────────────────────────────────────────────────────┘
-             │  OTLP/HTTP (ADR-0002), zstd, idempotency key per run
+             │  OTLP/HTTP JSON (ADR-0002), idempotency key per run
              ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │  INGESTION API  (apps/api)                                             │
