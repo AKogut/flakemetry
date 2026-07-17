@@ -66,6 +66,14 @@ Unknown keys are rejected with an error naming the offending path — typos fail
 | `FLAKEMETRY_AI_RCA` | `ai.rca` |
 | `FLAKEMETRY_AI_DAILY_TOKEN_BUDGET` | `ai.dailyTokenBudget` |
 
+### Reporter transport (Playwright)
+
+| Variable | Effect |
+|---|---|
+| `FLAKEMETRY_TRANSPORT` | `otlp` (default) or `json` |
+| `FLAKEMETRY_BUFFER_DIR` | Directory to buffer runs to when delivery fails; replayed on the next run |
+| `FLAKEMETRY_SAMPLE_RATE` | Fraction (0–1) of **passing** runs to deliver; runs containing a failure or flake are always delivered |
+
 ## Inspecting the resolved configuration
 
 ```bash

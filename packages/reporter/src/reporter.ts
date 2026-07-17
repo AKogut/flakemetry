@@ -2,7 +2,13 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, relative } from 'node:path'
 
 import type { ArtifactRef, IngestRunBatch } from '@flakemetry/contracts'
-import { exportRunOverOtlp, IngestClient, type RunContext, TestRunRecorder } from '@flakemetry/sdk'
+import {
+  exportRunOverOtlp,
+  IngestClient,
+  type RunContext,
+  shouldDeliverRun,
+  TestRunRecorder,
+} from '@flakemetry/sdk'
 import type {
   FullConfig,
   FullResult,
@@ -27,6 +33,8 @@ export interface FlakemetryReporterOptions {
   outputFile?: string
   transport?: 'otlp' | 'json'
   bufferDir?: string | null
+  sampleRate?: number
+  rng?: () => number
 }
 
 const collectAncestors = (test: TestCase): SuiteNode[] => {
@@ -126,6 +134,16 @@ export default class FlakemetryReporter implements Reporter {
     const token = this.options.token ?? this.env.FLAKEMETRY_TOKEN
     if (!endpoint || !token) return
 
+    const bufferDir = this.bufferDir()
+    const client = new IngestClient({ endpoint, token, bufferDir })
+
+    if (bufferDir) {
+      const { flushed } = await client.flushBuffered()
+      if (flushed > 0) process.stderr.write(`flakemetry: flushed ${flushed} buffered run(s)\n`)
+    }
+
+    if (!shouldDeliverRun(batch, { sampleRate: this.sampleRate(), rng: this.options.rng })) return
+
     const transport =
       this.options.transport ?? (this.env.FLAKEMETRY_TRANSPORT === 'json' ? 'json' : 'otlp')
     if (transport === 'otlp') {
@@ -139,7 +157,6 @@ export default class FlakemetryReporter implements Reporter {
       }
     }
 
-    const client = new IngestClient({ endpoint, token, bufferDir: this.bufferDir() })
     const outcome = await client.send(batch)
     if (!outcome.ok) {
       process.stderr.write(
@@ -150,5 +167,12 @@ export default class FlakemetryReporter implements Reporter {
 
   private bufferDir(): string | null {
     return this.options.bufferDir ?? this.env.FLAKEMETRY_BUFFER_DIR ?? null
+  }
+
+  private sampleRate(): number {
+    if (this.options.sampleRate != null) return this.options.sampleRate
+    const raw = this.env.FLAKEMETRY_SAMPLE_RATE
+    const parsed = raw ? Number(raw) : NaN
+    return Number.isFinite(parsed) ? parsed : 1
   }
 }

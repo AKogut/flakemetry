@@ -1,5 +1,8 @@
+import { existsSync, mkdtempSync, readdirSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import { type AddressInfo } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import {
   ingestRunBatchSchema,
@@ -18,6 +21,7 @@ import { RESOURCE_ATTR, SPAN_ATTR, SPAN_NAMES } from '../conventions'
 import { exportRunOverOtlp } from '../exporter'
 import { computeFingerprint, hashParams, normalizeFilePath } from '../fingerprint'
 import { type RunContext, TestRunRecorder } from '../recorder'
+import { shouldDeliverRun } from '../sampling'
 import { emitRunSpans } from '../spans'
 
 const context: RunContext = {
@@ -203,5 +207,102 @@ describe('otlp exporter round-trip', () => {
     expect(batch.executions).toHaveLength(2)
     expect(batch.executions[1]?.retryOfIndex).toBe(0)
     expect(batch.executions[0]?.error?.message).toBe('Timeout 30000ms exceeded')
+  })
+})
+
+describe('run sampling', () => {
+  const passing = () => {
+    const recorder = new TestRunRecorder(context)
+    recorder.startRun(new Date('2026-07-16T10:00:00Z'))
+    recorder.record({
+      filePath: 'e2e/home.spec.ts',
+      suite: 'home',
+      title: 'renders',
+      status: 'pass',
+      attempt: 1,
+      startedAt: new Date('2026-07-16T10:00:01Z'),
+      durationMs: 800,
+    })
+    recorder.finishRun('passed', new Date('2026-07-16T10:00:02Z'))
+    return recorder.toIngestBatch('pass-000001')
+  }
+
+  it('always delivers at full sample rate', () => {
+    expect(shouldDeliverRun(passing(), { sampleRate: 1 })).toBe(true)
+  })
+
+  it('always delivers runs that contain a failure regardless of rate', () => {
+    const failing = makeRecorder().toIngestBatch('fail-000001')
+    expect(shouldDeliverRun(failing, { sampleRate: 0, rng: () => 0.99 })).toBe(true)
+  })
+
+  it('samples passing runs by the configured rate', () => {
+    expect(shouldDeliverRun(passing(), { sampleRate: 0.5, rng: () => 0.4 })).toBe(true)
+    expect(shouldDeliverRun(passing(), { sampleRate: 0.5, rng: () => 0.6 })).toBe(false)
+  })
+})
+
+describe('buffer flush-later', () => {
+  let server: Server
+  let mode: 'ok' | 'fail'
+
+  beforeEach(async () => {
+    mode = 'ok'
+    server = createServer((req, res) => {
+      req.on('data', () => undefined)
+      req.on('end', () => {
+        if (mode === 'fail') {
+          res.writeHead(500)
+          res.end('nope')
+          return
+        }
+        res.writeHead(202, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ receiptId: 'r1', acceptedExecutions: 2 }))
+      })
+    })
+    await new Promise<void>((resolve) => server.listen(0, resolve))
+  })
+
+  afterEach(async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  })
+
+  it('buffers a failed send and replays it on the next flush', async () => {
+    const port = (server.address() as AddressInfo).port
+    const bufferDir = mkdtempSync(join(tmpdir(), 'flakemetry-buffer-'))
+    const client = new IngestClient({
+      endpoint: `http://127.0.0.1:${port}`,
+      token: 't',
+      bufferDir,
+    })
+
+    mode = 'fail'
+    const result = await client.send(makeRecorder().toIngestBatch('run-000001'))
+    expect(result.ok).toBe(false)
+    expect(result.buffered).toBe(true)
+    expect(readdirSync(bufferDir)).toHaveLength(1)
+
+    mode = 'ok'
+    const flush = await client.flushBuffered()
+    expect(flush.flushed).toBe(1)
+    expect(flush.remaining).toBe(0)
+    expect(existsSync(bufferDir) ? readdirSync(bufferDir) : []).toHaveLength(0)
+  })
+
+  it('keeps buffered runs when the flush still fails', async () => {
+    const port = (server.address() as AddressInfo).port
+    const bufferDir = mkdtempSync(join(tmpdir(), 'flakemetry-buffer-'))
+    const client = new IngestClient({
+      endpoint: `http://127.0.0.1:${port}`,
+      token: 't',
+      bufferDir,
+    })
+
+    mode = 'fail'
+    await client.send(makeRecorder().toIngestBatch('run-000001'))
+    const flush = await client.flushBuffered()
+    expect(flush.flushed).toBe(0)
+    expect(flush.remaining).toBe(1)
+    expect(readdirSync(bufferDir)).toHaveLength(1)
   })
 })

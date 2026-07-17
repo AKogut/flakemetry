@@ -1,7 +1,19 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 
-import { type IngestAck, ingestAckSchema, type IngestRunBatch } from '@flakemetry/contracts'
+import {
+  type IngestAck,
+  ingestAckSchema,
+  type IngestRunBatch,
+  ingestRunBatchSchema,
+} from '@flakemetry/contracts'
 
 export interface IngestClientOptions {
   endpoint: string
@@ -17,6 +29,11 @@ export interface IngestResult {
   ack?: IngestAck
   buffered?: boolean
   error?: string
+}
+
+export interface FlushResult {
+  flushed: number
+  remaining: number
 }
 
 export const INGEST_PATH = '/v1/ingest'
@@ -48,7 +65,7 @@ export class IngestClient {
     }
   }
 
-  async send(batch: IngestRunBatch): Promise<IngestResult> {
+  private async post(batch: IngestRunBatch): Promise<IngestResult> {
     try {
       const response = await this.fetchImpl(`${this.endpoint}${INGEST_PATH}`, {
         method: 'POST',
@@ -60,16 +77,51 @@ export class IngestClient {
         body: JSON.stringify(batch),
       })
 
-      if (!response.ok) {
-        const buffered = this.buffer(batch)
-        return { ok: false, status: response.status, buffered }
-      }
+      if (!response.ok) return { ok: false, status: response.status }
 
       const ack = ingestAckSchema.parse(await response.json())
       return { ok: true, status: response.status, ack }
     } catch (error) {
-      const buffered = this.buffer(batch)
-      return { ok: false, buffered, error: error instanceof Error ? error.message : String(error) }
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
+  }
+
+  async send(batch: IngestRunBatch): Promise<IngestResult> {
+    const result = await this.post(batch)
+    if (result.ok) return result
+    return { ...result, buffered: this.buffer(batch) }
+  }
+
+  async flushBuffered(): Promise<FlushResult> {
+    if (!this.bufferDir || !existsSync(this.bufferDir)) return { flushed: 0, remaining: 0 }
+
+    const files = readdirSync(this.bufferDir).filter((name) => name.endsWith('.json'))
+    let flushed = 0
+    let remaining = 0
+
+    for (const name of files) {
+      const path = join(this.bufferDir, name)
+      let batch: IngestRunBatch
+      try {
+        const parsed = ingestRunBatchSchema.safeParse(JSON.parse(readFileSync(path, 'utf8')))
+        if (!parsed.success) {
+          unlinkSync(path)
+          continue
+        }
+        batch = parsed.data
+      } catch {
+        unlinkSync(path)
+        continue
+      }
+      const result = await this.post(batch)
+      if (result.ok) {
+        unlinkSync(path)
+        flushed += 1
+      } else {
+        remaining += 1
+      }
+    }
+
+    return { flushed, remaining }
   }
 }
