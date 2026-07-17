@@ -81,7 +81,9 @@ describe.skipIf(!hasDb)('processJob', () => {
 
     const score = await prisma.flakyScore.findFirstOrThrow()
     expect(score.passOnRerunRate).toBeGreaterThan(0)
+    expect(score.failIsolation).toBe(1)
     expect(Array.isArray(score.reasonCodes)).toBe(true)
+    expect((score.reasonCodes as { code: string }[]).length).toBeGreaterThan(0)
   })
 
   it('is idempotent: re-processing the same batch does not duplicate executions', async () => {

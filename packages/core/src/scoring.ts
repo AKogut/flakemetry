@@ -1,12 +1,13 @@
 import type { ReasonCode, TestStatus } from '@flakemetry/contracts'
 
-export const SCORING_MODEL_VERSION = '0.1.0'
+export const SCORING_MODEL_VERSION = '0.2.0'
 
 export interface ExecutionPoint {
   status: TestStatus
   commitSha: string
   attempt: number
   startedAt: Date
+  runFailureCount?: number
 }
 
 export interface ScoringConfig {
@@ -16,6 +17,7 @@ export interface ScoringConfig {
   halfLifeDays?: number
   priorAlpha?: number
   priorBeta?: number
+  windowSize?: number
 }
 
 export interface FlakyScoreResult {
@@ -37,6 +39,16 @@ const DEFAULTS = {
   halfLifeDays: 14,
   priorAlpha: 1,
   priorBeta: 1,
+  windowSize: 500,
+}
+
+const WEIGHTS = {
+  sameShaVariance: 0.4,
+  instability: 0.2,
+  flipRate: 0.15,
+  passOnRerunRate: 0.1,
+  entropy: 0.1,
+  failIsolation: 0.05,
 }
 
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value))
@@ -87,6 +99,16 @@ const computePassOnRerun = (byCommit: Map<string, ExecutionPoint[]>): number => 
   return retriedAfterFail === 0 ? 0 : recovered / retriedAfterFail
 }
 
+const computeFailIsolation = (
+  points: readonly ExecutionPoint[],
+): { ratio: number; failures: number } => {
+  const failures = points.filter((point) => isRed(point.status))
+  const withContext = failures.filter((point) => point.runFailureCount != null)
+  if (withContext.length === 0) return { ratio: 0, failures: failures.length }
+  const isolated = withContext.filter((point) => (point.runFailureCount ?? 0) <= 1).length
+  return { ratio: isolated / withContext.length, failures: failures.length }
+}
+
 const computeEntropy = (green: number, red: number): number => {
   const total = green + red
   if (total === 0) return 0
@@ -101,6 +123,9 @@ const buildReasonCodes = (signals: {
   sameShaVariance: number
   flipRate: number
   sameShaMixedCommits: number
+  failIsolation: number
+  failures: number
+  sampleSize: number
 }): ReasonCode[] => {
   const codes: ReasonCode[] = []
   if (signals.sameShaVariance > 0) {
@@ -121,6 +146,18 @@ const buildReasonCodes = (signals: {
       message: `flipped pass/fail at ${percent(signals.flipRate)}% of run transitions`,
     })
   }
+  if (signals.failIsolation > 0.5 && signals.failures >= 2) {
+    codes.push({
+      code: 'FAIL_ISOLATION',
+      message: `failed alone in ${percent(signals.failIsolation)}% of failing runs, pointing at the test not the environment`,
+    })
+  }
+  if (codes.length === 0) {
+    codes.push({
+      code: 'STABLE',
+      message: `no flakiness signals across ${signals.sampleSize} sample(s)`,
+    })
+  }
   return codes
 }
 
@@ -130,7 +167,9 @@ export const computeFlakyScore = (
 ): FlakyScoreResult => {
   const settings = { ...DEFAULTS, ...config }
   const graded = history.filter((point) => point.status !== 'skip')
-  const ordered = [...graded].sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime())
+  const ordered = [...graded]
+    .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime())
+    .slice(-settings.windowSize)
 
   const statusByCommit = new Map<string, TestStatus[]>()
   const pointsByCommit = new Map<string, ExecutionPoint[]>()
@@ -173,9 +212,17 @@ export const computeFlakyScore = (
   const stability = alpha / (alpha + beta)
   const instability = 1 - stability
   const entropy = computeEntropy(greenWeighted, redWeighted)
+  const { ratio: failIsolation, failures } = computeFailIsolation(ordered)
+
+  const sampleSize = ordered.length
 
   const score = clamp01(
-    0.45 * sameShaVariance + 0.25 * instability + 0.2 * flipRate + 0.1 * passOnRerunRate,
+    WEIGHTS.sameShaVariance * sameShaVariance +
+      WEIGHTS.instability * instability +
+      WEIGHTS.flipRate * flipRate +
+      WEIGHTS.passOnRerunRate * passOnRerunRate +
+      WEIGHTS.entropy * entropy +
+      WEIGHTS.failIsolation * failIsolation,
   )
 
   const reasonCodes = buildReasonCodes({
@@ -183,9 +230,10 @@ export const computeFlakyScore = (
     sameShaVariance,
     flipRate,
     sameShaMixedCommits,
+    failIsolation,
+    failures,
+    sampleSize,
   })
-
-  const sampleSize = graded.length
   const quarantineCandidate =
     score >= (settings.threshold ?? DEFAULTS.threshold) &&
     sampleSize >= (settings.minSamples ?? DEFAULTS.minSamples)
@@ -196,7 +244,7 @@ export const computeFlakyScore = (
     passOnRerunRate,
     sameShaVariance,
     entropy,
-    failIsolation: 0,
+    failIsolation,
     reasonCodes,
     quarantineCandidate,
     modelVersion: SCORING_MODEL_VERSION,

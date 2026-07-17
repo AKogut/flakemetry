@@ -24,3 +24,9 @@ A transparent Beta-Binomial model with exponential time-decay, fed by named sign
 - The model heals: a stabilized test decays its flaky history away without manual resets.
 - Ceiling on raw accuracy versus a trained model — accepted; ML-derived *signals* can feed the same transparent aggregation later without changing the surface.
 - Requires a stable test identity to attribute history correctly, making the identity engine a hard dependency.
+
+## Implementation status (`model_version` 0.2.0)
+
+Score is a weighted blend of all five signals: `same_sha_variance` 0.40 (strongest — different results on one commit), Bayesian `instability` 0.20 (Beta-Binomial with 14-day exponential decay), `flip_rate` 0.15, `entropy` 0.10, `pass_on_rerun_rate` 0.10, `fail_isolation` 0.05. `fail_isolation` distinguishes a test that fails **alone** (test-specific, more suspicious) from one failing alongside a broken run (environmental) using the count of failing tests per run.
+
+Reason codes are emitted for each triggered signal, with a `STABLE` floor so every score carries at least one explanation. Scoring runs over a bounded recent window (500 executions) so cost is constant per update rather than growing with total history; because re-processing a batch is idempotent, the window is recomputed from current state rather than folded incrementally.
