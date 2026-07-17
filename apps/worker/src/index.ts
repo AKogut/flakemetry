@@ -1,16 +1,22 @@
-import { getPrismaClient } from '@flakemetry/db'
+import { getPrismaClient, IngestionQueue } from '@flakemetry/db'
+
+import { createWorker } from './runner'
 
 const prisma = getPrismaClient()
-const intervalMs = Number(process.env.HEARTBEAT_INTERVAL_MS ?? 30_000)
+const queue = new IngestionQueue(prisma)
+const worker = createWorker(prisma, queue, {
+  pollIntervalMs: Number(process.env.POLL_INTERVAL_MS ?? 1_000),
+})
 
-const heartbeat = async () => {
-  const [runs, executions] = await Promise.all([prisma.run.count(), prisma.testExecution.count()])
-  process.stdout.write(`worker heartbeat: runs=${runs} executions=${executions}\n`)
+const shutdown = () => {
+  process.stdout.write('worker: shutting down\n')
+  worker.stop()
 }
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)
 
-await heartbeat()
-setInterval(() => {
-  heartbeat().catch((error: unknown) => {
-    process.stderr.write(`worker heartbeat failed: ${String(error)}\n`)
-  })
-}, intervalMs)
+process.stdout.write('worker: started\n')
+worker.start().catch((error: unknown) => {
+  process.stderr.write(`worker: fatal ${String(error)}\n`)
+  process.exitCode = 1
+})
