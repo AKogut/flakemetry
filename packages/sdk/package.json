@@ -32,11 +32,22 @@
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@flakemetry/eslint-config": "workspace:*",
     "@flakemetry/tsconfig": "workspace:*",
-    "@flakemetry/tsup-config": "workspace:*"
+    "@flakemetry/tsup-config": "workspace:*",
+    "@types/node": "^22.10.5",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@flakemetry/contracts": "workspace:*",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/core": "^2.0.0",
+    "@opentelemetry/resources": "^2.0.0",
+    "@opentelemetry/sdk-trace-base": "^2.0.0",
+    "@opentelemetry/semantic-conventions": "^1.28.0"
   }
 }
