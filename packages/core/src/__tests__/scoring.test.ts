@@ -21,11 +21,12 @@ const red = (commitSha: string, day: number, attempt = 1): ExecutionPoint => ({
 })
 
 describe('computeFlakyScore', () => {
-  it('scores a consistently green test near zero with no reason codes', () => {
+  it('scores a consistently green test near zero and explains it as stable', () => {
     const history = Array.from({ length: 8 }, (_, i) => green(`sha${i}`, i))
     const result = computeFlakyScore(history, config)
     expect(result.score).toBeLessThan(0.15)
-    expect(result.reasonCodes).toHaveLength(0)
+    expect(result.reasonCodes).toHaveLength(1)
+    expect(result.reasonCodes[0]?.code).toBe('STABLE')
     expect(result.quarantineCandidate).toBe(false)
   })
 
@@ -82,5 +83,49 @@ describe('computeFlakyScore', () => {
       green('c', 3),
     ]
     expect(computeFlakyScore(history, config).sampleSize).toBe(2)
+  })
+
+  it('raises fail_isolation and a reason code when the test fails alone', () => {
+    const isolated: ExecutionPoint[] = [
+      { ...red('a', 4), runFailureCount: 1 },
+      { ...red('b', 3), runFailureCount: 1 },
+      { ...red('c', 2), runFailureCount: 1 },
+      green('d', 1),
+    ]
+    const correlated: ExecutionPoint[] = [
+      { ...red('a', 4), runFailureCount: 40 },
+      { ...red('b', 3), runFailureCount: 35 },
+      { ...red('c', 2), runFailureCount: 50 },
+      green('d', 1),
+    ]
+    const isolatedResult = computeFlakyScore(isolated, config)
+    const correlatedResult = computeFlakyScore(correlated, config)
+
+    expect(isolatedResult.failIsolation).toBe(1)
+    expect(correlatedResult.failIsolation).toBe(0)
+    expect(isolatedResult.reasonCodes.map((r) => r.code)).toContain('FAIL_ISOLATION')
+    expect(isolatedResult.score).toBeGreaterThan(correlatedResult.score)
+  })
+
+  it('folds entropy into the score for an evenly split history', () => {
+    const balanced: ExecutionPoint[] = [
+      red('a', 8),
+      green('b', 7),
+      red('c', 6),
+      green('d', 5),
+      red('e', 4),
+      green('f', 3),
+    ]
+    const result = computeFlakyScore(balanced, config)
+    expect(result.entropy).toBeGreaterThan(0.9)
+    expect(result.score).toBeGreaterThan(0)
+  })
+
+  it('bounds the scoring window to the most recent executions', () => {
+    const ancient = Array.from({ length: 3 }, (_, i) => red('old', 300 + i))
+    const recent = Array.from({ length: 4 }, (_, i) => green(`new${i}`, i))
+    const result = computeFlakyScore([...ancient, ...recent], { ...config, windowSize: 4 })
+    expect(result.sampleSize).toBe(4)
+    expect(result.reasonCodes[0]?.code).toBe('STABLE')
   })
 })

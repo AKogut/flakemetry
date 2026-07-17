@@ -187,28 +187,51 @@ export const processJob = async (
   }
 }
 
+const SCORING_WINDOW = 500
+
 const scoreIdentity = async (
   prisma: PrismaClient,
   identityId: string,
   ctx: ProcessContext,
 ): Promise<void> => {
-  const executions = await prisma.testExecution.findMany({
+  const recent = await prisma.testExecution.findMany({
     where: { testIdentityId: identityId },
-    select: { status: true, attempt: true, startedAt: true, run: { select: { commitSha: true } } },
-    orderBy: { startedAt: 'asc' },
+    select: {
+      status: true,
+      attempt: true,
+      startedAt: true,
+      runId: true,
+      run: { select: { commitSha: true } },
+    },
+    orderBy: { startedAt: 'desc' },
+    take: SCORING_WINDOW,
   })
+  const executions = recent.reverse()
+
+  const runIds = [...new Set(executions.map((execution) => execution.runId))]
+  const failuresByRun = new Map<string, number>()
+  if (runIds.length > 0) {
+    const grouped = await prisma.testExecution.groupBy({
+      by: ['runId'],
+      where: { runId: { in: runIds }, status: 'fail' },
+      _count: { _all: true },
+    })
+    for (const row of grouped) failuresByRun.set(row.runId, row._count._all)
+  }
 
   const history: ExecutionPoint[] = executions.map((execution) => ({
     status: execution.status,
     attempt: execution.attempt,
     startedAt: execution.startedAt,
     commitSha: execution.run.commitSha,
+    runFailureCount: failuresByRun.get(execution.runId) ?? 0,
   }))
 
   const result = computeFlakyScore(history, {
     now: ctx.now,
     threshold: ctx.threshold,
     minSamples: ctx.minSamples,
+    windowSize: SCORING_WINDOW,
   })
 
   const lastFlakedAt = executions
