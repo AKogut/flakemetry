@@ -41,6 +41,7 @@ M1 emits `test.run` + `test.case`. `test.step` and network/browser child spans a
 | `test.status` | `pass \| fail \| skip \| flaky` | verdict |
 | `test.attempt` | `2` | retry index (1-based) |
 | `test.duration_ms` | `1834` | wall-clock duration |
+| `test.artifacts` | `[{"name":"trace",…}]` | JSON array of artifact refs (screenshot/video/trace), workspace-relative paths |
 
 ## Status mapping
 

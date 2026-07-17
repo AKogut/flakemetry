@@ -1,4 +1,5 @@
 import {
+  type ArtifactRef,
   type CiProvider,
   type IngestExecution,
   type IngestRunBatch,
@@ -33,6 +34,7 @@ export interface RecordedTest {
   startedAt: Date
   durationMs: number
   error?: { type?: string | null; message: string; stack?: string | null } | null
+  artifacts?: ArtifactRef[] | null
   attributes?: JsonRecord | null
 }
 
@@ -87,6 +89,7 @@ export class TestRunRecorder {
       startedAt: test.startedAt,
       durationMs: test.durationMs,
       error: test.error ?? undefined,
+      artifacts: test.artifacts ?? undefined,
       attributes: test.attributes ?? undefined,
     }
   }

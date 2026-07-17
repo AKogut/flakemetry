@@ -26,6 +26,12 @@ export const ingestErrorSchema = z.object({
   stack: z.string().nullish(),
 })
 
+export const artifactRefSchema = z.object({
+  name: z.string().min(1),
+  contentType: z.string().min(1),
+  path: z.string().min(1),
+})
+
 export const ingestExecutionSchema = z.object({
   filePath: z.string().min(1),
   suite: z.string(),
@@ -37,6 +43,7 @@ export const ingestExecutionSchema = z.object({
   startedAt: timestampSchema,
   durationMs: z.number().int().nonnegative(),
   error: ingestErrorSchema.nullish(),
+  artifacts: z.array(artifactRefSchema).nullish(),
   attributes: jsonRecordSchema.nullish(),
 })
 
@@ -61,6 +68,7 @@ export const ingestAckSchema = z.object({
 
 export type IngestResource = z.infer<typeof ingestResourceSchema>
 export type IngestError = z.infer<typeof ingestErrorSchema>
+export type ArtifactRef = z.infer<typeof artifactRefSchema>
 export type IngestExecution = z.infer<typeof ingestExecutionSchema>
 export type IngestRun = z.infer<typeof ingestRunSchema>
 export type IngestRunBatch = z.infer<typeof ingestRunBatchSchema>

@@ -137,6 +137,23 @@ describe('otlpToIngestBatch', () => {
     expect(batch.idempotencyKey).toBe('a'.repeat(32))
   })
 
+  it('parses artifact references from the case span attribute', () => {
+    const req = request()
+    const artifacts = [
+      { name: 'screenshot', contentType: 'image/png', path: 'test-results/login/shot.png' },
+      { name: 'trace', contentType: 'application/zip', path: 'test-results/login/trace.zip' },
+    ]
+    ;(
+      req.resourceSpans[0]!.scopeSpans[0]!.spans[1]!.attributes as { key: string; value: unknown }[]
+    ).push({
+      key: SPAN_ATTR.artifacts,
+      value: s(JSON.stringify(artifacts)),
+    })
+    const batch = otlpToIngestBatch(otlpTraceRequestSchema.parse(req))
+    expect(batch.executions[0]?.artifacts).toEqual(artifacts)
+    expect(batch.executions[1]?.artifacts).toBeUndefined()
+  })
+
   it('throws when no run span is present', () => {
     const req = request()
     req.resourceSpans[0]!.scopeSpans[0]!.spans = req.resourceSpans[0]!.scopeSpans[0]!.spans.filter(
