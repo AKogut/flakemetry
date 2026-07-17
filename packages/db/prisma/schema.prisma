@@ -63,10 +63,57 @@ model Project {
   flakyScores     FlakyScore[]
   errorSignatures ErrorSignature[]
   rcaReports      RcaReport[]
+  ingestTokens    IngestToken[]
+  ingestionJobs   IngestionJob[]
 
   @@unique([orgId, slug])
   @@index([orgId])
   @@map("project")
+}
+
+model IngestToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  orgId      String    @map("org_id") @db.Uuid
+  projectId  String    @map("project_id") @db.Uuid
+  name       String
+  tokenHash  String    @unique @map("token_hash")
+  lastUsedAt DateTime? @map("last_used_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([projectId])
+  @@map("ingest_token")
+}
+
+enum IngestionJobStatus {
+  pending
+  processing
+  done
+  dead
+}
+
+model IngestionJob {
+  id             String             @id @default(uuid()) @db.Uuid
+  orgId          String             @map("org_id") @db.Uuid
+  projectId      String             @map("project_id") @db.Uuid
+  idempotencyKey String             @map("idempotency_key")
+  payload        Json
+  status         IngestionJobStatus @default(pending)
+  attempts       Int                @default(0)
+  visibleAt      DateTime           @default(now()) @map("visible_at")
+  lastError      String?            @map("last_error")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, idempotencyKey])
+  @@index([status, visibleAt])
+  @@index([orgId])
+  @@map("ingestion_job")
 }
 
 model TestIdentity {

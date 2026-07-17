@@ -1,17 +1,18 @@
-import { createServer } from 'node:http'
+import { getPrismaClient } from '@flakemetry/db'
+
+import { buildApp } from './app'
 
 const port = Number(process.env.PORT ?? 4000)
+const host = process.env.HOST ?? '0.0.0.0'
 
-const server = createServer((req, res) => {
-  if (req.url === '/health') {
-    res.writeHead(200, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ status: 'ok', service: 'api' }))
-    return
-  }
-  res.writeHead(404, { 'content-type': 'application/json' })
-  res.end(JSON.stringify({ error: 'not_found' }))
-})
+const app = buildApp({ prisma: getPrismaClient() })
 
-server.listen(port, () => {
-  process.stdout.write(`api listening on :${port}\n`)
-})
+app
+  .listen({ port, host })
+  .then((address: string) => {
+    process.stdout.write(`api listening on ${address}\n`)
+  })
+  .catch((error: unknown) => {
+    process.stderr.write(`api failed to start: ${String(error)}\n`)
+    process.exitCode = 1
+  })
