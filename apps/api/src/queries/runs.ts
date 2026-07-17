@@ -1,9 +1,4 @@
-import type {
-  RunCounts,
-  RunDetail,
-  RunsListInput,
-  RunsListResult,
-} from '@flakemetry/contracts'
+import type { RunCounts, RunDetail, RunsListInput, RunsListResult } from '@flakemetry/contracts'
 import type { PrismaClient, TestStatus } from '@flakemetry/db'
 
 const emptyCounts = (): RunCounts => ({
@@ -55,7 +50,12 @@ export const listRuns = async (
       ...(input.branch ? { branch: input.branch } : {}),
       ...(input.status ? { status: input.status } : {}),
       ...(input.since || input.until
-        ? { startedAt: { ...(input.since ? { gte: input.since } : {}), ...(input.until ? { lte: input.until } : {}) } }
+        ? {
+            startedAt: {
+              ...(input.since ? { gte: input.since } : {}),
+              ...(input.until ? { lte: input.until } : {}),
+            },
+          }
         : {}),
     },
     orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
@@ -75,7 +75,11 @@ export const listRuns = async (
 
   const page = runs.slice(0, input.limit)
   const nextCursor = runs.length > input.limit ? (page.at(-1)?.id ?? null) : null
-  const counts = await countsByRun(prisma, projectId, page.map((run) => run.id))
+  const counts = await countsByRun(
+    prisma,
+    projectId,
+    page.map((run) => run.id),
+  )
 
   return {
     items: page.map((run) => ({

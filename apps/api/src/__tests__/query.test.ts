@@ -169,8 +169,7 @@ const seed = async () => {
   return { ...tenant, run1Id: run1.id, flakyId: flakyId.id, failExecId: failExec.id }
 }
 
-const caller = (project: TrpcContext['project']) =>
-  appRouter.createCaller({ prisma, project })
+const caller = (project: TrpcContext['project']) => appRouter.createCaller({ prisma, project })
 
 describe.skipIf(!hasDb)('query api', () => {
   beforeEach(async () => {
@@ -189,15 +188,18 @@ describe.skipIf(!hasDb)('query api', () => {
   })
 
   it('rejects unauthenticated callers', async () => {
-    await expect(caller(null).flaky.board({ limit: 20, minScore: 0, includeQuarantined: true }))
-      .rejects.toThrow(/token/)
+    await expect(
+      caller(null).flaky.board({ limit: 20, minScore: 0, includeQuarantined: true }),
+    ).rejects.toThrow(/token/)
   })
 
   it('lists runs newest-first with execution counts', async () => {
     const ctx = await seed()
-    const result = await caller({ orgId: ctx.orgId, projectId: ctx.projectId, tokenId: 't' }).runs.list(
-      { limit: 20 },
-    )
+    const result = await caller({
+      orgId: ctx.orgId,
+      projectId: ctx.projectId,
+      tokenId: 't',
+    }).runs.list({ limit: 20 })
 
     expect(result.items).toHaveLength(2)
     expect(result.items[0]?.commitSha).toBe('bbb2222')
@@ -224,9 +226,11 @@ describe.skipIf(!hasDb)('query api', () => {
 
   it('returns run detail with executions and rca flag', async () => {
     const ctx = await seed()
-    const detail = await caller({ orgId: ctx.orgId, projectId: ctx.projectId, tokenId: 't' }).run.get(
-      { runId: ctx.run1Id },
-    )
+    const detail = await caller({
+      orgId: ctx.orgId,
+      projectId: ctx.projectId,
+      tokenId: 't',
+    }).run.get({ runId: ctx.run1Id })
     expect(detail.executions).toHaveLength(2)
     const failing = detail.executions.find((execution) => execution.status === 'fail')
     expect(failing?.hasRca).toBe(true)
@@ -235,9 +239,11 @@ describe.skipIf(!hasDb)('query api', () => {
 
   it('returns test detail with ordered history and reason codes', async () => {
     const ctx = await seed()
-    const test = await caller({ orgId: ctx.orgId, projectId: ctx.projectId, tokenId: 't' }).test.get(
-      { testIdentityId: ctx.flakyId, historyLimit: 50 },
-    )
+    const test = await caller({
+      orgId: ctx.orgId,
+      projectId: ctx.projectId,
+      tokenId: 't',
+    }).test.get({ testIdentityId: ctx.flakyId, historyLimit: 50 })
     expect(test.score).toBeCloseTo(0.82)
     expect(test.reasonCodes[0]?.code).toBe('SAME_SHA_VARIANCE')
     expect(test.history).toHaveLength(2)
@@ -275,7 +281,10 @@ describe.skipIf(!hasDb)('query api', () => {
     const app = buildApp({ prisma })
     const input = encodeURIComponent(JSON.stringify({ limit: 5 }))
 
-    const unauthorized = await app.inject({ method: 'GET', url: `/trpc/flaky.board?input=${input}` })
+    const unauthorized = await app.inject({
+      method: 'GET',
+      url: `/trpc/flaky.board?input=${input}`,
+    })
     expect(unauthorized.statusCode).toBe(401)
 
     const authorized = await app.inject({
