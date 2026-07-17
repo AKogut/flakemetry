@@ -65,11 +65,22 @@ const drive = async (outputFile: string) => {
 
 describe('FlakemetryReporter lifecycle', () => {
   beforeEach(() => {
-    vi.stubEnv('GITHUB_ACTIONS', '')
+    for (const key of [
+      'GITHUB_ACTIONS',
+      'GITHUB_SHA',
+      'GITHUB_REF',
+      'GITHUB_REF_NAME',
+      'GITHUB_RUN_ID',
+      'GITHUB_RUN_ATTEMPT',
+      'GITHUB_EVENT_NAME',
+      'FLAKEMETRY_ENDPOINT',
+      'FLAKEMETRY_TOKEN',
+      'FLAKEMETRY_IDEMPOTENCY_KEY',
+    ]) {
+      vi.stubEnv(key, '')
+    }
     vi.stubEnv('FLAKEMETRY_PROJECT', 'acme/web')
     vi.stubEnv('FLAKEMETRY_COMMIT_SHA', 'deadbeef')
-    vi.stubEnv('FLAKEMETRY_ENDPOINT', '')
-    vi.stubEnv('FLAKEMETRY_TOKEN', '')
   })
 
   afterEach(() => {

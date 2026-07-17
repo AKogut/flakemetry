@@ -60,6 +60,16 @@ describe('resolveRunContext', () => {
     expect(context.trigger).toBe('manual')
     expect(context.prNumber).toBeNull()
   })
+
+  it('treats empty-string env vars as absent', () => {
+    const context = resolveRunContext({
+      GITHUB_SHA: '',
+      GITHUB_REF_NAME: '',
+      FLAKEMETRY_COMMIT_SHA: 'deadbeef',
+    })
+    expect(context.commitSha).toBe('deadbeef')
+    expect(context.branch).toBe('local')
+  })
 })
 
 describe('buildIdempotencyKey', () => {

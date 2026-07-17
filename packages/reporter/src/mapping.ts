@@ -28,6 +28,9 @@ const prNumberFromRef = (ref: string | undefined): number | null => {
   return match ? Number(match[1]) : null
 }
 
+const pick = (value: string | undefined): string | undefined =>
+  value && value.length > 0 ? value : undefined
+
 export const resolveRunContext = (env: Record<string, string | undefined>): RunContext => {
   const onGithub = env.GITHUB_ACTIONS === 'true'
   const ciProvider: CiProvider = onGithub ? 'github_actions' : 'local'
@@ -40,13 +43,13 @@ export const resolveRunContext = (env: Record<string, string | undefined>): RunC
     : 'manual'
 
   return {
-    project: env.FLAKEMETRY_PROJECT ?? 'local/project',
-    commitSha: env.GITHUB_SHA ?? env.FLAKEMETRY_COMMIT_SHA ?? '0000000',
-    branch: env.GITHUB_REF_NAME ?? env.FLAKEMETRY_BRANCH ?? 'local',
+    project: pick(env.FLAKEMETRY_PROJECT) ?? 'local/project',
+    commitSha: pick(env.GITHUB_SHA) ?? pick(env.FLAKEMETRY_COMMIT_SHA) ?? '0000000',
+    branch: pick(env.GITHUB_REF_NAME) ?? pick(env.FLAKEMETRY_BRANCH) ?? 'local',
     ciProvider,
     trigger,
-    ciRunId: env.GITHUB_RUN_ID ?? null,
-    prNumber: prNumberFromRef(env.GITHUB_REF),
+    ciRunId: pick(env.GITHUB_RUN_ID) ?? null,
+    prNumber: prNumberFromRef(pick(env.GITHUB_REF)),
   }
 }
 
