@@ -4,6 +4,14 @@
   "private": true,
   "description": "Ingestion and query API service",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json",
@@ -23,6 +31,7 @@
   "dependencies": {
     "@flakemetry/contracts": "workspace:*",
     "@flakemetry/db": "workspace:*",
+    "@trpc/server": "^11.0.0",
     "fastify": "^5.2.0"
   }
 }

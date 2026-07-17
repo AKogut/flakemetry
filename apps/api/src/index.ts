@@ -2,6 +2,8 @@ import { getPrismaClient } from '@flakemetry/db'
 
 import { buildApp } from './app'
 
+export type { AppRouter } from './app'
+
 const port = Number(process.env.PORT ?? 4000)
 const host = process.env.HOST ?? '0.0.0.0'
 

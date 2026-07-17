@@ -9,6 +9,7 @@ import {
   timestampSchema,
 } from './common'
 import { reasonCodeSchema } from './entities/flaky-score'
+import { rcaReportSchema } from './entities/rca-report'
 
 export const runCountsSchema = z.object({
   total: z.number().int().nonnegative(),
@@ -85,6 +86,53 @@ export const flakyBoardItemSchema = z.object({
   quarantined: z.boolean(),
 })
 
+export const runsListInputSchema = z.object({
+  branch: z.string().min(1).optional(),
+  status: runStatusSchema.optional(),
+  since: timestampSchema.optional(),
+  until: timestampSchema.optional(),
+  cursor: idSchema.optional(),
+  limit: z.number().int().min(1).max(100).default(20),
+})
+
+export const runsListResultSchema = z.object({
+  items: z.array(runListItemSchema),
+  nextCursor: idSchema.nullable(),
+})
+
+export const runGetInputSchema = z.object({
+  runId: idSchema,
+})
+
+export const testGetInputSchema = z.object({
+  testIdentityId: idSchema,
+  historyLimit: z.number().int().min(1).max(200).default(50),
+})
+
+export const flakyBoardInputSchema = z.object({
+  limit: z.number().int().min(1).max(100).default(20),
+  minScore: z.number().min(0).max(1).default(0),
+  includeQuarantined: z.boolean().default(true),
+})
+
+export const flakyBoardResultSchema = z.object({
+  items: z.array(flakyBoardItemSchema),
+})
+
+export const rcaGetInputSchema = z.object({
+  executionId: idSchema,
+})
+
+export const rcaGetResultSchema = rcaReportSchema.nullable()
+
+export type RunsListInput = z.infer<typeof runsListInputSchema>
+export type RunsListResult = z.infer<typeof runsListResultSchema>
+export type RunGetInput = z.infer<typeof runGetInputSchema>
+export type TestGetInput = z.infer<typeof testGetInputSchema>
+export type FlakyBoardInput = z.infer<typeof flakyBoardInputSchema>
+export type FlakyBoardResult = z.infer<typeof flakyBoardResultSchema>
+export type RcaGetInput = z.infer<typeof rcaGetInputSchema>
+export type RcaGetResult = z.infer<typeof rcaGetResultSchema>
 export type RunCounts = z.infer<typeof runCountsSchema>
 export type RunListItem = z.infer<typeof runListItemSchema>
 export type ExecutionListItem = z.infer<typeof executionListItemSchema>

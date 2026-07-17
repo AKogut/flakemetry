@@ -1,8 +1,11 @@
 import { ingestRunBatchSchema } from '@flakemetry/contracts'
 import { IngestionQueue, type PrismaClient } from '@flakemetry/db'
+import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify'
 import Fastify, { type FastifyInstance } from 'fastify'
 
 import { authenticateProject } from './auth'
+import { createContextFactory } from './trpc/context'
+import { appRouter } from './trpc/router'
 
 export interface AppOptions {
   prisma: PrismaClient
@@ -19,6 +22,11 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
   })
 
   app.get('/health', async () => ({ status: 'ok', service: 'api' }))
+
+  void app.register(fastifyTRPCPlugin, {
+    prefix: '/trpc',
+    trpcOptions: { router: appRouter, createContext: createContextFactory(prisma) },
+  })
 
   app.post('/v1/ingest', async (request, reply) => {
     const project = await authenticateProject(prisma, request)
@@ -54,3 +62,5 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
 
   return app
 }
+
+export type { AppRouter } from './trpc/router'
