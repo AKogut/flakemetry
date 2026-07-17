@@ -1,4 +1,8 @@
-import { ingestRunBatchSchema } from '@flakemetry/contracts'
+import {
+  ingestRunBatchSchema,
+  otlpToIngestBatch,
+  otlpTraceRequestSchema,
+} from '@flakemetry/contracts'
 import { IngestionQueue, type PrismaClient } from '@flakemetry/db'
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify'
 import Fastify, { type FastifyInstance } from 'fastify'
@@ -58,6 +62,41 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
       acceptedExecutions: batch.executions.length,
       deduplicated,
     })
+  })
+
+  app.post('/v1/traces', async (request, reply) => {
+    const project = await authenticateProject(prisma, request)
+    if (!project) {
+      return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
+    }
+
+    const parsedRequest = otlpTraceRequestSchema.safeParse(request.body)
+    if (!parsedRequest.success) {
+      return reply.code(400).send({
+        partialSuccess: { rejectedSpans: '0', errorMessage: 'malformed OTLP payload' },
+      })
+    }
+
+    let batch
+    try {
+      batch = ingestRunBatchSchema.parse(otlpToIngestBatch(parsedRequest.data))
+    } catch (error) {
+      return reply.code(400).send({
+        partialSuccess: {
+          rejectedSpans: '0',
+          errorMessage: error instanceof Error ? error.message : 'unmappable OTLP payload',
+        },
+      })
+    }
+
+    await queue.enqueue({
+      orgId: project.orgId,
+      projectId: project.projectId,
+      idempotencyKey: batch.idempotencyKey,
+      payload: JSON.parse(JSON.stringify(batch)),
+    })
+
+    return reply.code(200).send({})
   })
 
   return app

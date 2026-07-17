@@ -1,12 +1,21 @@
+import { createServer, type Server } from 'node:http'
+import { type AddressInfo } from 'node:net'
+
+import {
+  ingestRunBatchSchema,
+  otlpToIngestBatch,
+  otlpTraceRequestSchema,
+} from '@flakemetry/contracts'
 import {
   BasicTracerProvider,
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { IngestClient } from '../client'
 import { RESOURCE_ATTR, SPAN_ATTR, SPAN_NAMES } from '../conventions'
+import { exportRunOverOtlp } from '../exporter'
 import { computeFingerprint, hashParams, normalizeFilePath } from '../fingerprint'
 import { type RunContext, TestRunRecorder } from '../recorder'
 import { emitRunSpans } from '../spans'
@@ -146,5 +155,53 @@ describe('ingest client', () => {
     const result = await client.send(makeRecorder().toIngestBatch('k12345678'))
     expect(result.ok).toBe(false)
     expect(result.error).toContain('ECONNREFUSED')
+  })
+})
+
+describe('otlp exporter round-trip', () => {
+  let server: Server
+  let received: { authorization?: string; body: unknown } | null = null
+
+  beforeEach(async () => {
+    received = null
+    server = createServer((req, res) => {
+      const chunks: Buffer[] = []
+      req.on('data', (chunk: Buffer) => chunks.push(chunk))
+      req.on('end', () => {
+        received = {
+          authorization: req.headers.authorization,
+          body: JSON.parse(Buffer.concat(chunks).toString('utf8')),
+        }
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end('{}')
+      })
+    })
+    await new Promise<void>((resolve) => server.listen(0, resolve))
+  })
+
+  afterEach(async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  })
+
+  it('emits OTLP the ingest mapper accepts as a contract-valid batch', async () => {
+    const port = (server.address() as AddressInfo).port
+    await exportRunOverOtlp(makeRecorder(), 'gh-9000001-1', {
+      endpoint: `http://127.0.0.1:${port}`,
+      token: 'fmk_secret',
+    })
+
+    expect(received).not.toBeNull()
+    expect(received!.authorization).toBe('Bearer fmk_secret')
+
+    const otlp = otlpTraceRequestSchema.parse(received!.body)
+    const batch = ingestRunBatchSchema.parse(otlpToIngestBatch(otlp))
+
+    expect(batch.idempotencyKey).toBe('gh-9000001-1')
+    expect(batch.resource.commitSha).toBe('a1b2c3d')
+    expect(batch.resource.trigger).toBe('push')
+    expect(batch.run.status).toBe('failed')
+    expect(batch.executions).toHaveLength(2)
+    expect(batch.executions[1]?.retryOfIndex).toBe(0)
+    expect(batch.executions[0]?.error?.message).toBe('Timeout 30000ms exceeded')
   })
 })

@@ -1,6 +1,6 @@
 # OpenTelemetry Test Conventions
 
-The canonical span and attribute model every reporter emits to. The machine-readable source of truth is [`packages/sdk/src/conventions.ts`](../packages/sdk/src/conventions.ts); this document is the human-readable spec. Product rationale lives in [ADR-0002](adr/0002-otel-native-ingestion.md) and the [wiki](https://github.com/AKogut/flakemetry/wiki/OTel-Test-Conventions).
+The canonical span and attribute model every reporter emits to. The machine-readable source of truth is [`packages/contracts/src/otel.ts`](../packages/contracts/src/otel.ts) (re-exported from `@flakemetry/sdk`); this document is the human-readable spec. Product rationale lives in [ADR-0002](adr/0002-otel-native-ingestion.md) and the [wiki](https://github.com/AKogut/flakemetry/wiki/OTel-Test-Conventions).
 
 Conventions version: `0.1.0`.
 
@@ -25,6 +25,9 @@ M1 emits `test.run` + `test.case`. `test.step` and network/browser child spans a
 | `vcs.commit_sha` | `a1b2c3d` | commit under test — enables the same-sha flake signal |
 | `vcs.branch` | `main` | branch |
 | `vcs.pr_number` | `42` | pull request, when applicable |
+| `flakemetry.trigger` | `push` | run trigger (`push`/`pull_request`/`schedule`/`manual`/`other`) |
+| `flakemetry.idempotency_key` | `gh-9000001-1` | one per run; makes re-delivery safe (falls back to the run span trace id) |
+| `flakemetry.contract_version` | `0.1.0` | conventions/contract version stamp |
 
 ## Case span attributes
 
@@ -53,12 +56,13 @@ M1 emits `test.run` + `test.case`. `test.step` and network/browser child spans a
 
 ## OTLP → contracts mapping
 
-The SDK records executions and produces a contract-valid `ingestRunBatch` (`@flakemetry/contracts`) directly, so the same recorded run can be exported as OTLP spans or posted as the batch payload. Field mapping:
+Reporters export real OTLP spans via `@opentelemetry/exporter-trace-otlp-http` to `POST /v1/traces` (OTLP/HTTP JSON). The API normalizes the span tree into a contract-valid `ingestRunBatch` (`@flakemetry/contracts`) with `otlpToIngestBatch` before enqueueing, so downstream stages stay transport-agnostic. Field mapping:
 
 | Batch field | Source |
 |---|---|
-| `resource.*` | run/resource attributes above |
+| `resource.*` | run/resource attributes above (read from the OTLP Resource, falling back to `test.run` span attributes) |
 | `executions[].{filePath,suite,title,status,attempt,durationMs}` | case span attributes |
-| `executions[].retryOfIndex` | index of the earlier attempt in the same batch |
-| `executions[].error` | the case span exception event |
-| `idempotencyKey` | one per run; makes re-delivery safe |
+| `executions[].retryOfIndex` | reconstructed from attempt ordering per fingerprint |
+| `executions[].error` | the case span `exception` event (`exception.type` / `exception.message` / `exception.stacktrace`) |
+| `run.status` | `test.run` span status (`ERROR` → `failed`), or any failing case |
+| `idempotencyKey` | `flakemetry.idempotency_key`, else the run span trace id |
