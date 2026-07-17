@@ -1,6 +1,3 @@
-export const PACKAGE = '@flakemetry/playwright-reporter' as const
-
-export const reporter = {
-  name: PACKAGE,
-  version: '0.0.0',
-} as const
+export * from './mapping'
+export type { FlakemetryReporterOptions } from './reporter'
+export { default } from './reporter'

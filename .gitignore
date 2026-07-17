@@ -9,3 +9,5 @@ coverage/
 .DS_Store
 .next/
 out/
+test-results/
+playwright-report/
