@@ -163,6 +163,7 @@ export const processJob = async (
           durationMs: execution.durationMs,
           errorMessage: execution.error?.message ?? null,
           otelTraceId: batch.resource.ciRunId ?? null,
+          artifactsRef: (execution.artifacts ?? null) as Prisma.InputJsonValue,
           attributes: (execution.attributes ?? null) as Prisma.InputJsonValue,
           startedAt: execution.startedAt,
         },

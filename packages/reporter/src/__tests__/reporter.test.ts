@@ -28,6 +28,7 @@ const makeResult = (
   status: TestResult['status'],
   retry: number,
   error?: TestResult['error'],
+  attachments: TestResult['attachments'] = [],
 ): TestResult =>
   ({
     status,
@@ -35,6 +36,7 @@ const makeResult = (
     duration: 1500,
     startTime: new Date('2026-07-16T10:00:00Z'),
     error,
+    attachments,
   }) as unknown as TestResult
 
 const drive = async (outputFile: string) => {
@@ -47,10 +49,18 @@ const drive = async (outputFile: string) => {
   const fail = makeTest('t2', 'rejects invalid', 'auth')
   reporter.onTestEnd(
     fail,
-    makeResult('failed', 0, {
-      message: 'expected true',
-      stack: 'at login:5',
-    } as TestResult['error']),
+    makeResult(
+      'failed',
+      0,
+      {
+        message: 'expected true',
+        stack: 'at login:5',
+      } as TestResult['error'],
+      [
+        { name: 'screenshot', contentType: 'image/png', path: `${rootDir}/test-results/shot.png` },
+        { name: 'stdout', contentType: 'text/plain', body: Buffer.from('x') },
+      ] as unknown as TestResult['attachments'],
+    ),
   )
 
   const flaky = makeTest('t3', 'completes payment', 'checkout')
@@ -117,5 +127,18 @@ describe('FlakemetryReporter lifecycle', () => {
     expect(flakyRetry?.retryOfIndex).toBe(2)
     expect(batch.executions[1]?.suite).toBe('auth')
     expect(flakyRetry?.suite).toBe('checkout')
+  })
+
+  it('captures path-backed attachments as workspace-relative artifact refs', async () => {
+    const outputFile = join(tmpdir(), `flakemetry-reporter-${process.hrtime.bigint()}.json`)
+    await drive(outputFile)
+
+    const batch = ingestRunBatchSchema.parse(JSON.parse(readFileSync(outputFile, 'utf8')))
+    const fail = batch.executions[1]
+
+    expect(fail?.artifacts).toEqual([
+      { name: 'screenshot', contentType: 'image/png', path: 'test-results/shot.png' },
+    ])
+    expect(batch.executions[0]?.artifacts ?? []).toHaveLength(0)
   })
 })

@@ -56,6 +56,9 @@ export const emitRunSpans = (
           [SPAN_ATTR.attempt]: test.attempt ?? 1,
           [SPAN_ATTR.durationMs]: test.durationMs,
           ...(test.paramsHash ? { [SPAN_ATTR.paramsHash]: test.paramsHash } : {}),
+          ...(test.artifacts && test.artifacts.length > 0
+            ? { [SPAN_ATTR.artifacts]: JSON.stringify(test.artifacts) }
+            : {}),
         },
       },
       runCtx,

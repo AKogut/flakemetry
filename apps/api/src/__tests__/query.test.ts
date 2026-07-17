@@ -74,6 +74,7 @@ const seed = async () => {
       status: 'fail',
       durationMs: 1800,
       errorMessage: 'Timeout 30000ms exceeded',
+      artifactsRef: [{ name: 'trace', contentType: 'application/zip', path: 'results/trace.zip' }],
       startedAt: at('2026-07-16T10:00:01Z'),
     },
   })
@@ -235,6 +236,9 @@ describe.skipIf(!hasDb)('query api', () => {
     const failing = detail.executions.find((execution) => execution.status === 'fail')
     expect(failing?.hasRca).toBe(true)
     expect(failing?.filePath).toBe('e2e/login.spec.ts')
+    expect(failing?.artifacts).toEqual([
+      { name: 'trace', contentType: 'application/zip', path: 'results/trace.zip' },
+    ])
   })
 
   it('returns test detail with ordered history and reason codes', async () => {

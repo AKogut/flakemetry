@@ -1,4 +1,10 @@
-import type { RunCounts, RunDetail, RunsListInput, RunsListResult } from '@flakemetry/contracts'
+import type {
+  ArtifactRef,
+  RunCounts,
+  RunDetail,
+  RunsListInput,
+  RunsListResult,
+} from '@flakemetry/contracts'
 import type { PrismaClient, TestStatus } from '@flakemetry/db'
 
 const emptyCounts = (): RunCounts => ({
@@ -129,6 +135,7 @@ export const getRun = async (
       attempt: true,
       durationMs: true,
       errorMessage: true,
+      artifactsRef: true,
       identity: { select: { filePath: true, suite: true, title: true } },
       rcaReport: { select: { id: true } },
     },
@@ -159,6 +166,7 @@ export const getRun = async (
       durationMs: execution.durationMs,
       errorMessage: execution.errorMessage,
       hasRca: execution.rcaReport !== null,
+      artifacts: (execution.artifactsRef ?? []) as ArtifactRef[],
     })),
   }
 }

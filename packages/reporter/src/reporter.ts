@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, relative } from 'node:path'
 
-import type { IngestRunBatch } from '@flakemetry/contracts'
+import type { ArtifactRef, IngestRunBatch } from '@flakemetry/contracts'
 import { exportRunOverOtlp, IngestClient, type RunContext, TestRunRecorder } from '@flakemetry/sdk'
 import type {
   FullConfig,
@@ -82,9 +82,22 @@ export default class FlakemetryReporter implements Reporter {
       startedAt: result.startTime,
       durationMs: Math.round(result.duration),
       error,
+      artifacts: this.collectArtifacts(result),
     })
 
     if (attempt === 1) this.firstAttemptIndex.set(test.id, index)
+  }
+
+  private collectArtifacts(result: TestResult): ArtifactRef[] {
+    return (result.attachments ?? [])
+      .filter((attachment): attachment is TestResult['attachments'][number] & { path: string } =>
+        Boolean(attachment.path),
+      )
+      .map((attachment) => ({
+        name: attachment.name,
+        contentType: attachment.contentType,
+        path: relative(this.rootDir, attachment.path),
+      }))
   }
 
   async onEnd(result: FullResult): Promise<void> {

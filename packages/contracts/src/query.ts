@@ -10,6 +10,7 @@ import {
 } from './common'
 import { reasonCodeSchema } from './entities/flaky-score'
 import { rcaReportSchema } from './entities/rca-report'
+import { artifactRefSchema } from './ingestion'
 
 export const runCountsSchema = z.object({
   total: z.number().int().nonnegative(),
@@ -42,6 +43,7 @@ export const executionListItemSchema = z.object({
   durationMs: z.number().int().nonnegative(),
   errorMessage: z.string().nullable(),
   hasRca: z.boolean(),
+  artifacts: z.array(artifactRefSchema),
 })
 
 export const runDetailSchema = runListItemSchema.extend({

@@ -1,7 +1,12 @@
 import { z } from 'zod'
 
 import type { CiProvider, RunStatus, RunTrigger, TestStatus } from './common'
-import type { IngestExecution, IngestRunBatch } from './ingestion'
+import {
+  type ArtifactRef,
+  artifactRefSchema,
+  type IngestExecution,
+  type IngestRunBatch,
+} from './ingestion'
 
 export const CONVENTIONS_VERSION = '0.1.0'
 
@@ -34,6 +39,7 @@ export const SPAN_ATTR = {
   retryOf: 'test.retry_of',
   filePath: 'test.file_path',
   durationMs: 'test.duration_ms',
+  artifacts: 'test.artifacts',
 } as const
 
 export const EXCEPTION_EVENT = {
@@ -120,6 +126,16 @@ const nanoToDate = (nano: string | number): Date => new Date(Math.round(Number(n
 const asString = (value: string | number | boolean | undefined): string | undefined =>
   value === undefined ? undefined : String(value)
 
+const parseArtifacts = (raw: string | undefined): ArtifactRef[] | undefined => {
+  if (!raw) return undefined
+  try {
+    const parsed = artifactRefSchema.array().safeParse(JSON.parse(raw))
+    return parsed.success && parsed.data.length > 0 ? parsed.data : undefined
+  } catch {
+    return undefined
+  }
+}
+
 class OtlpMappingError extends Error {}
 
 export const otlpToIngestBatch = (request: OtlpTraceRequest): IngestRunBatch => {
@@ -201,6 +217,7 @@ export const otlpToIngestBatch = (request: OtlpTraceRequest): IngestRunBatch => 
       startedAt: nanoToDate(span.startTimeUnixNano),
       durationMs: Math.round(durationMs),
       error,
+      artifacts: parseArtifacts(asString(attrs.get(SPAN_ATTR.artifacts))),
     })
     lastIndexByFingerprint.set(fingerprint, executions.length - 1)
   }
