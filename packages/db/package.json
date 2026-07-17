@@ -28,7 +28,7 @@
     "db:reset": "prisma migrate reset --force",
     "db:seed": "tsx prisma/seed.ts",
     "clean": "rm -rf dist .turbo",
-    "test": "vitest run"
+    "test": "prisma generate && vitest run"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
