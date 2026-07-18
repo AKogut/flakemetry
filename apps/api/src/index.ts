@@ -1,7 +1,7 @@
-import { getPrismaClient } from '@flakemetry/db'
+import { getPrismaClient, IngestionQueue } from '@flakemetry/db'
 
 import { buildApp } from './app'
-import { initSelfTelemetry } from './telemetry'
+import { initSelfTelemetry, observeQueueDepth } from './telemetry'
 
 export type { AppRouter } from './app'
 
@@ -22,8 +22,14 @@ const maxQueueDepth = process.env.FLAKEMETRY_MAX_QUEUE_DEPTH
   ? Number(process.env.FLAKEMETRY_MAX_QUEUE_DEPTH)
   : undefined
 
+const prisma = getPrismaClient()
+const queue = new IngestionQueue(prisma)
+
+observeQueueDepth(() => queue.depth())
+
 const app = buildApp({
-  prisma: getPrismaClient(),
+  prisma,
+  queue,
   logger: {
     level: process.env.LOG_LEVEL ?? 'info',
     redact: ['req.headers.authorization'],

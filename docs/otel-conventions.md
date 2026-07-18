@@ -40,6 +40,7 @@ M1 emits `test.run` + `test.case`. `test.step` and network/browser child spans a
 | `test.params_hash` | `9f2c…` | parameterized bucket, omitted when absent |
 | `test.status` | `pass \| fail \| skip \| flaky` | verdict |
 | `test.attempt` | `2` | retry index (1-based) |
+| `test.retry_of` | `0` | index of the attempt this one retries, when applicable |
 | `test.duration_ms` | `1834` | wall-clock duration |
 | `test.artifacts` | `[{"name":"trace",…}]` | JSON array of artifact refs (screenshot/video/trace), workspace-relative paths |
 
@@ -63,7 +64,7 @@ Reporters export real OTLP spans via `@opentelemetry/exporter-trace-otlp-http` t
 |---|---|
 | `resource.*` | run/resource attributes above (read from the OTLP Resource, falling back to `test.run` span attributes) |
 | `executions[].{filePath,suite,title,status,attempt,durationMs}` | case span attributes |
-| `executions[].retryOfIndex` | reconstructed from attempt ordering per fingerprint |
+| `executions[].retryOfIndex` | `test.retry_of` when present, otherwise reconstructed from attempt ordering per fingerprint |
 | `executions[].error` | the case span `exception` event (`exception.type` / `exception.message` / `exception.stacktrace`) |
 | `run.status` | `test.run` span status (`ERROR` → `failed`), or any failing case |
 | `idempotencyKey` | `flakemetry.idempotency_key`, else the run span trace id |

@@ -122,6 +122,8 @@ export class IngestionQueue {
   }
 
   async depth(): Promise<number> {
-    return this.prisma.ingestionJob.count({ where: { status: 'pending' } })
+    return this.prisma.ingestionJob.count({
+      where: { status: { in: ['pending', 'processing'] } },
+    })
   }
 }

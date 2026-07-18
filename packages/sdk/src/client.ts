@@ -50,7 +50,7 @@ export class IngestClient {
     this.token = options.token
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch
     this.bufferDir = options.bufferDir ?? null
-    this.now = options.now ?? (() => 0)
+    this.now = options.now ?? (() => Date.now())
   }
 
   private buffer(batch: IngestRunBatch): boolean {

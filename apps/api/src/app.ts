@@ -15,7 +15,7 @@ import Fastify, {
 
 import { authenticateProject } from './auth'
 import { createRateLimiter } from './rate-limit'
-import { apiMetrics, observeQueueDepth } from './telemetry'
+import { apiMetrics } from './telemetry'
 import { createContextFactory } from './trpc/context'
 import { appRouter } from './trpc/router'
 
@@ -25,8 +25,10 @@ export interface AppOptions {
   bodyLimitBytes?: number
   logger?: FastifyServerOptions['logger']
   maxQueueDepth?: number
+  depthCacheMs?: number
   rateLimit?: { max: number; windowMs: number }
   rateLimitNow?: () => number
+  now?: () => number
 }
 
 type Admission = { ok: true } | { ok: false; status: number; reason: string; retryAfterMs: number }
@@ -45,7 +47,18 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     now: options.rateLimitNow,
   })
 
-  observeQueueDepth(() => queue.depth())
+  const now = options.now ?? (() => Date.now())
+  const depthCacheMs = options.depthCacheMs ?? 1_000
+  let cachedDepth = 0
+  let depthReadAt = -Infinity
+
+  const queueDepth = async (): Promise<number> => {
+    const at = now()
+    if (at - depthReadAt < depthCacheMs) return cachedDepth
+    cachedDepth = await queue.depth()
+    depthReadAt = at
+    return cachedDepth
+  }
 
   app.addHook('preParsing', async (request, _reply, payload) => {
     if (request.headers['content-encoding'] !== 'gzip') return payload
@@ -67,7 +80,7 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
       apiMetrics.rateLimited.add(1)
       return { ok: false, status: 429, reason: 'rate_limited', retryAfterMs: decision.retryAfterMs }
     }
-    if (options.maxQueueDepth != null && (await queue.depth()) >= options.maxQueueDepth) {
+    if (options.maxQueueDepth != null && (await queueDepth()) >= options.maxQueueDepth) {
       apiMetrics.backpressured.add(1)
       return { ok: false, status: 503, reason: 'backpressure', retryAfterMs: 1_000 }
     }

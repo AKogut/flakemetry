@@ -4,7 +4,12 @@ import { fileURLToPath } from 'node:url'
 
 export default function setup(): void {
   const base = process.env.DATABASE_URL
-  if (!base) return
+  if (!base) {
+    if (process.env.REQUIRE_DB === '1') {
+      throw new Error('REQUIRE_DB is set but DATABASE_URL is missing: database tests would skip')
+    }
+    return
+  }
   const url = new URL(base)
   url.searchParams.set('schema', 'flakemetry_test_db')
   const schema = join(dirname(fileURLToPath(import.meta.url)), '..', 'prisma', 'schema.prisma')

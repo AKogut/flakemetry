@@ -79,6 +79,23 @@ describe.skipIf(!hasDb)('IngestionQueue', () => {
     expect(await queue.depth()).toBe(0)
   })
 
+  it('counts in-flight jobs in depth so backpressure sees the real backlog', async () => {
+    const { orgId, projectId } = await seedProject()
+    const queue = new IngestionQueue(prisma)
+    const { jobId } = await queue.enqueue({
+      orgId,
+      projectId,
+      idempotencyKey: 'inflight',
+      payload: payload('inflight'),
+    })
+
+    await queue.dequeue(1)
+    expect(await queue.depth()).toBe(1)
+
+    await queue.complete(jobId)
+    expect(await queue.depth()).toBe(0)
+  })
+
   it('retries below the attempt cap and dead-letters at the cap', async () => {
     const { orgId, projectId } = await seedProject()
     const queue = new IngestionQueue(prisma, { maxAttempts: 2, baseBackoffMs: 5_000 })
