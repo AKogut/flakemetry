@@ -9,12 +9,15 @@ import {
 } from '@flakemetry/core'
 import type { Prisma, PrismaClient } from '@flakemetry/db'
 
+import type { EventBus } from './events'
+
 export interface ProcessContext {
   orgId: string
   projectId: string
   now: Date
   threshold?: number
   minSamples?: number
+  events?: EventBus
 }
 
 export interface ProcessResult {
@@ -38,6 +41,8 @@ export const processJob = async (
   const finishedAt = batch.run.finishedAt ?? null
 
   const affected = new Set<string>()
+  const createdEvents: { testIdentityId: string; projectId: string; fingerprint: string }[] = []
+  const movedEvents: { testIdentityId: string; projectId: string; alias: string }[] = []
   let newIdentities = 0
   let movedIdentities = 0
 
@@ -120,6 +125,11 @@ export const processJob = async (
         })
         const entry = existing.find((item) => item.id === identityId)
         if (entry) entry.aliases = [...entry.aliases, resolution.addAlias]
+        movedEvents.push({
+          testIdentityId: identityId,
+          projectId: ctx.projectId,
+          alias: resolution.addAlias,
+        })
       } else {
         newIdentities += 1
         const created = await tx.testIdentity.upsert({
@@ -146,6 +156,7 @@ export const processJob = async (
           paramsHash,
           aliases: [],
         })
+        createdEvents.push({ testIdentityId: identityId, projectId: ctx.projectId, fingerprint })
       }
 
       affected.add(identityId)
@@ -175,9 +186,20 @@ export const processJob = async (
     return run.id
   })
 
+  for (const event of createdEvents) ctx.events?.emit('identity.created', event)
+  for (const event of movedEvents) ctx.events?.emit('identity.moved', event)
+
   for (const identityId of affected) {
     await scoreIdentity(prisma, identityId, ctx)
   }
+
+  ctx.events?.emit('run.processed', {
+    runId,
+    projectId: ctx.projectId,
+    executions: batch.executions.length,
+    newIdentities,
+    movedIdentities,
+  })
 
   return {
     runId,
@@ -259,5 +281,12 @@ const scoreIdentity = async (
     where: { testIdentityId: identityId },
     create: { testIdentityId: identityId, ...data },
     update: data,
+  })
+
+  ctx.events?.emit('score.updated', {
+    testIdentityId: identityId,
+    projectId: ctx.projectId,
+    score: result.score,
+    quarantineCandidate: result.quarantineCandidate,
   })
 }

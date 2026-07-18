@@ -1,12 +1,15 @@
 import { ingestRunBatchSchema } from '@flakemetry/contracts'
 import type { IngestionQueue, PrismaClient } from '@flakemetry/db'
 
+import type { EventBus } from './events'
 import { processJob } from './processor'
+import { workerMetrics } from './telemetry'
 
 export interface WorkerOptions {
   pollIntervalMs?: number
   batchSize?: number
   now?: () => Date
+  events?: EventBus
 }
 
 export interface Worker {
@@ -30,16 +33,28 @@ export const createWorker = (
   const tick = async (): Promise<number> => {
     const jobs = await queue.dequeue(batchSize)
     for (const job of jobs) {
+      const pickedUpAt = Date.now()
+      workerMetrics.processingLag.record(Math.max(0, pickedUpAt - job.createdAt.getTime()))
       try {
         const batch = ingestRunBatchSchema.parse(job.payload)
-        await processJob(prisma, batch, { orgId: job.orgId, projectId: job.projectId, now: now() })
+        await processJob(prisma, batch, {
+          orgId: job.orgId,
+          projectId: job.projectId,
+          now: now(),
+          events: options.events,
+        })
         await queue.complete(job.id)
+        workerMetrics.jobsProcessed.add(1)
       } catch (error) {
         const outcome = await queue.fail(
           job.id,
           error instanceof Error ? error.message : String(error),
         )
+        workerMetrics.jobsFailed.add(1, { outcome })
+        if (outcome === 'dead') workerMetrics.jobsDeadLettered.add(1)
         process.stderr.write(`worker: job ${job.id} failed (${outcome}): ${String(error)}\n`)
+      } finally {
+        workerMetrics.processingDuration.record(Date.now() - pickedUpAt)
       }
     }
     return jobs.length

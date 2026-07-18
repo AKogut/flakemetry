@@ -19,6 +19,7 @@ export interface QueuedJob {
   idempotencyKey: string
   payload: unknown
   attempts: number
+  createdAt: Date
 }
 
 export interface IngestionQueueOptions {
@@ -84,7 +85,8 @@ export class IngestionQueue {
         FOR UPDATE SKIP LOCKED
       )
       RETURNING id, org_id AS "orgId", project_id AS "projectId",
-                idempotency_key AS "idempotencyKey", payload, attempts
+                idempotency_key AS "idempotencyKey", payload, attempts,
+                created_at AS "createdAt"
     `
   }
 

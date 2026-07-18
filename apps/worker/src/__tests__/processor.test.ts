@@ -2,6 +2,7 @@ import type { IngestRunBatch } from '@flakemetry/contracts'
 import { PrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
+import { createEventBus, type DomainEventMap } from '../events'
 import { processJob } from '../processor'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
@@ -94,6 +95,63 @@ describe.skipIf(!hasDb)('processJob', () => {
     expect(await prisma.run.count()).toBe(1)
     expect(await prisma.testExecution.count()).toBe(2)
     expect(await prisma.testIdentity.count()).toBe(1)
+  })
+
+  it('emits domain events for identities, scores and the processed run', async () => {
+    const events = createEventBus()
+    const created: DomainEventMap['identity.created'][] = []
+    const scored: DomainEventMap['score.updated'][] = []
+    const processed: DomainEventMap['run.processed'][] = []
+    events.on('identity.created', (payload) => created.push(payload))
+    events.on('score.updated', (payload) => scored.push(payload))
+    events.on('run.processed', (payload) => processed.push(payload))
+
+    const ctx = { ...(await seedProject()), now: NOW, events }
+    const result = await processJob(prisma, batch(), ctx)
+
+    expect(created).toHaveLength(1)
+    expect(created[0]?.fingerprint).toBeTruthy()
+    expect(scored).toHaveLength(1)
+    expect(scored[0]?.testIdentityId).toBe(created[0]?.testIdentityId)
+    expect(processed).toEqual([
+      {
+        runId: result.runId,
+        projectId: ctx.projectId,
+        executions: 2,
+        newIdentities: 1,
+        movedIdentities: 0,
+      },
+    ])
+  })
+
+  it('emits identity.moved when a test file moves', async () => {
+    const events = createEventBus()
+    const moved: DomainEventMap['identity.moved'][] = []
+    events.on('identity.moved', (payload) => moved.push(payload))
+
+    const ctx = { ...(await seedProject()), now: NOW, events }
+    await processJob(prisma, batch(), ctx)
+    await processJob(
+      prisma,
+      batch({
+        idempotencyKey: 'run-000002',
+        executions: [
+          {
+            filePath: 'e2e/auth/login.spec.ts',
+            suite: 'auth',
+            title: 'logs in',
+            status: 'pass',
+            attempt: 1,
+            startedAt: new Date('2026-07-16T11:00:00Z'),
+            durationMs: 1600,
+          },
+        ],
+      }),
+      ctx,
+    )
+
+    expect(moved).toHaveLength(1)
+    expect(moved[0]?.alias).toBeTruthy()
   })
 
   it('stitches history across a file move via L2 identity resolution', async () => {
