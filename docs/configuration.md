@@ -85,6 +85,15 @@ Unknown keys are rejected with an error naming the offending path — typos fail
 
 The API also rate-limits per project token (fixed window) and returns `429` with `Retry-After` when exceeded.
 
+### Processing worker
+
+| Variable | Effect |
+|---|---|
+| `POLL_INTERVAL_MS` | Idle poll interval between dequeue attempts |
+| `FLAKEMETRY_SELF_OTEL_ENDPOINT` | OTLP endpoint for the worker's own metrics (processing lag, throughput, error rate, queue depth) |
+
+The worker emits domain events (`run.processed`, `identity.created`, `identity.moved`, `score.updated`) after each job commits — the seam downstream stages such as signature clustering and AI RCA subscribe to.
+
 ## Inspecting the resolved configuration
 
 ```bash
