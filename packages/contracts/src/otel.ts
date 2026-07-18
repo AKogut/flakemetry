@@ -1,6 +1,12 @@
 import { z } from 'zod'
 
-import type { CiProvider, RunStatus, RunTrigger, TestStatus } from './common'
+import {
+  type CiProvider,
+  CONTRACT_VERSION,
+  type RunStatus,
+  type RunTrigger,
+  type TestStatus,
+} from './common'
 import {
   type ArtifactRef,
   artifactRefSchema,
@@ -8,7 +14,7 @@ import {
   type IngestRunBatch,
 } from './ingestion'
 
-export const CONVENTIONS_VERSION = '0.1.0'
+export const CONVENTIONS_VERSION = CONTRACT_VERSION
 
 export const SPAN_NAMES = {
   run: 'test.run',
@@ -193,8 +199,14 @@ export const otlpToIngestBatch = (request: OtlpTraceRequest): IngestRunBatch => 
       ? Number(attrs.get(SPAN_ATTR.durationMs))
       : Math.max(0, Number(span.endTimeUnixNano) - Number(span.startTimeUnixNano)) / 1_000_000
 
+    const explicitRetryOf = attrs.get(SPAN_ATTR.retryOf)
     const previousIndex = lastIndexByFingerprint.get(fingerprint)
-    const retryOfIndex = attempt > 1 && previousIndex !== undefined ? previousIndex : undefined
+    const retryOfIndex =
+      explicitRetryOf !== undefined
+        ? Number(explicitRetryOf)
+        : attempt > 1 && previousIndex !== undefined
+          ? previousIndex
+          : undefined
 
     const exception = span.events.find((event) => event.name === EXCEPTION_EVENT.name)
     const exceptionAttrs = exception ? toAttrMap(exception.attributes) : undefined

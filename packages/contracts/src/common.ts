@@ -36,12 +36,6 @@ export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 
 export const jsonRecordSchema = z.record(jsonValueSchema)
 
-export const paginatedSchema = <T extends z.ZodTypeAny>(item: T) =>
-  z.object({
-    items: z.array(item),
-    nextCursor: z.string().nullable(),
-  })
-
 export type TestStatus = z.infer<typeof testStatusSchema>
 export type RunStatus = z.infer<typeof runStatusSchema>
 export type CiProvider = z.infer<typeof ciProviderSchema>

@@ -11,9 +11,6 @@
     "url": "git+https://github.com/AKogut/flakemetry.git",
     "directory": "packages/ai"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -38,5 +35,6 @@
     "@flakemetry/eslint-config": "workspace:*",
     "@flakemetry/tsconfig": "workspace:*",
     "@flakemetry/tsup-config": "workspace:*"
-  }
+  },
+  "private": true
 }

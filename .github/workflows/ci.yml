@@ -36,6 +36,7 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://flakemetry:flakemetry@localhost:5432/flakemetry?schema=public
+      REQUIRE_DB: '1'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,6 +57,13 @@ jobs:
           key: turbo-${{ runner.os }}-node${{ matrix.node }}-${{ github.sha }}
           restore-keys: |
             turbo-${{ runner.os }}-node${{ matrix.node }}-
+
+      - name: Apply migrations for test schemas
+        run: |
+          for schema in flakemetry_test_db flakemetry_test_api flakemetry_test_worker; do
+            DATABASE_URL="postgresql://flakemetry:flakemetry@localhost:5432/flakemetry?schema=$schema" \
+              pnpm --filter @flakemetry/db exec prisma migrate deploy
+          done
 
       - run: pnpm format:check
 

@@ -12,6 +12,7 @@ export interface RateLimitDecision {
 
 export interface RateLimiter {
   check: (key: string) => RateLimitDecision
+  size: () => number
 }
 
 interface Bucket {
@@ -22,10 +23,22 @@ interface Bucket {
 export const createRateLimiter = (options: RateLimitOptions): RateLimiter => {
   const now = options.now ?? (() => Date.now())
   const buckets = new Map<string, Bucket>()
+  let lastSweep = 0
+
+  const sweep = (at: number): void => {
+    if (at - lastSweep < options.windowMs) return
+    lastSweep = at
+    for (const [key, bucket] of buckets) {
+      if (at - bucket.windowStart >= options.windowMs) buckets.delete(key)
+    }
+  }
 
   return {
+    size: () => buckets.size,
+
     check(key: string): RateLimitDecision {
       const at = now()
+      sweep(at)
       const bucket = buckets.get(key)
       if (!bucket || at - bucket.windowStart >= options.windowMs) {
         buckets.set(key, { count: 1, windowStart: at })

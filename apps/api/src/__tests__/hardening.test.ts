@@ -1,7 +1,7 @@
 import { gzipSync } from 'node:zlib'
 
 import { RESOURCE_ATTR, SPAN_ATTR, SPAN_NAMES } from '@flakemetry/contracts'
-import { generateToken, hashToken, PrismaClient } from '@flakemetry/db'
+import { generateToken, hashToken, IngestionQueue, PrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { buildApp } from '../app'
@@ -120,7 +120,7 @@ describe.skipIf(!hasDb)('api hardening', () => {
 
   it('sheds load with 503 when the queue depth exceeds the limit', async () => {
     const { raw } = await seedToken()
-    const app = buildApp({ prisma, maxQueueDepth: 1 })
+    const app = buildApp({ prisma, maxQueueDepth: 1, depthCacheMs: 0 })
     const send = (key: string) =>
       app.inject({
         method: 'POST',
@@ -133,6 +133,30 @@ describe.skipIf(!hasDb)('api hardening', () => {
     const shed = await send('run-000002')
     expect(shed.statusCode).toBe(503)
     expect(shed.headers['retry-after']).toBeDefined()
+  })
+
+  it('caches queue depth instead of counting on every request', async () => {
+    const { raw } = await seedToken()
+    const queue = new IngestionQueue(prisma)
+    let depthCalls = 0
+    const countingQueue = Object.assign(Object.create(Object.getPrototypeOf(queue)), queue, {
+      depth: async () => {
+        depthCalls += 1
+        return 0
+      },
+    }) as IngestionQueue
+
+    const app = buildApp({ prisma, queue: countingQueue, maxQueueDepth: 100, depthCacheMs: 60_000 })
+    for (const key of ['run-000001', 'run-000002', 'run-000003']) {
+      await app.inject({
+        method: 'POST',
+        url: '/v1/ingest',
+        headers: { authorization: `Bearer ${raw}` },
+        payload: validBatch(key),
+      })
+    }
+
+    expect(depthCalls).toBe(1)
   })
 
   it('decompresses gzip-encoded OTLP request bodies', async () => {
