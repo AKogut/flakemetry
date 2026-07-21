@@ -1,8 +1,9 @@
 {
-  "extends": "@flakemetry/tsconfig/node.json",
+  "extends": "@flakemetry/tsconfig/nextjs.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": "src"
+    "plugins": [{ "name": "next" }],
+    "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["src"]
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
 }

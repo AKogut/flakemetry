@@ -1,0 +1,35 @@
+{
+  "name": "@flakemetry/queries",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Tenant-scoped read queries shared by the api and the dashboard",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "clean": "rm -rf dist .turbo"
+  },
+  "devDependencies": {
+    "@flakemetry/eslint-config": "workspace:*",
+    "@flakemetry/tsconfig": "workspace:*",
+    "@flakemetry/tsup-config": "workspace:*",
+    "@types/node": "^22.10.5",
+    "tsup": "^8.3.5"
+  },
+  "dependencies": {
+    "@flakemetry/contracts": "workspace:*",
+    "@flakemetry/db": "workspace:*"
+  }
+}

@@ -5,12 +5,9 @@ import {
   runsListInputSchema,
   testGetInputSchema,
 } from '@flakemetry/contracts'
+import { flakyBoard, getRca, getRun, getTest, listRuns } from '@flakemetry/queries'
 import { TRPCError } from '@trpc/server'
 
-import { flakyBoard } from '../queries/flaky'
-import { getRca } from '../queries/rca'
-import { getRun, listRuns } from '../queries/runs'
-import { getTest } from '../queries/tests'
 import { protectedProcedure, router } from './trpc'
 
 export const appRouter = router({
