@@ -72,9 +72,16 @@ The write path returns `202` instantly and does the heavy work asynchronously â€
 ```bash
 git clone https://github.com/AKogut/flakemetry.git
 cd flakemetry
-pnpm install
+cp .env.example .env
+echo "AUTH_SECRET=$(openssl rand -base64 32)" >> .env
 docker compose up
 ```
+
+The dashboard is on [localhost:3000](http://localhost:3000) and the ingestion API on
+[localhost:4000](http://localhost:4000), seeded with demo runs. Sign-in uses GitHub OAuth â€” create
+an OAuth app with callback `http://localhost:3000/api/auth/callback/github` and put its
+`AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` in `.env`. The first account to sign in adopts the seeded
+workspace.
 
 Add the reporter to a Playwright project:
 

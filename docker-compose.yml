@@ -72,7 +72,7 @@ services:
     ports:
       - '${API_PORT:-4000}:4000'
     healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://localhost:4000/health']
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:4000/health']
       interval: 10s
       timeout: 3s
       retries: 6
@@ -86,7 +86,7 @@ services:
         condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-flakemetry}:${POSTGRES_PASSWORD:-flakemetry}@postgres:5432/${POSTGRES_DB:-flakemetry}?schema=public
-      HEARTBEAT_INTERVAL_MS: 30000
+      POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-1000}
 
   web:
     build:
@@ -97,11 +97,17 @@ services:
         condition: service_completed_successfully
     environment:
       PORT: 3000
+      HOSTNAME: 0.0.0.0
       DATABASE_URL: postgresql://${POSTGRES_USER:-flakemetry}:${POSTGRES_PASSWORD:-flakemetry}@postgres:5432/${POSTGRES_DB:-flakemetry}?schema=public
+      AUTH_SECRET: '${AUTH_SECRET:?set AUTH_SECRET in .env, generate one with openssl rand -base64 32}'
+      AUTH_GITHUB_ID: ${AUTH_GITHUB_ID:-}
+      AUTH_GITHUB_SECRET: ${AUTH_GITHUB_SECRET:-}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+      AUTH_TRUST_HOST: 'true'
     ports:
       - '${WEB_PORT:-3000}:3000'
     healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000/health']
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/health']
       interval: 10s
       timeout: 3s
       retries: 6
