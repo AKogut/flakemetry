@@ -53,11 +53,16 @@ export const runDetailSchema = runListItemSchema.extend({
 })
 
 export const testHistoryPointSchema = z.object({
+  executionId: idSchema,
   runId: idSchema,
   commitSha: commitShaSchema,
+  branch: z.string(),
   startedAt: timestampSchema,
   status: testStatusSchema,
+  attempt: z.number().int().min(1),
   durationMs: z.number().int().nonnegative(),
+  errorMessage: z.string().nullable(),
+  hasRca: z.boolean(),
 })
 
 export const testDetailSchema = z.object({

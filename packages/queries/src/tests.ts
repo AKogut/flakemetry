@@ -26,10 +26,14 @@ export const getTest = async (
     orderBy: { startedAt: 'desc' },
     take: historyLimit,
     select: {
+      id: true,
       status: true,
+      attempt: true,
       durationMs: true,
       startedAt: true,
-      run: { select: { id: true, commitSha: true } },
+      errorMessage: true,
+      run: { select: { id: true, commitSha: true, branch: true } },
+      rcaReport: { select: { id: true } },
     },
   })
 
@@ -46,11 +50,16 @@ export const getTest = async (
     reasonCodes,
     history: executions
       .map((execution) => ({
+        executionId: execution.id,
         runId: execution.run.id,
         commitSha: execution.run.commitSha,
+        branch: execution.run.branch,
         startedAt: execution.startedAt,
         status: execution.status,
+        attempt: execution.attempt,
         durationMs: execution.durationMs,
+        errorMessage: execution.errorMessage,
+        hasRca: execution.rcaReport !== null,
       }))
       .reverse(),
   }

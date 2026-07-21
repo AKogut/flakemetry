@@ -313,3 +313,116 @@ label {
   font-size: 0.85rem;
   color: var(--muted);
 }
+
+.sparkline {
+  display: block;
+  margin: 0.6rem 0 0;
+}
+
+.score-badge {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.reasons {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.reasons li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  font-size: 0.88rem;
+}
+
+.reason-code {
+  flex-shrink: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--flaky);
+  border-radius: 5px;
+  padding: 0.12rem 0.4rem;
+}
+
+.reason-stable {
+  color: var(--pass);
+}
+
+.pill {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--border);
+}
+
+.pill-candidate {
+  color: var(--flaky);
+}
+
+.pill-quarantined {
+  color: var(--fail);
+}
+
+.filters {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1.1rem;
+}
+
+.filter-tab {
+  font-size: 0.85rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.filter-tab:hover {
+  color: var(--text);
+}
+
+.filter-tab[data-active='true'] {
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.rca {
+  border-color: var(--border);
+}
+
+.rca-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.rca-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.9rem;
+}
+
+.error-box {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--fail);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.9rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
