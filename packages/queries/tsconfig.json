@@ -1,0 +1,4 @@
+{
+  "extends": "@flakemetry/tsconfig/library.json",
+  "include": ["src"]
+}
