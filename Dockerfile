@@ -8,6 +8,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps ./apps
 COPY packages ./packages
 RUN corepack pnpm install --frozen-lockfile
+ENV AUTH_SECRET=build-time-placeholder
 RUN corepack pnpm build
 
 FROM build AS migrate
@@ -22,6 +23,8 @@ FROM build AS worker
 ENV NODE_ENV=production
 CMD ["node", "apps/worker/dist/index.js"]
 
-FROM build AS web
+FROM base AS web
 ENV NODE_ENV=production
-CMD ["node", "apps/web/dist/index.js"]
+COPY --from=build /app/apps/web/.next/standalone ./
+COPY --from=build /app/apps/web/.next/static ./apps/web/.next/static
+CMD ["node", "apps/web/server.js"]
