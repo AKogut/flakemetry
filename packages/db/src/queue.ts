@@ -69,7 +69,7 @@ export class IngestionQueue {
   }
 
   async dequeue(limit = 1): Promise<QueuedJob[]> {
-    const timeout = `${Math.round(this.options.visibilityTimeoutMs / 1000)} seconds`
+    const timeout = `${this.options.visibilityTimeoutMs} milliseconds`
     return this.prisma.$queryRaw<QueuedJob[]>`
       UPDATE ingestion_job
       SET status = 'processing',
@@ -79,7 +79,7 @@ export class IngestionQueue {
       WHERE id IN (
         SELECT id FROM ingestion_job
         WHERE status IN ('pending', 'processing')
-          AND visible_at <= now()
+          AND visible_at <= now() + '1 millisecond'::interval
         ORDER BY visible_at ASC
         LIMIT ${limit}
         FOR UPDATE SKIP LOCKED
@@ -110,14 +110,15 @@ export class IngestionQueue {
       return 'dead'
     }
     const backoffMs = this.options.baseBackoffMs * 2 ** (job.attempts - 1)
-    await this.prisma.ingestionJob.update({
-      where: { id: jobId },
-      data: {
-        status: 'pending',
-        lastError: error,
-        visibleAt: new Date(Date.now() + backoffMs),
-      },
-    })
+    const backoff = `${backoffMs} milliseconds`
+    await this.prisma.$executeRaw`
+      UPDATE ingestion_job
+      SET status = 'pending',
+          last_error = ${error},
+          visible_at = now() + ${backoff}::interval,
+          updated_at = now()
+      WHERE id = ${jobId}::uuid
+    `
     return 'retry'
   }
 

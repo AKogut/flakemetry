@@ -22,3 +22,12 @@ The ingestion api does the minimum synchronously: authenticate the project token
 - At-least-once delivery plus idempotency keys make re-delivery safe; duplicate batches cannot double-count.
 - Results appear in the dashboard with a processing lag — the UI must communicate freshness honestly.
 - Queue depth becomes the platform's primary health metric and backpressure signal.
+
+## Implementation note: job visibility lives in one clock domain
+
+Job visibility is a comparison between a stored timestamp and "now", so both sides must come from the **database** clock. Two defects were found and fixed here:
+
+- `visible_at` was populated by the ORM from the **application** clock while `dequeue` compared it against Postgres `now()`. Any positive skew between the app host and the database (NTP drift, containers on different hosts) made freshly enqueued jobs invisible for the duration of that skew. The column is now database-generated, and retry backoff is computed as `now() + interval` in SQL rather than from the application clock.
+- The column is `TIMESTAMP(3)` while `now()` is microsecond-precision, so a stored value can **round up** to as much as half a millisecond into the future. `dequeue` therefore compares against `now() + 1 millisecond`, a tolerance equal to the storage granularity.
+
+Together these made a just-enqueued job invisible in roughly 99% of tight enqueue-then-dequeue cycles on a machine with 1 ms host/container clock skew. In production the effect was masked by the worker's polling interval, which is exactly why it survived so long: the only visible symptom was an occasional flaky test.
