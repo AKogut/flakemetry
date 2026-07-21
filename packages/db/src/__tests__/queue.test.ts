@@ -79,6 +79,23 @@ describe.skipIf(!hasDb)('IngestionQueue', () => {
     expect(await queue.depth()).toBe(0)
   })
 
+  it('makes a freshly enqueued job immediately visible to dequeue', async () => {
+    const { orgId, projectId } = await seedProject()
+    const queue = new IngestionQueue(prisma)
+
+    for (let round = 0; round < 25; round += 1) {
+      await queue.enqueue({
+        orgId,
+        projectId,
+        idempotencyKey: `immediate-${round}`,
+        payload: payload('immediate'),
+      })
+      const batch = await queue.dequeue(1)
+      expect(batch).toHaveLength(1)
+      await queue.complete(batch[0]!.id)
+    }
+  })
+
   it('counts in-flight jobs in depth so backpressure sees the real backlog', async () => {
     const { orgId, projectId } = await seedProject()
     const queue = new IngestionQueue(prisma)

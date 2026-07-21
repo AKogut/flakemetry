@@ -103,7 +103,7 @@ model IngestionJob {
   payload        Json
   status         IngestionJobStatus @default(pending)
   attempts       Int                @default(0)
-  visibleAt      DateTime           @default(now()) @map("visible_at")
+  visibleAt      DateTime           @default(dbgenerated("now()")) @map("visible_at")
   lastError      String?            @map("last_error")
   createdAt      DateTime           @default(now()) @map("created_at")
   updatedAt      DateTime           @updatedAt @map("updated_at")
