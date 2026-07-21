@@ -11,3 +11,6 @@ coverage/
 out/
 test-results/
 playwright-report/
+
+# Next.js generated types
+next-env.d.ts
