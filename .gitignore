@@ -14,3 +14,4 @@ playwright-report/
 
 # Next.js generated types
 next-env.d.ts
+*.tsbuildinfo
