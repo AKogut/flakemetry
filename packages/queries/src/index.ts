@@ -1,4 +1,5 @@
 export * from './flaky'
+export * from './policy'
 export * from './rca'
 export * from './runs'
 export * from './tests'

@@ -64,8 +64,12 @@ describe.skipIf(!hasDb)('full ingestion chain', () => {
   let app: ReturnType<typeof buildApp>
   let endpoint: string
   let token: string
+  let orgId: string
+  let projectId: string
 
   beforeEach(async () => {
+    await prisma.policyChange.deleteMany()
+    await prisma.projectPolicy.deleteMany()
     await prisma.flakyScore.deleteMany()
     await prisma.testExecution.deleteMany()
     await prisma.testIdentity.deleteMany()
@@ -79,6 +83,8 @@ describe.skipIf(!hasDb)('full ingestion chain', () => {
     const project = await prisma.project.create({
       data: { orgId: org.id, name: 'Web', slug: 'web' },
     })
+    orgId = org.id
+    projectId = project.id
     token = generateToken()
     await prisma.ingestToken.create({
       data: { orgId: org.id, projectId: project.id, name: 'ci', tokenHash: hashToken(token) },
@@ -151,5 +157,18 @@ describe.skipIf(!hasDb)('full ingestion chain', () => {
 
     expect(await prisma.run.count()).toBe(2)
     expect(await prisma.testExecution.count()).toBe(3)
+  })
+
+  it('applies the project policy the worker loads from the database', async () => {
+    await prisma.projectPolicy.create({
+      data: { projectId, orgId, flakyThreshold: 0.01, minSamples: 1 },
+    })
+
+    const worker = createWorker(prisma, new IngestionQueue(prisma))
+    await exportRunOverOtlp(recordRun('aaa1111', true), 'e2e-run-000001', { endpoint, token })
+    await drain(worker)
+
+    const scored = await prisma.flakyScore.findFirstOrThrow()
+    expect(scored.quarantineCandidate).toBe(true)
   })
 })

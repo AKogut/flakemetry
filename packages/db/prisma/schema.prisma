@@ -63,9 +63,10 @@ model User {
   image         String?
   createdAt     DateTime  @default(now()) @map("created_at")
 
-  accounts    Account[]
-  sessions    Session[]
-  memberships Membership[]
+  accounts       Account[]
+  sessions       Session[]
+  memberships    Membership[]
+  policyChanges  PolicyChange[]
 
   @@map("user")
 }
@@ -144,10 +145,47 @@ model Project {
   rcaReports      RcaReport[]
   ingestTokens    IngestToken[]
   ingestionJobs   IngestionJob[]
+  policy          ProjectPolicy?
+  policyChanges   PolicyChange[]
 
   @@unique([orgId, slug])
   @@index([orgId])
   @@map("project")
+}
+
+model ProjectPolicy {
+  projectId              String   @id @map("project_id") @db.Uuid
+  orgId                  String   @map("org_id") @db.Uuid
+  flakyThreshold         Float?   @map("flaky_threshold")
+  minSamples             Int?     @map("min_samples")
+  quarantineEnabled      Boolean? @map("quarantine_enabled")
+  quarantineCooldownRuns Int?     @map("quarantine_cooldown_runs")
+  aiRcaEnabled           Boolean? @map("ai_rca_enabled")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("project_policy")
+}
+
+model PolicyChange {
+  id        String   @id @default(uuid()) @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  field     String
+  oldValue  String?  @map("old_value")
+  newValue  String?  @map("new_value")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([orgId])
+  @@map("policy_change")
 }
 
 model IngestToken {

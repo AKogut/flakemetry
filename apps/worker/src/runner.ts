@@ -2,6 +2,7 @@ import { ingestRunBatchSchema } from '@flakemetry/contracts'
 import type { IngestionQueue, PrismaClient } from '@flakemetry/db'
 
 import type { EventBus } from './events'
+import { loadScoringPolicy, type ScoringPolicy } from './policy'
 import { processJob } from './processor'
 import { workerMetrics } from './telemetry'
 
@@ -32,15 +33,23 @@ export const createWorker = (
 
   const tick = async (): Promise<number> => {
     const jobs = await queue.dequeue(batchSize)
+    const policyCache = new Map<string, ScoringPolicy>()
     for (const job of jobs) {
       const pickedUpAt = Date.now()
       workerMetrics.processingLag.record(Math.max(0, pickedUpAt - job.createdAt.getTime()))
       try {
         const batch = ingestRunBatchSchema.parse(job.payload)
+        let policy = policyCache.get(job.projectId)
+        if (!policy) {
+          policy = await loadScoringPolicy(prisma, job.projectId)
+          policyCache.set(job.projectId, policy)
+        }
         await processJob(prisma, batch, {
           orgId: job.orgId,
           projectId: job.projectId,
           now: now(),
+          threshold: policy.threshold,
+          minSamples: policy.minSamples,
           events: options.events,
         })
         await queue.complete(job.id)
