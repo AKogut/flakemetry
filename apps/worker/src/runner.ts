@@ -1,3 +1,4 @@
+import { type LlmProvider, resolveProvider } from '@flakemetry/ai'
 import { ingestRunBatchSchema } from '@flakemetry/contracts'
 import type { IngestionQueue, PrismaClient } from '@flakemetry/db'
 
@@ -11,6 +12,7 @@ export interface WorkerOptions {
   batchSize?: number
   now?: () => Date
   events?: EventBus
+  provider?: LlmProvider | null
 }
 
 export interface Worker {
@@ -29,6 +31,7 @@ export const createWorker = (
   const pollIntervalMs = options.pollIntervalMs ?? 1_000
   const batchSize = options.batchSize ?? 5
   const now = options.now ?? (() => new Date())
+  const provider = options.provider !== undefined ? options.provider : resolveProvider(process.env)
   let running = false
 
   const tick = async (): Promise<number> => {
@@ -50,6 +53,9 @@ export const createWorker = (
           now: now(),
           threshold: policy.threshold,
           minSamples: policy.minSamples,
+          provider,
+          aiEnabled: policy.aiEnabled,
+          aiDailyTokenBudget: policy.dailyTokenBudget,
           events: options.events,
         })
         await queue.complete(job.id)

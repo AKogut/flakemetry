@@ -70,7 +70,10 @@ describe.skipIf(!hasDb)('per-project scoring policy', () => {
 
   it('defaults to 0.8 / 5 when no policy row exists', async () => {
     const { projectId } = await seedProject()
-    expect(await loadScoringPolicy(prisma, projectId)).toEqual({ threshold: 0.8, minSamples: 5 })
+    expect(await loadScoringPolicy(prisma, projectId)).toMatchObject({
+      threshold: 0.8,
+      minSamples: 5,
+    })
   })
 
   it('reads a stored UI policy row', async () => {
@@ -78,7 +81,10 @@ describe.skipIf(!hasDb)('per-project scoring policy', () => {
     await prisma.projectPolicy.create({
       data: { projectId, orgId, flakyThreshold: 0.5, minSamples: 2 },
     })
-    expect(await loadScoringPolicy(prisma, projectId)).toEqual({ threshold: 0.5, minSamples: 2 })
+    expect(await loadScoringPolicy(prisma, projectId)).toMatchObject({
+      threshold: 0.5,
+      minSamples: 2,
+    })
   })
 
   it('lets an env override win over the stored row', async () => {
@@ -87,7 +93,10 @@ describe.skipIf(!hasDb)('per-project scoring policy', () => {
       data: { projectId, orgId, flakyThreshold: 0.5, minSamples: 2 },
     })
     process.env.FLAKEMETRY_FLAKY_THRESHOLD = '0.99'
-    expect(await loadScoringPolicy(prisma, projectId)).toEqual({ threshold: 0.99, minSamples: 2 })
+    expect(await loadScoringPolicy(prisma, projectId)).toMatchObject({
+      threshold: 0.99,
+      minSamples: 2,
+    })
   })
 
   it('a lower stored threshold makes a test a quarantine candidate on the next run', async () => {

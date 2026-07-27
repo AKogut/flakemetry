@@ -23,6 +23,15 @@ export const workerMetrics = {
     description: 'time spent processing a job',
     unit: 'ms',
   }),
+  rcaGenerated: meter.createCounter('flakemetry.worker.rca_generated', {
+    description: 'root-cause analyses produced by the LLM',
+  }),
+  rcaSkipped: meter.createCounter('flakemetry.worker.rca_skipped', {
+    description: 'RCA attempts whose model output could not be parsed',
+  }),
+  rcaBudgetExhausted: meter.createCounter('flakemetry.worker.rca_budget_exhausted', {
+    description: 'RCA runs skipped because the daily token budget was spent',
+  }),
 }
 
 export const observeQueueDepth = (getDepth: () => Promise<number>): void => {

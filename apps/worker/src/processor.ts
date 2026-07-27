@@ -1,3 +1,4 @@
+import type { LlmProvider } from '@flakemetry/ai'
 import type { IngestRunBatch } from '@flakemetry/contracts'
 import {
   computeFingerprint,
@@ -10,6 +11,7 @@ import {
 import type { Prisma, PrismaClient } from '@flakemetry/db'
 
 import type { EventBus } from './events'
+import { type FailureRecord, processFailures } from './rca'
 
 export interface ProcessContext {
   orgId: string
@@ -17,6 +19,9 @@ export interface ProcessContext {
   now: Date
   threshold?: number
   minSamples?: number
+  provider?: LlmProvider | null
+  aiEnabled?: boolean
+  aiDailyTokenBudget?: number
   events?: EventBus
 }
 
@@ -43,6 +48,7 @@ export const processJob = async (
   const affected = new Set<string>()
   const createdEvents: { testIdentityId: string; projectId: string; fingerprint: string }[] = []
   const movedEvents: { testIdentityId: string; projectId: string; alias: string }[] = []
+  const failures: FailureRecord[] = []
   let newIdentities = 0
   let movedIdentities = 0
 
@@ -181,6 +187,18 @@ export const processJob = async (
         select: { id: true },
       })
       createdIds.push(row.id)
+
+      if (execution.error) {
+        failures.push({
+          executionId: row.id,
+          filePath: execution.filePath,
+          suite: execution.suite,
+          title: execution.title,
+          errorType: execution.error.type ?? null,
+          errorMessage: execution.error.message,
+          errorStack: execution.error.stack ?? null,
+        })
+      }
     }
 
     return run.id
@@ -192,6 +210,20 @@ export const processJob = async (
   for (const identityId of affected) {
     await scoreIdentity(prisma, identityId, ctx)
   }
+
+  await processFailures(
+    prisma,
+    {
+      orgId: ctx.orgId,
+      projectId: ctx.projectId,
+      now: ctx.now,
+      provider: ctx.provider,
+      aiEnabled: ctx.aiEnabled,
+      dailyTokenBudget: ctx.aiDailyTokenBudget,
+      events: ctx.events,
+    },
+    failures,
+  )
 
   ctx.events?.emit('run.processed', {
     runId,
