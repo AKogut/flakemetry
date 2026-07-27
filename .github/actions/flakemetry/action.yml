@@ -1,0 +1,30 @@
+name: Flakemetry Upload
+description: Send recorded Playwright test results to the Flakemetry ingestion API.
+branding:
+  icon: activity
+  color: yellow
+inputs:
+  token:
+    description: Flakemetry ingest token (store it as a repository secret).
+    required: true
+  endpoint:
+    description: Ingestion API endpoint, e.g. https://flakemetry.example.com or http://localhost:4000.
+    required: true
+  file:
+    description: Path to the results file the reporter wrote (FLAKEMETRY_OUTPUT_FILE).
+    required: false
+    default: flakemetry-results.json
+  fail-on-error:
+    description: Fail the step when the upload does not succeed. Off by default so ingestion never blocks CI.
+    required: false
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: node "$GITHUB_ACTION_PATH/upload.mjs"
+      env:
+        FLAKEMETRY_TOKEN: ${{ inputs.token }}
+        FLAKEMETRY_ENDPOINT: ${{ inputs.endpoint }}
+        FLAKEMETRY_RESULTS_FILE: ${{ inputs.file }}
+        FLAKEMETRY_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
