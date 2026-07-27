@@ -93,14 +93,36 @@ export default defineConfig({
 })
 ```
 
-Wire it into CI:
+Wire it into CI. Let the test step write the results file, then upload it — the upload
+step runs even when tests fail and never blocks the build:
 
 ```yaml
-- uses: AKogut/flakemetry/.github/actions/flakemetry@main
+- name: Run tests
+  run: npx playwright test
+  env:
+    FLAKEMETRY_OUTPUT_FILE: flakemetry-results.json
+
+- name: Upload to Flakemetry
   if: always()
+  uses: AKogut/flakemetry/.github/actions/flakemetry@main
   with:
     token: ${{ secrets.FLAKEMETRY_TOKEN }}
+    endpoint: ${{ secrets.FLAKEMETRY_ENDPOINT }}
+
+- name: Comment flaky summary on the PR
+  if: always()
+  uses: AKogut/flakemetry/.github/actions/flakemetry-pr-comment@main
+  with:
+    token: ${{ secrets.FLAKEMETRY_TOKEN }}
+    endpoint: ${{ secrets.FLAKEMETRY_ENDPOINT }}
 ```
+
+The comment step needs `permissions: pull-requests: write` on the job. It posts one sticky
+comment and updates it on every run; it never fails the build.
+
+Prefer sending straight from your own tooling? `flakemetry upload flakemetry-results.json`
+(from `@flakemetry/cli`) does the same over any CI provider, reading
+`FLAKEMETRY_ENDPOINT` and `FLAKEMETRY_TOKEN` from the environment.
 
 ## How it works
 

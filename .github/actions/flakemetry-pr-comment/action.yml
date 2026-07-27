@@ -1,0 +1,35 @@
+name: Flakemetry PR Comment
+description: Post a sticky pull-request comment summarizing this run's flaky and failing tests.
+branding:
+  icon: message-square
+  color: yellow
+inputs:
+  token:
+    description: Flakemetry ingest token (store it as a repository secret).
+    required: true
+  endpoint:
+    description: Query API endpoint, e.g. https://flakemetry.example.com or http://localhost:4000.
+    required: true
+  github-token:
+    description: GitHub token used to post the comment. Needs pull-requests:write.
+    required: false
+    default: ${{ github.token }}
+  commit-sha:
+    description: Commit SHA to summarize. Defaults to the PR head or the pushed commit.
+    required: false
+    default: ''
+  retries:
+    description: How many times to poll the API while the run is still being processed.
+    required: false
+    default: '10'
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: node "$GITHUB_ACTION_PATH/comment.mjs"
+      env:
+        FLAKEMETRY_TOKEN: ${{ inputs.token }}
+        FLAKEMETRY_ENDPOINT: ${{ inputs.endpoint }}
+        FLAKEMETRY_COMMIT_SHA: ${{ inputs.commit-sha }}
+        FLAKEMETRY_RETRIES: ${{ inputs.retries }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}

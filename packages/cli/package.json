@@ -47,6 +47,7 @@
   },
   "dependencies": {
     "@flakemetry/contracts": "workspace:*",
+    "@flakemetry/sdk": "workspace:*",
     "commander": "^13.0.0",
     "yaml": "^2.7.0"
   }

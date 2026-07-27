@@ -191,6 +191,9 @@ importers:
       '@flakemetry/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@flakemetry/sdk':
+        specifier: workspace:*
+        version: link:../sdk
       commander:
         specifier: ^13.0.0
         version: 13.1.0

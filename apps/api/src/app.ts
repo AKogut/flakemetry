@@ -6,6 +6,7 @@ import {
   otlpTraceRequestSchema,
 } from '@flakemetry/contracts'
 import { IngestionQueue, type PrismaClient } from '@flakemetry/db'
+import { getRunSummaryByCommit, renderPrComment } from '@flakemetry/queries'
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify'
 import Fastify, {
   type FastifyInstance,
@@ -137,6 +138,23 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
       acceptedExecutions: batch.executions.length,
       deduplicated,
     })
+  })
+
+  app.get('/v1/runs/summary', async (request, reply) => {
+    const project = await authenticateProject(prisma, request)
+    if (!project) {
+      return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
+    }
+
+    const commitSha = (request.query as { commitSha?: string }).commitSha
+    if (!commitSha || !/^[0-9a-f]{7,40}$/i.test(commitSha)) {
+      return reply.code(400).send({ error: 'invalid_commit_sha' })
+    }
+
+    const summary = await getRunSummaryByCommit(prisma, project.projectId, commitSha)
+    if (!summary) return reply.code(200).send({ found: false })
+
+    return reply.code(200).send({ found: true, summary, markdown: renderPrComment(summary) })
   })
 
   app.post('/v1/traces', async (request, reply) => {
