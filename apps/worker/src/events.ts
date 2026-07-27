@@ -22,6 +22,13 @@ export interface DomainEventMap {
     score: number
     quarantineCandidate: boolean
   }
+  'rca.created': {
+    executionId: string
+    projectId: string
+    signatureId: string
+    model: string
+    tokenCost: number
+  }
 }
 
 export type DomainEventName = keyof DomainEventMap
