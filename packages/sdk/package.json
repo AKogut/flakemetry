@@ -1,6 +1,6 @@
 {
   "name": "@flakemetry/sdk",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "OpenTelemetry test instrumentation and ingest client",
   "license": "MIT",
   "author": "Andrii Kohut",

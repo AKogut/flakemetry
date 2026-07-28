@@ -1,6 +1,6 @@
 {
   "name": "@flakemetry/core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Pure domain logic: test identity and flaky scoring",
   "license": "MIT",
   "author": "Andrii Kohut",
