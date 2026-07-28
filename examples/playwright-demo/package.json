@@ -1,0 +1,14 @@
+{
+  "name": "flakemetry-playwright-demo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A tiny Playwright suite with a deliberately flaky test, wired to the Flakemetry reporter.",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@flakemetry/playwright-reporter": "latest",
+    "@playwright/test": "^1.49.0"
+  }
+}

@@ -83,6 +83,29 @@ an OAuth app with callback `http://localhost:3000/api/auth/callback/github` and 
 `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` in `.env`. The first account to sign in adopts the seeded
 workspace.
 
+## See it in 60 seconds
+
+Load the demo dataset — one project's worth of history with a stable test, two flaky tests, and a
+regression that AI RCA explains:
+
+```bash
+pnpm demo   # resets the database and seeds the demo dataset in one command
+```
+
+Then walk the story in the dashboard:
+
+1. **Flaky board** — every test ranked by a transparent score, worst first.
+2. **Test detail** — that score broken into reason codes (same commit, different result · pass-on-rerun · …).
+3. **RCA panel** — the `orders` regression, explained with a likely cause and a suggested fix.
+
+Prefer to generate the data yourself? Run the sample suite in
+[`examples/playwright-demo`](examples/playwright-demo) against your instance a few times — it ships one
+of every outcome (stable, timing-race flake, retry flake, regression).
+
+![Flakemetry — flaky detection and AI root-cause, end to end](docs/demo.gif)
+
+<sub>Recorded from the walkthrough above · re-capture it with [docs/recording-the-demo.md](docs/recording-the-demo.md).</sub>
+
 Add the reporter to a Playwright project:
 
 ```ts
