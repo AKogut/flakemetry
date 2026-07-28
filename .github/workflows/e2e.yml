@@ -1,0 +1,66 @@
+name: e2e
+
+# Full-chain smoke: seeds the demo dataset and runs the entire suite (not just
+# the affected packages), so the reporter → ingest → worker → scored-rows path
+# is proven green nightly and on demand — even when a PR didn't touch it.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+
+jobs:
+  e2e:
+    name: e2e smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: flakemetry
+          POSTGRES_PASSWORD: flakemetry
+          POSTGRES_DB: flakemetry
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U flakemetry -d flakemetry"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://flakemetry:flakemetry@localhost:5432/flakemetry?schema=public
+      REQUIRE_DB: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations
+        run: |
+          for schema in public flakemetry_test_db flakemetry_test_api flakemetry_test_worker flakemetry_test_web; do
+            DATABASE_URL="postgresql://flakemetry:flakemetry@localhost:5432/flakemetry?schema=$schema" \
+              pnpm --filter @flakemetry/db exec prisma migrate deploy
+          done
+
+      - name: Load the demo dataset (pnpm demo)
+        run: pnpm demo
+
+      - run: pnpm format:check
+
+      - name: Full suite (reporter → ingest → worker → dashboard state)
+        run: pnpm turbo run build lint typecheck test
