@@ -1,12 +1,15 @@
 import { createGunzip } from 'node:zlib'
 
 import {
+  artifactPresignRequestSchema,
   ingestRunBatchSchema,
+  isAllowedArtifactContentType,
   otlpToIngestBatch,
   otlpTraceRequestSchema,
 } from '@flakemetry/contracts'
 import { IngestionQueue, type PrismaClient } from '@flakemetry/db'
 import { getRunSummaryByCommit, renderPrComment } from '@flakemetry/queries'
+import { artifactKey, type ObjectStore } from '@flakemetry/storage'
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify'
 import Fastify, {
   type FastifyInstance,
@@ -23,6 +26,7 @@ import { appRouter } from './trpc/router'
 export interface AppOptions {
   prisma: PrismaClient
   queue?: IngestionQueue
+  store?: ObjectStore | null
   bodyLimitBytes?: number
   logger?: FastifyServerOptions['logger']
   maxQueueDepth?: number
@@ -138,6 +142,58 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
       acceptedExecutions: batch.executions.length,
       deduplicated,
     })
+  })
+
+  app.post('/v1/artifacts/presign', async (request, reply) => {
+    const project = await authenticateProject(prisma, request)
+    if (!project) {
+      return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
+    }
+
+    const store = options.store
+    if (!store) {
+      return reply.code(501).send({ error: 'artifacts_disabled' })
+    }
+
+    const parsed = artifactPresignRequestSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: 'invalid_payload',
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      })
+    }
+
+    const rejected = parsed.data.artifacts.find(
+      (artifact) => !isAllowedArtifactContentType(artifact.contentType),
+    )
+    if (rejected) {
+      return reply
+        .code(415)
+        .send({ error: 'unsupported_content_type', contentType: rejected.contentType })
+    }
+
+    const items = await Promise.all(
+      parsed.data.artifacts.map(async (artifact) => {
+        const key = artifactKey({
+          orgId: project.orgId,
+          projectId: project.projectId,
+          idempotencyKey: parsed.data.idempotencyKey,
+          executionIndex: artifact.executionIndex,
+          name: artifact.name,
+        })
+        return {
+          executionIndex: artifact.executionIndex,
+          name: artifact.name,
+          key,
+          uploadUrl: await store.presignUpload(key, artifact.contentType),
+        }
+      }),
+    )
+
+    return reply.code(200).send({ items })
   })
 
   app.get('/v1/runs/summary', async (request, reply) => {

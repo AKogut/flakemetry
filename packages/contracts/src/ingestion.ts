@@ -26,10 +26,32 @@ export const ingestErrorSchema = z.object({
   stack: z.string().nullish(),
 })
 
+export const MAX_ARTIFACT_BYTES = 50 * 1024 * 1024
+
+export const ALLOWED_ARTIFACT_CONTENT_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'video/webm',
+  'video/mp4',
+  'application/zip',
+  'application/json',
+  'text/plain',
+  'text/html',
+] as const
+
+export const artifactContentType = (contentType: string): string =>
+  contentType.split(';')[0]!.trim().toLowerCase()
+
+export const isAllowedArtifactContentType = (contentType: string): boolean =>
+  (ALLOWED_ARTIFACT_CONTENT_TYPES as readonly string[]).includes(artifactContentType(contentType))
+
 export const artifactRefSchema = z.object({
   name: z.string().min(1),
   contentType: z.string().min(1),
   path: z.string().min(1),
+  key: z.string().min(1).nullish(),
+  sizeBytes: z.number().int().nonnegative().max(MAX_ARTIFACT_BYTES).nullish(),
 })
 
 export const MAX_SPANS_PER_EXECUTION = 500
@@ -88,6 +110,31 @@ export const ingestAckSchema = z.object({
   acceptedExecutions: z.number().int().nonnegative(),
 })
 
+export const MAX_ARTIFACTS_PER_PRESIGN = 200
+
+export const artifactPresignItemSchema = z.object({
+  executionIndex: z.number().int().nonnegative(),
+  name: z.string().min(1),
+  contentType: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative().max(MAX_ARTIFACT_BYTES),
+})
+
+export const artifactPresignRequestSchema = z.object({
+  idempotencyKey: z.string().min(8).max(128),
+  artifacts: z.array(artifactPresignItemSchema).min(1).max(MAX_ARTIFACTS_PER_PRESIGN),
+})
+
+export const artifactPresignItemResultSchema = z.object({
+  executionIndex: z.number().int().nonnegative(),
+  name: z.string().min(1),
+  key: z.string().min(1),
+  uploadUrl: z.string().min(1),
+})
+
+export const artifactPresignResponseSchema = z.object({
+  items: z.array(artifactPresignItemResultSchema),
+})
+
 export type IngestResource = z.infer<typeof ingestResourceSchema>
 export type IngestError = z.infer<typeof ingestErrorSchema>
 export type ArtifactRef = z.infer<typeof artifactRefSchema>
@@ -98,3 +145,7 @@ export type IngestExecution = z.infer<typeof ingestExecutionSchema>
 export type IngestRun = z.infer<typeof ingestRunSchema>
 export type IngestRunBatch = z.infer<typeof ingestRunBatchSchema>
 export type IngestAck = z.infer<typeof ingestAckSchema>
+export type ArtifactPresignItem = z.infer<typeof artifactPresignItemSchema>
+export type ArtifactPresignRequest = z.infer<typeof artifactPresignRequestSchema>
+export type ArtifactPresignItemResult = z.infer<typeof artifactPresignItemResultSchema>
+export type ArtifactPresignResponse = z.infer<typeof artifactPresignResponseSchema>

@@ -1,4 +1,5 @@
 import { getPrismaClient, IngestionQueue } from '@flakemetry/db'
+import { resolveObjectStore } from '@flakemetry/storage'
 
 import { buildApp } from './app'
 import { initSelfTelemetry, observeQueueDepth } from './telemetry'
@@ -30,6 +31,7 @@ observeQueueDepth(() => queue.depth())
 const app = buildApp({
   prisma,
   queue,
+  store: resolveObjectStore(process.env),
   logger: {
     level: process.env.LOG_LEVEL ?? 'info',
     redact: ['req.headers.authorization'],
