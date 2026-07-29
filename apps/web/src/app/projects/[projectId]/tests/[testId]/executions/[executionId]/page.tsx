@@ -1,6 +1,6 @@
 import { getPrismaClient } from '@flakemetry/db'
 import { getExecutionTrace, signArtifacts } from '@flakemetry/queries'
-import { resolveObjectStore } from '@flakemetry/storage'
+import { projectArtifactPrefix, resolveObjectStore } from '@flakemetry/storage'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -29,7 +29,9 @@ export default async function ExecutionTracePage({
   const trace = await getExecutionTrace(prisma, projectId, executionId)
   if (!trace || trace.testIdentityId !== testId) notFound()
 
-  const signed = await signArtifacts(resolveObjectStore(process.env), trace.artifacts)
+  const signed = await signArtifacts(resolveObjectStore(process.env), trace.artifacts, {
+    keyPrefix: projectArtifactPrefix(trace.orgId, projectId),
+  })
   const testBase = `/projects/${projectId}/tests/${testId}`
 
   return (

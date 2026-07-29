@@ -2,11 +2,13 @@ import type { LlmProvider, LlmRequest, LlmResult } from '../provider'
 
 export const DEFAULT_OLLAMA_MODEL = 'llama3.1'
 export const DEFAULT_OLLAMA_ENDPOINT = 'http://localhost:11434'
+export const DEFAULT_OLLAMA_TIMEOUT_MS = 30_000
 
 export interface OllamaProviderOptions {
   endpoint?: string
   model?: string
   maxTokens?: number
+  timeoutMs?: number
   fetchImpl?: typeof fetch
 }
 
@@ -19,6 +21,7 @@ interface OllamaChatResponse {
 export const createOllamaProvider = (options: OllamaProviderOptions = {}): LlmProvider => {
   const model = options.model ?? DEFAULT_OLLAMA_MODEL
   const endpoint = (options.endpoint ?? DEFAULT_OLLAMA_ENDPOINT).replace(/\/+$/, '')
+  const timeoutMs = options.timeoutMs ?? DEFAULT_OLLAMA_TIMEOUT_MS
   const fetchImpl = options.fetchImpl ?? globalThis.fetch
 
   return {
@@ -28,6 +31,7 @@ export const createOllamaProvider = (options: OllamaProviderOptions = {}): LlmPr
       const response = await fetchImpl(`${endpoint}/api/chat`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        signal: AbortSignal.timeout(timeoutMs),
         body: JSON.stringify({
           model,
           stream: false,

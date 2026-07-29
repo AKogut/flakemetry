@@ -23,6 +23,8 @@ export interface ProcessContext {
   provider?: LlmProvider | null
   aiEnabled?: boolean
   aiDailyTokenBudget?: number
+  quarantineEnabled?: boolean
+  quarantineCooldownRuns?: number
   events?: EventBus
 }
 
@@ -251,6 +253,42 @@ export const processJob = async (
   }
 }
 
+const enforceQuarantine = async (
+  prisma: PrismaClient,
+  identityId: string,
+  isCandidate: boolean,
+  recent: readonly { status: string }[],
+  cooldownRuns: number,
+): Promise<void> => {
+  const identity = await prisma.testIdentity.findUnique({
+    where: { id: identityId },
+    select: { quarantined: true },
+  })
+  if (!identity) return
+
+  if (isCandidate && !identity.quarantined) {
+    await prisma.testIdentity.update({
+      where: { id: identityId },
+      data: { quarantined: true, quarantineReason: 'auto: flaky score above threshold' },
+    })
+    return
+  }
+
+  if (!isCandidate && identity.quarantined) {
+    const window = recent.slice(-Math.max(cooldownRuns, 1))
+    const stable =
+      cooldownRuns <= 0 ||
+      (window.length >= cooldownRuns &&
+        window.every((execution) => execution.status === 'pass' || execution.status === 'skip'))
+    if (stable) {
+      await prisma.testIdentity.update({
+        where: { id: identityId },
+        data: { quarantined: false, quarantineReason: null },
+      })
+    }
+  }
+}
+
 const SCORING_WINDOW = 500
 
 const scoreIdentity = async (
@@ -323,6 +361,16 @@ const scoreIdentity = async (
     create: { testIdentityId: identityId, ...data },
     update: data,
   })
+
+  if (ctx.quarantineEnabled) {
+    await enforceQuarantine(
+      prisma,
+      identityId,
+      result.quarantineCandidate,
+      executions,
+      ctx.quarantineCooldownRuns ?? 0,
+    )
+  }
 
   ctx.events?.emit('score.updated', {
     testIdentityId: identityId,

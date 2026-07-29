@@ -10,6 +10,8 @@ export interface ScoringPolicy {
   minSamples: number
   aiEnabled: boolean
   dailyTokenBudget: number
+  quarantineEnabled: boolean
+  quarantineCooldownRuns: number
 }
 
 const DEFAULT_DAILY_TOKEN_BUDGET = 200_000
@@ -35,5 +37,7 @@ export const loadScoringPolicy = async (
     minSamples: effective.minSamples.value,
     aiEnabled: effective.aiRcaEnabled.value,
     dailyTokenBudget: readDailyTokenBudget(process.env),
+    quarantineEnabled: effective.quarantineEnabled.value,
+    quarantineCooldownRuns: effective.quarantineCooldownRuns.value,
   }
 }

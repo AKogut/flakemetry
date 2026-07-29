@@ -19,6 +19,7 @@ export interface Worker {
   tick: () => Promise<number>
   start: () => Promise<void>
   stop: () => void
+  drain: () => Promise<void>
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
@@ -56,6 +57,8 @@ export const createWorker = (
           provider,
           aiEnabled: policy.aiEnabled,
           aiDailyTokenBudget: policy.dailyTokenBudget,
+          quarantineEnabled: policy.quarantineEnabled,
+          quarantineCooldownRuns: policy.quarantineCooldownRuns,
           events: options.events,
         })
         await queue.complete(job.id)
@@ -75,17 +78,36 @@ export const createWorker = (
     return jobs.length
   }
 
+  let inFlight: Promise<number> | null = null
+
   return {
     tick,
     async start() {
       running = true
       while (running) {
-        const processed = await tick()
-        if (processed === 0) await sleep(pollIntervalMs)
+        try {
+          inFlight = tick()
+          const processed = await inFlight
+          if (processed === 0) await sleep(pollIntervalMs)
+        } catch (error) {
+          process.stderr.write(`worker: tick failed, backing off: ${String(error)}\n`)
+          await sleep(pollIntervalMs)
+        } finally {
+          inFlight = null
+        }
       }
     },
     stop() {
       running = false
+    },
+    async drain() {
+      if (inFlight) {
+        try {
+          await inFlight
+        } catch {
+          // already logged by the loop
+        }
+      }
     },
   }
 }

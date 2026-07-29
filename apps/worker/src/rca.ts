@@ -114,16 +114,25 @@ export const processFailures = async (
     })
     if (alreadyReported) continue
 
-    const outcome = await analyzeFailure(provider, {
-      testTitle: group.representative.title,
-      suite: group.representative.suite,
-      filePath: group.representative.filePath,
-      error: {
-        type: group.representative.errorType,
-        message: group.representative.errorMessage,
-        stack: group.representative.errorStack,
-      },
-    })
+    let outcome
+    try {
+      outcome = await analyzeFailure(provider, {
+        testTitle: group.representative.title,
+        suite: group.representative.suite,
+        filePath: group.representative.filePath,
+        error: {
+          type: group.representative.errorType,
+          message: group.representative.errorMessage,
+          stack: group.representative.errorStack,
+        },
+      })
+    } catch (error) {
+      workerMetrics.rcaSkipped.add(1)
+      process.stderr.write(
+        `worker: rca failed for signature ${group.signatureId}: ${error instanceof Error ? error.message : String(error)}\n`,
+      )
+      continue
+    }
     if (!outcome) {
       workerMetrics.rcaSkipped.add(1)
       continue

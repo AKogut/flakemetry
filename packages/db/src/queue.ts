@@ -29,7 +29,7 @@ export interface IngestionQueueOptions {
 }
 
 const DEFAULTS = {
-  visibilityTimeoutMs: 60_000,
+  visibilityTimeoutMs: 300_000,
   maxAttempts: 5,
   baseBackoffMs: 2_000,
 }
