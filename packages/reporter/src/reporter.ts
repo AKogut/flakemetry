@@ -18,6 +18,7 @@ import type {
   TestResult,
 } from '@playwright/test/reporter'
 
+import { uploadArtifacts } from './artifacts'
 import {
   buildIdempotencyKey,
   deriveSuite,
@@ -114,10 +115,33 @@ export default class FlakemetryReporter implements Reporter {
     if (!this.recorder || !this.context) return
     this.recorder.finishRun(result.status === 'passed' ? 'passed' : 'failed', new Date())
     const idempotencyKey = buildIdempotencyKey(this.context, this.env)
-    const batch = this.recorder.toIngestBatch(idempotencyKey)
 
+    await this.maybeUploadArtifacts(idempotencyKey)
+
+    const batch = this.recorder.toIngestBatch(idempotencyKey)
     this.writeOutput(batch)
     await this.deliver(this.recorder, batch, idempotencyKey)
+  }
+
+  private async maybeUploadArtifacts(idempotencyKey: string): Promise<void> {
+    const endpoint = this.options.endpoint ?? this.env.FLAKEMETRY_ENDPOINT
+    const token = this.options.token ?? this.env.FLAKEMETRY_TOKEN
+    if (!endpoint || !token || !this.recorder) return
+
+    try {
+      const { uploaded } = await uploadArtifacts({
+        endpoint,
+        token,
+        idempotencyKey,
+        rootDir: this.rootDir,
+        executions: this.recorder.recorded,
+      })
+      if (uploaded > 0) process.stderr.write(`flakemetry: uploaded ${uploaded} artifact(s)\n`)
+    } catch (error) {
+      process.stderr.write(
+        `flakemetry: artifact upload skipped (${error instanceof Error ? error.message : String(error)})\n`,
+      )
+    }
   }
 
   private writeOutput(batch: IngestRunBatch): void {

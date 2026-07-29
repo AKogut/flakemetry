@@ -94,6 +94,22 @@ The API also rate-limits per project token (fixed window) and returns `429` with
 
 The worker emits domain events (`run.processed`, `identity.created`, `identity.moved`, `score.updated`) after each job commits — the seam downstream stages such as signature clustering and AI RCA subscribe to.
 
+### Artifact storage
+
+Screenshots, video, traces, and HAR files are stored in an S3-compatible object store. The reporter requests a presigned upload URL from the API (`POST /v1/artifacts/presign`, ingest-token auth, content-type and size validated) and uploads each file directly to the store; the stored object key is carried on the execution's artifact refs. The dashboard serves them back through short-lived signed download URLs. The pipeline is off until a bucket is configured.
+
+| Variable | Effect |
+|---|---|
+| `FLAKEMETRY_S3_BUCKET` | Bucket for artifacts. Unset disables the pipeline (`/v1/artifacts/presign` returns `501`) |
+| `FLAKEMETRY_S3_ENDPOINT` | S3 endpoint. Point at MinIO for self-host; unset for AWS S3 |
+| `FLAKEMETRY_S3_PUBLIC_ENDPOINT` | Browser-reachable host the dashboard mints download URLs against |
+| `FLAKEMETRY_S3_REGION` | Region (default `us-east-1`) |
+| `FLAKEMETRY_S3_ACCESS_KEY_ID` / `FLAKEMETRY_S3_SECRET_ACCESS_KEY` | Credentials (fall back to the standard `AWS_*` names) |
+| `FLAKEMETRY_S3_FORCE_PATH_STYLE` | `true` for MinIO; defaults on when an endpoint is set |
+| `FLAKEMETRY_ARTIFACT_RETENTION_DAYS` | Worker prunes objects older than this on a periodic sweep; unset keeps everything |
+
+`docker compose up` wires the bundled MinIO to all of these automatically — nothing to set for a local stack.
+
 ## Inspecting the resolved configuration
 
 ```bash

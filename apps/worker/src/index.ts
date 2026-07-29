@@ -1,8 +1,32 @@
 import { getPrismaClient, IngestionQueue } from '@flakemetry/db'
+import { pruneArtifacts, resolveObjectStore } from '@flakemetry/storage'
 
 import { createEventBus } from './events'
 import { createWorker } from './runner'
 import { initSelfTelemetry, observeQueueDepth } from './telemetry'
+
+const RETENTION_INTERVAL_MS = 6 * 60 * 60 * 1000
+
+const startArtifactRetention = (): void => {
+  const store = resolveObjectStore(process.env)
+  const days = Number(process.env.FLAKEMETRY_ARTIFACT_RETENTION_DAYS ?? 0)
+  if (!store || !Number.isFinite(days) || days <= 0) return
+
+  const sweep = (): void => {
+    void pruneArtifacts(store, { olderThanDays: days })
+      .then((result) => {
+        if (result.deleted.length > 0) {
+          process.stdout.write(`worker: pruned ${result.deleted.length} expired artifact(s)\n`)
+        }
+      })
+      .catch((error: unknown) => {
+        process.stderr.write(`worker: artifact prune failed ${String(error)}\n`)
+      })
+  }
+
+  sweep()
+  setInterval(sweep, RETENTION_INTERVAL_MS).unref()
+}
 
 const prisma = getPrismaClient()
 const queue = new IngestionQueue(prisma)
@@ -30,6 +54,8 @@ const shutdown = () => {
 }
 process.on('SIGINT', shutdown)
 process.on('SIGTERM', shutdown)
+
+startArtifactRetention()
 
 process.stdout.write('worker: started\n')
 worker.start().catch((error: unknown) => {

@@ -66,9 +66,17 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      createbuckets:
+        condition: service_completed_successfully
     environment:
       PORT: 4000
       DATABASE_URL: postgresql://${POSTGRES_USER:-flakemetry}:${POSTGRES_PASSWORD:-flakemetry}@postgres:5432/${POSTGRES_DB:-flakemetry}?schema=public
+      FLAKEMETRY_S3_BUCKET: ${S3_BUCKET:-flakemetry-artifacts}
+      FLAKEMETRY_S3_ENDPOINT: ${FLAKEMETRY_S3_ENDPOINT:-http://minio:9000}
+      FLAKEMETRY_S3_REGION: ${FLAKEMETRY_S3_REGION:-us-east-1}
+      FLAKEMETRY_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-flakemetry}
+      FLAKEMETRY_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-flakemetry123}
+      FLAKEMETRY_S3_FORCE_PATH_STYLE: 'true'
     ports:
       - '${API_PORT:-4000}:4000'
     healthcheck:
@@ -98,6 +106,13 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       FLAKEMETRY_AI_ENDPOINT: ${FLAKEMETRY_AI_ENDPOINT:-}
       FLAKEMETRY_AI_DAILY_TOKEN_BUDGET: ${FLAKEMETRY_AI_DAILY_TOKEN_BUDGET:-}
+      FLAKEMETRY_S3_BUCKET: ${S3_BUCKET:-flakemetry-artifacts}
+      FLAKEMETRY_S3_ENDPOINT: ${FLAKEMETRY_S3_ENDPOINT:-http://minio:9000}
+      FLAKEMETRY_S3_REGION: ${FLAKEMETRY_S3_REGION:-us-east-1}
+      FLAKEMETRY_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-flakemetry}
+      FLAKEMETRY_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-flakemetry123}
+      FLAKEMETRY_S3_FORCE_PATH_STYLE: 'true'
+      FLAKEMETRY_ARTIFACT_RETENTION_DAYS: ${FLAKEMETRY_ARTIFACT_RETENTION_DAYS:-}
 
   web:
     build:
@@ -105,6 +120,8 @@ services:
       target: web
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      createbuckets:
         condition: service_completed_successfully
     environment:
       PORT: 3000
@@ -120,6 +137,12 @@ services:
       FLAKEMETRY_QUARANTINE_ENABLED: ${FLAKEMETRY_QUARANTINE_ENABLED:-}
       FLAKEMETRY_QUARANTINE_COOLDOWN_RUNS: ${FLAKEMETRY_QUARANTINE_COOLDOWN_RUNS:-}
       FLAKEMETRY_AI_RCA: ${FLAKEMETRY_AI_RCA:-}
+      FLAKEMETRY_S3_BUCKET: ${S3_BUCKET:-flakemetry-artifacts}
+      FLAKEMETRY_S3_ENDPOINT: ${FLAKEMETRY_S3_PUBLIC_ENDPOINT:-http://localhost:9000}
+      FLAKEMETRY_S3_REGION: ${FLAKEMETRY_S3_REGION:-us-east-1}
+      FLAKEMETRY_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-flakemetry}
+      FLAKEMETRY_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-flakemetry123}
+      FLAKEMETRY_S3_FORCE_PATH_STYLE: 'true'
     ports:
       - '${WEB_PORT:-3000}:3000'
     healthcheck:

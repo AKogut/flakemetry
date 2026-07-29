@@ -1,3 +1,4 @@
+export * from './artifacts'
 export * from './flaky'
 export * from './policy'
 export * from './rca'
