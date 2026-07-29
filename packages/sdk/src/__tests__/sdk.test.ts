@@ -123,6 +123,71 @@ describe('otel spans', () => {
   })
 })
 
+const recorderWithSteps = () => {
+  const recorder = new TestRunRecorder(context)
+  recorder.startRun(new Date('2026-07-16T10:00:00Z'))
+  recorder.record({
+    filePath: 'e2e/auth/login.spec.ts',
+    suite: 'auth',
+    title: 'logs in',
+    status: 'fail',
+    attempt: 1,
+    startedAt: new Date('2026-07-16T10:00:01Z'),
+    durationMs: 1800,
+    error: { type: 'TimeoutError', message: 'Timeout', stack: 'at login' },
+    steps: [
+      {
+        name: 'open login page',
+        kind: 'step',
+        startedAt: new Date('2026-07-16T10:00:01Z'),
+        durationMs: 200,
+        children: [
+          {
+            name: 'GET /api/session',
+            kind: 'http',
+            startedAt: new Date('2026-07-16T10:00:01.05Z'),
+            durationMs: 50,
+            status: 'error',
+            error: { message: '502 Bad Gateway' },
+          },
+        ],
+      },
+    ],
+  })
+  recorder.finishRun('failed', new Date('2026-07-16T10:00:05Z'))
+  return recorder
+}
+
+describe('step spans', () => {
+  it('flattens the recorded step tree into a parent-linked span list (json path)', () => {
+    const execution = recorderWithSteps().toIngestBatch('gh-9000001-1').executions[0]!
+    expect(execution.spanId).toBeDefined()
+    expect(execution.spans).toHaveLength(2)
+
+    const step = execution.spans!.find((s) => s.kind === 'step')!
+    const http = execution.spans!.find((s) => s.kind === 'http')!
+    expect(step.parentSpanId).toBe(execution.spanId)
+    expect(http.parentSpanId).toBe(step.spanId)
+    expect(http.status).toBe('error')
+    expect(http.error?.message).toBe('502 Bad Gateway')
+  })
+
+  it('emits nested child spans under the case span (otlp path)', () => {
+    const exporter = new InMemorySpanExporter()
+    const provider = new BasicTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    })
+    emitRunSpans(provider.getTracer('test'), recorderWithSteps())
+
+    const spans = exporter.getFinishedSpans()
+    const caseSpan = spans.find((s) => s.name === SPAN_NAMES.case)!
+    const stepSpan = spans.find((s) => s.attributes[SPAN_ATTR.spanKind] === 'step')!
+    const httpSpan = spans.find((s) => s.attributes[SPAN_ATTR.spanKind] === 'http')!
+    expect(stepSpan.parentSpanContext?.spanId).toBe(caseSpan.spanContext().spanId)
+    expect(httpSpan.parentSpanContext?.spanId).toBe(stepSpan.spanContext().spanId)
+  })
+})
+
 describe('ingest client', () => {
   it('sends the batch with auth and idempotency headers and parses the ack', async () => {
     let seen: { url: string; headers: Record<string, string>; body: string } | null = null

@@ -21,6 +21,7 @@ import type {
 import {
   buildIdempotencyKey,
   deriveSuite,
+  mapSteps,
   type PlaywrightStatus,
   resolveRunContext,
   statusFromResult,
@@ -91,6 +92,7 @@ export default class FlakemetryReporter implements Reporter {
       durationMs: Math.round(result.duration),
       error,
       artifacts: this.collectArtifacts(result),
+      steps: mapSteps(result.steps ?? []),
     })
 
     if (attempt === 1) this.firstAttemptIndex.set(test.id, index)

@@ -1,6 +1,55 @@
+import type { TestStep } from '@playwright/test/reporter'
 import { describe, expect, it } from 'vitest'
 
-import { buildIdempotencyKey, deriveSuite, resolveRunContext, statusFromResult } from '../mapping'
+import {
+  buildIdempotencyKey,
+  deriveSuite,
+  mapSteps,
+  resolveRunContext,
+  statusFromResult,
+} from '../mapping'
+
+const step = (over: Partial<TestStep> & { category: string; title: string }): TestStep =>
+  ({
+    startTime: new Date('2026-07-16T10:00:00Z'),
+    duration: 100,
+    steps: [],
+    annotations: [],
+    ...over,
+  }) as TestStep
+
+describe('mapSteps', () => {
+  it('classifies categories into span kinds and preserves nesting', () => {
+    const mapped = mapSteps([
+      step({
+        category: 'test.step',
+        title: 'open page',
+        steps: [step({ category: 'pw:api', title: 'page.goto' })],
+      }),
+      step({ category: 'expect', title: 'toBeVisible' }),
+    ])
+
+    expect(mapped).toHaveLength(2)
+    expect(mapped[0]?.kind).toBe('step')
+    expect(mapped[0]?.children?.[0]?.kind).toBe('browser')
+    expect(mapped[1]?.kind).toBe('step')
+  })
+
+  it('drops attach steps and lifts step errors', () => {
+    const mapped = mapSteps([
+      step({ category: 'attach', title: 'screenshot' }),
+      step({
+        category: 'pw:api',
+        title: 'click',
+        error: { message: 'locator not found', stack: 'at click' },
+      }),
+    ])
+
+    expect(mapped).toHaveLength(1)
+    expect(mapped[0]?.status).toBe('error')
+    expect(mapped[0]?.error?.message).toBe('locator not found')
+  })
+})
 
 describe('statusFromResult', () => {
   it('maps a first-attempt pass to pass and a retried pass to flaky', () => {
