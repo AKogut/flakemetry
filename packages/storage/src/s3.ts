@@ -42,11 +42,16 @@ export const createS3ObjectStore = (options: S3ObjectStoreOptions): ObjectStore 
   return {
     name: 's3',
 
-    presignUpload(key, contentType, ttlSeconds = DEFAULT_UPLOAD_TTL_SECONDS) {
+    presignUpload(key, contentType, options = {}) {
       return getSignedUrl(
         client,
-        new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType }),
-        { expiresIn: ttlSeconds },
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          ContentType: contentType,
+          ...(options.contentLength !== undefined ? { ContentLength: options.contentLength } : {}),
+        }),
+        { expiresIn: options.ttlSeconds ?? DEFAULT_UPLOAD_TTL_SECONDS },
       )
     },
 

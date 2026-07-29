@@ -2,8 +2,11 @@ import { generateToken, hashToken, PrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { buildApp } from '../app'
+import { createRateLimiter } from '../rate-limit'
 import type { TrpcContext } from '../trpc/context'
 import { appRouter } from '../trpc/router'
+
+const testLimiter = createRateLimiter({ max: 10_000, windowMs: 60_000 })
 
 const hasDb = Boolean(process.env.DATABASE_URL)
 const prisma = new PrismaClient()
@@ -170,7 +173,8 @@ const seed = async () => {
   return { ...tenant, run1Id: run1.id, flakyId: flakyId.id, failExecId: failExec.id }
 }
 
-const caller = (project: TrpcContext['project']) => appRouter.createCaller({ prisma, project })
+const caller = (project: TrpcContext['project']) =>
+  appRouter.createCaller({ prisma, project, limiter: testLimiter })
 
 describe.skipIf(!hasDb)('query api', () => {
   beforeEach(async () => {

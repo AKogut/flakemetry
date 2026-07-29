@@ -10,5 +10,8 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   if (!ctx.project) {
     throw new TRPCError({ code: 'UNAUTHORIZED', message: 'missing or invalid token' })
   }
+  if (!ctx.limiter.check(ctx.project.projectId).allowed) {
+    throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'rate limited' })
+  }
   return next({ ctx: { ...ctx, project: ctx.project } })
 })
