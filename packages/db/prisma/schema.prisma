@@ -147,6 +147,9 @@ model Project {
   ingestionJobs   IngestionJob[]
   policy          ProjectPolicy?
   policyChanges   PolicyChange[]
+  dailyTestStats  DailyTestStats[]
+  suiteDaily      SuiteDaily[]
+  flakyTrends     FlakyTrends[]
 
   @@unique([orgId, slug])
   @@index([orgId])
@@ -248,9 +251,10 @@ model TestIdentity {
   firstSeenAt      DateTime  @default(now()) @map("first_seen_at")
   lastSeenAt       DateTime  @default(now()) @map("last_seen_at")
 
-  project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project    Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   executions TestExecution[]
   flakyScore FlakyScore?
+  dailyStats DailyTestStats[]
 
   @@unique([projectId, fingerprint])
   @@index([orgId])
@@ -389,4 +393,60 @@ model RcaReport {
   @@index([projectId, createdAt(sort: Desc)])
   @@index([signatureId])
   @@map("rca_report")
+}
+
+model DailyTestStats {
+  projectId      String   @map("project_id") @db.Uuid
+  orgId          String   @map("org_id") @db.Uuid
+  testIdentityId String   @map("test_identity_id") @db.Uuid
+  day            DateTime @db.Date
+  total          Int      @default(0)
+  passed         Int      @default(0)
+  failed         Int      @default(0)
+  flaky          Int      @default(0)
+  skipped        Int      @default(0)
+  avgDurationMs  Int      @default(0) @map("avg_duration_ms")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  identity TestIdentity @relation(fields: [testIdentityId], references: [id], onDelete: Cascade)
+
+  @@id([testIdentityId, day])
+  @@index([projectId, day])
+  @@map("daily_test_stats")
+}
+
+model SuiteDaily {
+  projectId     String   @map("project_id") @db.Uuid
+  orgId         String   @map("org_id") @db.Uuid
+  suite         String
+  day           DateTime @db.Date
+  total         Int      @default(0)
+  passed        Int      @default(0)
+  failed        Int      @default(0)
+  flaky         Int      @default(0)
+  skipped       Int      @default(0)
+  avgDurationMs Int      @default(0) @map("avg_duration_ms")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, suite, day])
+  @@index([projectId, day])
+  @@map("suite_daily")
+}
+
+model FlakyTrends {
+  projectId        String   @map("project_id") @db.Uuid
+  orgId            String   @map("org_id") @db.Uuid
+  day              DateTime @db.Date
+  flakyCount       Int      @default(0) @map("flaky_count")
+  quarantinedCount Int      @default(0) @map("quarantined_count")
+  avgScore         Float    @default(0) @map("avg_score")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, day])
+  @@map("flaky_trends")
 }

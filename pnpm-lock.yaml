@@ -167,6 +167,9 @@ importers:
       '@flakemetry/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
+      '@flakemetry/queries':
+        specifier: workspace:*
+        version: link:../../packages/queries
       '@flakemetry/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk

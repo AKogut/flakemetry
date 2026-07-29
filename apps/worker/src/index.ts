@@ -2,10 +2,29 @@ import { getPrismaClient, IngestionQueue } from '@flakemetry/db'
 import { pruneArtifacts, resolveObjectStore } from '@flakemetry/storage'
 
 import { createEventBus } from './events'
+import { pruneRawExecutions } from './rollups'
 import { createWorker } from './runner'
 import { initSelfTelemetry, observeQueueDepth } from './telemetry'
 
 const RETENTION_INTERVAL_MS = 6 * 60 * 60 * 1000
+
+const startExecutionRetention = (prisma: ReturnType<typeof getPrismaClient>): void => {
+  const days = Number(process.env.FLAKEMETRY_EXECUTION_RETENTION_DAYS ?? 0)
+  if (!Number.isFinite(days) || days <= 0) return
+
+  const sweep = (): void => {
+    void pruneRawExecutions(prisma, { olderThanDays: days })
+      .then((count) => {
+        if (count > 0) process.stdout.write(`worker: pruned ${count} raw execution(s)\n`)
+      })
+      .catch((error: unknown) => {
+        process.stderr.write(`worker: execution prune failed ${String(error)}\n`)
+      })
+  }
+
+  sweep()
+  setInterval(sweep, RETENTION_INTERVAL_MS).unref()
+}
 
 const startArtifactRetention = (): void => {
   const store = resolveObjectStore(process.env)
@@ -56,6 +75,7 @@ process.on('SIGINT', shutdown)
 process.on('SIGTERM', shutdown)
 
 startArtifactRetention()
+startExecutionRetention(prisma)
 
 process.stdout.write('worker: started\n')
 worker.start().catch((error: unknown) => {

@@ -1,19 +1,16 @@
 import type { FlakyBoardInput, FlakyBoardResult, FlakyTrend } from '@flakemetry/contracts'
-import type { PrismaClient, TestStatus } from '@flakemetry/db'
+import type { PrismaClient } from '@flakemetry/db'
 
-const TREND_WINDOW = 20
 const TREND_EPSILON = 0.15
 
-const isBad = (status: TestStatus): boolean => status === 'fail' || status === 'flaky'
+const mean = (values: number[]): number =>
+  values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length
 
-const badnessRatio = (statuses: TestStatus[]): number =>
-  statuses.length === 0 ? 0 : statuses.filter(isBad).length / statuses.length
-
-const computeTrend = (ordered: TestStatus[]): FlakyTrend => {
-  if (ordered.length < 4) return 'stable'
-  const mid = Math.floor(ordered.length / 2)
-  const older = badnessRatio(ordered.slice(0, mid))
-  const recent = badnessRatio(ordered.slice(mid))
+const computeTrend = (dailyBadness: number[]): FlakyTrend => {
+  if (dailyBadness.length < 2) return 'stable'
+  const mid = Math.floor(dailyBadness.length / 2)
+  const older = mean(dailyBadness.slice(0, mid))
+  const recent = mean(dailyBadness.slice(mid))
   if (recent - older > TREND_EPSILON) return 'rising'
   if (older - recent > TREND_EPSILON) return 'falling'
   return 'stable'
@@ -27,23 +24,22 @@ const trendByIdentity = async (
   const result = new Map<string, FlakyTrend>()
   if (identityIds.length === 0) return result
 
-  const executions = await prisma.testExecution.findMany({
+  const rows = await prisma.dailyTestStats.findMany({
     where: { projectId, testIdentityId: { in: identityIds } },
-    orderBy: { startedAt: 'desc' },
-    take: identityIds.length * TREND_WINDOW,
-    select: { testIdentityId: true, status: true },
+    orderBy: { day: 'asc' },
+    select: { testIdentityId: true, total: true, failed: true, flaky: true },
   })
 
-  const grouped = new Map<string, TestStatus[]>()
-  for (const execution of executions) {
-    const list = grouped.get(execution.testIdentityId) ?? []
-    if (list.length < TREND_WINDOW) list.push(execution.status)
-    grouped.set(execution.testIdentityId, list)
+  const grouped = new Map<string, number[]>()
+  for (const row of rows) {
+    const badness = row.total > 0 ? (row.failed + row.flaky) / row.total : 0
+    const list = grouped.get(row.testIdentityId) ?? []
+    list.push(badness)
+    grouped.set(row.testIdentityId, list)
   }
 
   for (const id of identityIds) {
-    const statuses = (grouped.get(id) ?? []).reverse()
-    result.set(id, computeTrend(statuses))
+    result.set(id, computeTrend(grouped.get(id) ?? []))
   }
   return result
 }

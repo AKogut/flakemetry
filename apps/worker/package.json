@@ -20,7 +20,8 @@
     "@flakemetry/tsup-config": "workspace:*",
     "@types/node": "^22.10.5",
     "tsup": "^8.3.5",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "@flakemetry/queries": "workspace:*"
   },
   "dependencies": {
     "@flakemetry/ai": "workspace:*",

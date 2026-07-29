@@ -12,6 +12,7 @@ import type { Prisma, PrismaClient } from '@flakemetry/db'
 
 import type { EventBus } from './events'
 import { type FailureRecord, processFailures } from './rca'
+import { updateRollups } from './rollups'
 
 export interface ProcessContext {
   orgId: string
@@ -214,6 +215,10 @@ export const processJob = async (
   for (const identityId of affected) {
     await scoreIdentity(prisma, identityId, ctx)
   }
+
+  await updateRollups(prisma, { orgId: ctx.orgId, projectId: ctx.projectId }, startedAt, [
+    ...affected,
+  ])
 
   await processFailures(
     prisma,
