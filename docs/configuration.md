@@ -110,6 +110,16 @@ Screenshots, video, traces, and HAR files are stored in an S3-compatible object 
 
 `docker compose up` wires the bundled MinIO to all of these automatically — nothing to set for a local stack.
 
+### Trend rollups and retention
+
+Daily aggregates are materialized on ingest — the worker recomputes `daily_test_stats`, `suite_daily`, and `flaky_trends` for the affected day after each run, so trend queries read pre-aggregated rows rather than scanning raw executions. Because the rollups are the source of truth for trends, raw executions can be kept on a short horizon while aggregates persist.
+
+| Variable | Effect |
+|---|---|
+| `FLAKEMETRY_EXECUTION_RETENTION_DAYS` | Worker prunes raw executions older than this on a periodic sweep; rollups are untouched. Unset keeps every execution |
+
+Recompute is idempotent: re-delivering a run recomputes the same day's aggregates rather than double-counting.
+
 ## Inspecting the resolved configuration
 
 ```bash
