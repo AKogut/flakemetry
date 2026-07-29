@@ -1,6 +1,12 @@
 import type { IngestRunBatch } from '@flakemetry/contracts'
 import { PrismaClient } from '@flakemetry/db'
-import { getFlakyTrend, getSuiteHealth } from '@flakemetry/queries'
+import {
+  getDailyTrend,
+  getFlakyTrend,
+  getProjectHealthKpis,
+  getSuiteHealth,
+  getTestLeaderboards,
+} from '@flakemetry/queries'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { processJob } from '../processor'
@@ -92,6 +98,25 @@ describe.skipIf(!hasDb)('trend rollups', () => {
     const flakyTrend = await getFlakyTrend(prisma, ctx.projectId, 3650)
     expect(flakyTrend).toHaveLength(1)
     expect(flakyTrend[0]?.day).toBe('2026-07-16')
+  })
+
+  it('serves suite-health KPIs, daily trend, and leaderboards from rollups', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(prisma, batch(), ctx)
+
+    const kpis = await getProjectHealthKpis(prisma, ctx.projectId, 3650)
+    expect(kpis.totalExecutions).toBe(2)
+    expect(kpis.passRate).toBe(0)
+    expect(kpis.flakyRate).toBe(0.5)
+    expect(kpis.avgDurationMs).toBe(1600)
+
+    const daily = await getDailyTrend(prisma, ctx.projectId, 3650)
+    expect(daily).toHaveLength(1)
+    expect(daily[0]?.flakyRate).toBe(0.5)
+
+    const leaderboards = await getTestLeaderboards(prisma, ctx.projectId, 3650)
+    expect(leaderboards.slowest[0]?.avgDurationMs).toBe(1600)
+    expect(leaderboards.mostFailing[0]?.failRate).toBe(1)
   })
 
   it('stays idempotent when the same run is re-delivered', async () => {
