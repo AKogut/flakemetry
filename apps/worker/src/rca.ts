@@ -47,6 +47,10 @@ export const processFailures = async (
     const scrubbedMessage = scrubText(failure.errorMessage)
     const scrubbedStack = failure.errorStack == null ? null : scrubText(failure.errorStack)
     const signature = computeErrorSignature(scrubbedMessage, scrubbedStack)
+    const execution = await prisma.testExecution.findUnique({
+      where: { id: failure.executionId },
+      select: { errorSignatureId: true },
+    })
     const existing = await prisma.errorSignature.findUnique({
       where: {
         projectId_normalizedHash: {
@@ -61,9 +65,13 @@ export const processFailures = async (
     let isNew = false
     if (existing) {
       signatureId = existing.id
+      const alreadyCounted = execution?.errorSignatureId === signatureId
       await prisma.errorSignature.update({
         where: { id: signatureId },
-        data: { occurrenceCount: { increment: 1 }, lastSeenAt: ctx.now },
+        data: {
+          ...(alreadyCounted ? {} : { occurrenceCount: { increment: 1 } }),
+          lastSeenAt: ctx.now,
+        },
       })
     } else {
       const created = await prisma.errorSignature.create({
@@ -82,10 +90,12 @@ export const processFailures = async (
       isNew = true
     }
 
-    await prisma.testExecution.update({
-      where: { id: failure.executionId },
-      data: { errorSignatureId: signatureId },
-    })
+    if (execution?.errorSignatureId !== signatureId) {
+      await prisma.testExecution.update({
+        where: { id: failure.executionId },
+        data: { errorSignatureId: signatureId },
+      })
+    }
 
     if (!groups.has(signature.normalizedHash))
       groups.set(signature.normalizedHash, { signatureId, representative: failure, isNew })

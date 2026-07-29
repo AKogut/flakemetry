@@ -87,8 +87,6 @@ export const processJob = async (
       select: { id: true },
     })
 
-    await tx.testExecution.deleteMany({ where: { runId: run.id } })
-
     const identities = await tx.testIdentity.findMany({
       where: { projectId: ctx.projectId },
       select: {
@@ -173,24 +171,26 @@ export const processJob = async (
       affected.add(identityId)
       const retryOf =
         execution.retryOfIndex != null ? (createdIds[execution.retryOfIndex] ?? null) : null
+      const ordinal = createdIds.length
 
-      const row = await tx.testExecution.create({
-        data: {
-          ...tenant,
-          runId: run.id,
-          testIdentityId: identityId,
-          attempt: execution.attempt,
-          retryOf,
-          status: execution.status,
-          durationMs: execution.durationMs,
-          errorMessage: execution.error?.message ?? null,
-          otelTraceId: execution.traceId ?? batch.run.traceId ?? null,
-          otelSpanId: execution.spanId ?? null,
-          artifactsRef: (execution.artifacts ?? null) as Prisma.InputJsonValue,
-          attributes: (execution.attributes ?? null) as Prisma.InputJsonValue,
-          spans: (execution.spans ?? null) as Prisma.InputJsonValue,
-          startedAt: execution.startedAt,
-        },
+      const fields = {
+        testIdentityId: identityId,
+        attempt: execution.attempt,
+        retryOf,
+        status: execution.status,
+        durationMs: execution.durationMs,
+        errorMessage: execution.error?.message ?? null,
+        otelTraceId: execution.traceId ?? batch.run.traceId ?? null,
+        otelSpanId: execution.spanId ?? null,
+        artifactsRef: (execution.artifacts ?? null) as Prisma.InputJsonValue,
+        attributes: (execution.attributes ?? null) as Prisma.InputJsonValue,
+        spans: (execution.spans ?? null) as Prisma.InputJsonValue,
+        startedAt: execution.startedAt,
+      }
+      const row = await tx.testExecution.upsert({
+        where: { runId_ordinal: { runId: run.id, ordinal } },
+        create: { ...tenant, runId: run.id, ordinal, ...fields },
+        update: fields,
         select: { id: true },
       })
       createdIds.push(row.id)
@@ -207,6 +207,13 @@ export const processJob = async (
         })
       }
     }
+
+    await tx.testExecution.deleteMany({
+      where: {
+        runId: run.id,
+        OR: [{ ordinal: null }, { ordinal: { gte: batch.executions.length } }],
+      },
+    })
 
     return run.id
   })
