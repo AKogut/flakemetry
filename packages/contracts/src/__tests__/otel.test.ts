@@ -162,3 +162,70 @@ describe('otlpToIngestBatch', () => {
     expect(() => otlpToIngestBatch(otlpTraceRequestSchema.parse(req))).toThrow(/test.run/)
   })
 })
+
+const withChildSpans = () => {
+  const req = request()
+  const spans = req.resourceSpans[0]!.scopeSpans[0]!.spans as unknown as Record<string, unknown>[]
+  spans.push(
+    {
+      traceId: 'a'.repeat(32),
+      spanId: 'e'.repeat(16),
+      parentSpanId: 'c'.repeat(16),
+      name: SPAN_NAMES.step,
+      startTimeUnixNano: nano(20),
+      endTimeUnixNano: nano(120),
+      attributes: [{ key: 'test.step.title', value: s('open login page') }],
+      events: [],
+    },
+    {
+      traceId: 'a'.repeat(32),
+      spanId: 'f'.repeat(16),
+      parentSpanId: 'e'.repeat(16),
+      name: 'GET /api/session',
+      startTimeUnixNano: nano(40),
+      endTimeUnixNano: nano(90),
+      attributes: [{ key: 'http.request.method', value: s('GET') }],
+      status: { code: 2 },
+      events: [
+        {
+          name: 'exception',
+          attributes: [{ key: 'exception.message', value: s('502 Bad Gateway') }],
+        },
+      ],
+    },
+  )
+  return req
+}
+
+describe('otlpToIngestBatch child spans', () => {
+  it('nests step + network spans under their case execution', () => {
+    const batch = otlpToIngestBatch(otlpTraceRequestSchema.parse(withChildSpans()))
+    const parsed = ingestRunBatchSchema.parse(batch)
+
+    const execution = parsed.executions[0]!
+    expect(execution.traceId).toBe('a'.repeat(32))
+    expect(execution.spanId).toBe('c'.repeat(16))
+    expect(execution.spans).toHaveLength(2)
+
+    const step = execution.spans!.find((span) => span.spanId === 'e'.repeat(16))!
+    expect(step.kind).toBe('step')
+    expect(step.parentSpanId).toBe('c'.repeat(16))
+    expect(step.durationMs).toBe(100)
+
+    const http = execution.spans!.find((span) => span.spanId === 'f'.repeat(16))!
+    expect(http.kind).toBe('http')
+    expect(http.parentSpanId).toBe('e'.repeat(16))
+    expect(http.status).toBe('error')
+    expect(http.error?.message).toBe('502 Bad Gateway')
+  })
+
+  it('leaves executions without child spans undefined', () => {
+    const batch = otlpToIngestBatch(otlpTraceRequestSchema.parse(withChildSpans()))
+    expect(batch.executions[1]?.spans).toBeUndefined()
+  })
+
+  it('propagates the run trace id', () => {
+    const batch = otlpToIngestBatch(otlpTraceRequestSchema.parse(withChildSpans()))
+    expect(batch.run.traceId).toBe('a'.repeat(32))
+  })
+})

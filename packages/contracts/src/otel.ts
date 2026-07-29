@@ -12,6 +12,10 @@ import {
   artifactRefSchema,
   type IngestExecution,
   type IngestRunBatch,
+  type IngestSpan,
+  MAX_SPANS_PER_EXECUTION,
+  type SpanKind,
+  type SpanStatus,
 } from './ingestion'
 
 export const CONVENTIONS_VERSION = CONTRACT_VERSION
@@ -46,6 +50,12 @@ export const SPAN_ATTR = {
   filePath: 'test.file_path',
   durationMs: 'test.duration_ms',
   artifacts: 'test.artifacts',
+  spanKind: 'flakemetry.span_kind',
+} as const
+
+export const HTTP_ATTR = {
+  method: 'http.request.method',
+  legacyMethod: 'http.method',
 } as const
 
 export const EXCEPTION_EVENT = {
@@ -142,6 +152,90 @@ const parseArtifacts = (raw: string | undefined): ArtifactRef[] | undefined => {
   }
 }
 
+const spanStatusFromCode = (code: number | undefined): SpanStatus =>
+  code === 2 ? 'error' : code === 1 ? 'ok' : 'unset'
+
+const classifySpanKind = (
+  span: OtlpSpan,
+  attrs: Map<string, string | number | boolean>,
+): SpanKind => {
+  const explicit = asString(attrs.get(SPAN_ATTR.spanKind))
+  if (
+    explicit === 'step' ||
+    explicit === 'http' ||
+    explicit === 'browser' ||
+    explicit === 'other'
+  ) {
+    return explicit
+  }
+  if (attrs.has(HTTP_ATTR.method) || attrs.has(HTTP_ATTR.legacyMethod)) return 'http'
+  if (span.name === SPAN_NAMES.step) return 'step'
+  if (span.name.startsWith('browser.') || span.name.startsWith('pw:api')) return 'browser'
+  return 'other'
+}
+
+const RESERVED_SPAN_ATTRS = new Set<string>([SPAN_ATTR.spanKind, SPAN_ATTR.durationMs])
+
+const spanAttributes = (
+  attrs: Map<string, string | number | boolean>,
+): Record<string, string | number | boolean> | undefined => {
+  const out: Record<string, string | number | boolean> = {}
+  for (const [key, value] of attrs) {
+    if (!RESERVED_SPAN_ATTRS.has(key)) out[key] = value
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+const exceptionFromSpan = (span: OtlpSpan): IngestSpan['error'] => {
+  const exception = span.events.find((event) => event.name === EXCEPTION_EVENT.name)
+  if (!exception) return undefined
+  const attrs = toAttrMap(exception.attributes)
+  const message = asString(attrs.get(EXCEPTION_EVENT.message))
+  if (!message) return undefined
+  return {
+    type: asString(attrs.get(EXCEPTION_EVENT.type)),
+    message,
+    stack: asString(attrs.get(EXCEPTION_EVENT.stacktrace)),
+  }
+}
+
+const collectDescendantSpans = (
+  caseSpan: OtlpSpan,
+  childrenByParent: Map<string, OtlpSpan[]>,
+): IngestSpan[] => {
+  const collected: IngestSpan[] = []
+  const rootId = caseSpan.spanId
+  if (!rootId) return collected
+
+  const stack: OtlpSpan[] = [...(childrenByParent.get(rootId) ?? [])]
+  const seen = new Set<string>()
+  while (stack.length > 0 && collected.length < MAX_SPANS_PER_EXECUTION) {
+    const span = stack.shift()!
+    const spanId = span.spanId
+    if (!spanId || seen.has(spanId)) continue
+    seen.add(spanId)
+    if (span.name === SPAN_NAMES.case || span.name === SPAN_NAMES.run) continue
+
+    const attrs = toAttrMap(span.attributes)
+    collected.push({
+      spanId,
+      parentSpanId: span.parentSpanId ?? null,
+      name: span.name,
+      kind: classifySpanKind(span, attrs),
+      status: spanStatusFromCode(span.status?.code),
+      startedAt: nanoToDate(span.startTimeUnixNano),
+      durationMs: Math.round(
+        Math.max(0, Number(span.endTimeUnixNano) - Number(span.startTimeUnixNano)) / 1_000_000,
+      ),
+      attributes: spanAttributes(attrs),
+      error: exceptionFromSpan(span),
+    })
+    stack.push(...(childrenByParent.get(spanId) ?? []))
+  }
+
+  return collected.sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime())
+}
+
 class OtlpMappingError extends Error {}
 
 export const otlpToIngestBatch = (request: OtlpTraceRequest): IngestRunBatch => {
@@ -181,6 +275,14 @@ export const otlpToIngestBatch = (request: OtlpTraceRequest): IngestRunBatch => 
     .filter((span) => span.name === SPAN_NAMES.case)
     .sort((a, b) => Number(a.startTimeUnixNano) - Number(b.startTimeUnixNano))
 
+  const childrenByParent = new Map<string, OtlpSpan[]>()
+  for (const span of spans) {
+    if (!span.parentSpanId) continue
+    const siblings = childrenByParent.get(span.parentSpanId)
+    if (siblings) siblings.push(span)
+    else childrenByParent.set(span.parentSpanId, [span])
+  }
+
   const executions: IngestExecution[] = []
   const lastIndexByFingerprint = new Map<string, number>()
 
@@ -219,6 +321,8 @@ export const otlpToIngestBatch = (request: OtlpTraceRequest): IngestRunBatch => 
         }
       : undefined
 
+    const childSpans = collectDescendantSpans(span, childrenByParent)
+
     executions.push({
       filePath,
       suite: asString(attrs.get(SPAN_ATTR.suite)) ?? '',
@@ -230,6 +334,9 @@ export const otlpToIngestBatch = (request: OtlpTraceRequest): IngestRunBatch => 
       durationMs: Math.round(durationMs),
       error,
       artifacts: parseArtifacts(asString(attrs.get(SPAN_ATTR.artifacts))),
+      traceId: span.traceId ?? undefined,
+      spanId: span.spanId ?? undefined,
+      spans: childSpans.length > 0 ? childSpans : undefined,
     })
     lastIndexByFingerprint.set(fingerprint, executions.length - 1)
   }
@@ -251,6 +358,7 @@ export const otlpToIngestBatch = (request: OtlpTraceRequest): IngestRunBatch => 
       status: (runFailed ? 'failed' : 'passed') as RunStatus,
       startedAt: nanoToDate(runSpan.startTimeUnixNano),
       finishedAt: nanoToDate(runSpan.endTimeUnixNano),
+      traceId: runSpan.traceId ?? undefined,
     },
     executions,
   }

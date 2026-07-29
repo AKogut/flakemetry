@@ -1,12 +1,53 @@
-import { context, SpanStatusCode, trace, type Tracer } from '@opentelemetry/api'
+import { type Context, context, SpanStatusCode, trace, type Tracer } from '@opentelemetry/api'
 
 import { CONVENTIONS_VERSION, RESOURCE_ATTR, SPAN_ATTR, SPAN_NAMES } from './conventions'
-import type { TestRunRecorder } from './recorder'
+import type { RecordedStep, TestRunRecorder } from './recorder'
 
 const spanStatusFor = (status: string): SpanStatusCode => {
   if (status === 'fail') return SpanStatusCode.ERROR
   if (status === 'skip') return SpanStatusCode.UNSET
   return SpanStatusCode.OK
+}
+
+const stepStatusFor = (step: RecordedStep): SpanStatusCode => {
+  const status = step.status ?? (step.error ? 'error' : 'ok')
+  if (status === 'error') return SpanStatusCode.ERROR
+  if (status === 'unset') return SpanStatusCode.UNSET
+  return SpanStatusCode.OK
+}
+
+const emitStepSpans = (
+  tracer: Tracer,
+  steps: readonly RecordedStep[],
+  parentCtx: Context,
+): void => {
+  for (const step of steps) {
+    const endTime = new Date(step.startedAt.getTime() + step.durationMs)
+    const span = tracer.startSpan(
+      step.name,
+      {
+        startTime: step.startedAt,
+        attributes: {
+          [SPAN_ATTR.spanKind]: step.kind,
+          [SPAN_ATTR.durationMs]: step.durationMs,
+          ...(step.attributes ?? {}),
+        },
+      },
+      parentCtx,
+    )
+    if (step.error) {
+      span.recordException({
+        name: step.error.type ?? 'Error',
+        message: step.error.message,
+        stack: step.error.stack ?? undefined,
+      })
+    }
+    span.setStatus({ code: stepStatusFor(step) })
+    if (step.children && step.children.length > 0) {
+      emitStepSpans(tracer, step.children, trace.setSpan(parentCtx, span))
+    }
+    span.end(endTime)
+  }
 }
 
 export interface EmitRunSpansOptions {
@@ -64,6 +105,10 @@ export const emitRunSpans = (
       },
       runCtx,
     )
+
+    if (test.steps && test.steps.length > 0) {
+      emitStepSpans(tracer, test.steps, trace.setSpan(runCtx, caseSpan))
+    }
 
     if (test.error) {
       caseSpan.recordException({

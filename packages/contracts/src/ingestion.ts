@@ -32,6 +32,24 @@ export const artifactRefSchema = z.object({
   path: z.string().min(1),
 })
 
+export const MAX_SPANS_PER_EXECUTION = 500
+
+export const spanKindSchema = z.enum(['step', 'http', 'browser', 'other'])
+
+export const spanStatusSchema = z.enum(['ok', 'error', 'unset'])
+
+export const ingestSpanSchema = z.object({
+  spanId: z.string().min(1),
+  parentSpanId: z.string().min(1).nullish(),
+  name: z.string().min(1),
+  kind: spanKindSchema.default('other'),
+  status: spanStatusSchema.default('unset'),
+  startedAt: timestampSchema,
+  durationMs: z.number().int().nonnegative(),
+  attributes: jsonRecordSchema.nullish(),
+  error: ingestErrorSchema.nullish(),
+})
+
 export const ingestExecutionSchema = z.object({
   filePath: z.string().min(1),
   suite: z.string(),
@@ -45,12 +63,16 @@ export const ingestExecutionSchema = z.object({
   error: ingestErrorSchema.nullish(),
   artifacts: z.array(artifactRefSchema).nullish(),
   attributes: jsonRecordSchema.nullish(),
+  traceId: z.string().min(1).nullish(),
+  spanId: z.string().min(1).nullish(),
+  spans: z.array(ingestSpanSchema).max(MAX_SPANS_PER_EXECUTION).nullish(),
 })
 
 export const ingestRunSchema = z.object({
   status: runStatusSchema,
   startedAt: timestampSchema,
   finishedAt: timestampSchema.nullish(),
+  traceId: z.string().min(1).nullish(),
 })
 
 export const ingestRunBatchSchema = z.object({
@@ -69,6 +91,9 @@ export const ingestAckSchema = z.object({
 export type IngestResource = z.infer<typeof ingestResourceSchema>
 export type IngestError = z.infer<typeof ingestErrorSchema>
 export type ArtifactRef = z.infer<typeof artifactRefSchema>
+export type SpanKind = z.infer<typeof spanKindSchema>
+export type SpanStatus = z.infer<typeof spanStatusSchema>
+export type IngestSpan = z.infer<typeof ingestSpanSchema>
 export type IngestExecution = z.infer<typeof ingestExecutionSchema>
 export type IngestRun = z.infer<typeof ingestRunSchema>
 export type IngestRunBatch = z.infer<typeof ingestRunBatchSchema>

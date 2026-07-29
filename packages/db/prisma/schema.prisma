@@ -303,6 +303,7 @@ model TestExecution {
   otelSpanId       String?    @map("otel_span_id")
   artifactsRef     Json?      @map("artifacts_ref")
   attributes       Json?
+  spans            Json?
   startedAt        DateTime   @map("started_at")
 
   project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)

@@ -4,9 +4,13 @@ import {
   type IngestExecution,
   type IngestRunBatch,
   ingestRunBatchSchema,
+  type IngestSpan,
   type JsonRecord,
+  MAX_SPANS_PER_EXECUTION,
   type RunStatus,
   type RunTrigger,
+  type SpanKind,
+  type SpanStatus,
   type TestStatus,
 } from '@flakemetry/contracts'
 
@@ -23,6 +27,17 @@ export interface RunContext {
   prNumber?: number | null
 }
 
+export interface RecordedStep {
+  name: string
+  kind: SpanKind
+  startedAt: Date
+  durationMs: number
+  status?: SpanStatus
+  error?: { type?: string | null; message: string; stack?: string | null } | null
+  attributes?: JsonRecord | null
+  children?: RecordedStep[]
+}
+
 export interface RecordedTest {
   filePath: string
   suite: string
@@ -36,6 +51,7 @@ export interface RecordedTest {
   error?: { type?: string | null; message: string; stack?: string | null } | null
   artifacts?: ArtifactRef[] | null
   attributes?: JsonRecord | null
+  steps?: RecordedStep[] | null
 }
 
 export interface RecordedTestWithIdentity extends RecordedTest {
@@ -77,7 +93,38 @@ export class TestRunRecorder {
     return this.tests
   }
 
-  private toExecution(test: RecordedTestWithIdentity): IngestExecution {
+  private flattenSteps(
+    steps: readonly RecordedStep[],
+    execIndex: number,
+  ): { caseSpanId: string; spans: IngestSpan[] } {
+    const caseSpanId = `x${execIndex}c`
+    const spans: IngestSpan[] = []
+    let counter = 0
+    const walk = (nodes: readonly RecordedStep[], parentSpanId: string): void => {
+      for (const node of nodes) {
+        if (spans.length >= MAX_SPANS_PER_EXECUTION) return
+        const spanId = `x${execIndex}s${counter++}`
+        spans.push({
+          spanId,
+          parentSpanId,
+          name: node.name,
+          kind: node.kind,
+          status: node.status ?? (node.error ? 'error' : 'ok'),
+          startedAt: node.startedAt,
+          durationMs: Math.round(node.durationMs),
+          attributes: node.attributes ?? undefined,
+          error: node.error ?? undefined,
+        })
+        if (node.children && node.children.length > 0) walk(node.children, spanId)
+      }
+    }
+    walk(steps, caseSpanId)
+    return { caseSpanId, spans }
+  }
+
+  private toExecution(test: RecordedTestWithIdentity, execIndex: number): IngestExecution {
+    const tree =
+      test.steps && test.steps.length > 0 ? this.flattenSteps(test.steps, execIndex) : null
     return {
       filePath: test.filePath,
       suite: test.suite,
@@ -91,6 +138,8 @@ export class TestRunRecorder {
       error: test.error ?? undefined,
       artifacts: test.artifacts ?? undefined,
       attributes: test.attributes ?? undefined,
+      spanId: tree?.caseSpanId,
+      spans: tree && tree.spans.length > 0 ? tree.spans : undefined,
     }
   }
 
@@ -112,7 +161,7 @@ export class TestRunRecorder {
         startedAt,
         finishedAt: this.runFinishedAt ?? undefined,
       },
-      executions: this.tests.map((test) => this.toExecution(test)),
+      executions: this.tests.map((test, index) => this.toExecution(test, index)),
     })
   }
 }

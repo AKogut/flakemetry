@@ -40,6 +40,23 @@ const recordRun = (commitSha: string, failFirstAttempt: boolean) => {
     attempt: 1,
     startedAt: new Date('2026-07-16T10:00:01Z'),
     durationMs: 1800,
+    steps: [
+      {
+        name: 'open login page',
+        kind: 'step',
+        startedAt: new Date('2026-07-16T10:00:01Z'),
+        durationMs: 200,
+        children: [
+          {
+            name: 'GET /api/session',
+            kind: 'http',
+            startedAt: new Date('2026-07-16T10:00:01.05Z'),
+            durationMs: 50,
+            status: failFirstAttempt ? 'error' : 'ok',
+          },
+        ],
+      },
+    ],
     ...(failFirstAttempt
       ? { error: { type: 'TimeoutError', message: 'Timeout 30000ms exceeded', stack: 'at login' } }
       : {}),
@@ -137,6 +154,36 @@ describe.skipIf(!hasDb)('full ingestion chain', () => {
 
     expect(processedEvents).toHaveLength(1)
     expect(processedEvents[0]?.executions).toBe(2)
+  })
+
+  it('reconstructs the full span tree through the real OTLP chain', async () => {
+    const worker = createWorker(prisma, new IngestionQueue(prisma))
+    await exportRunOverOtlp(recordRun('aaa1111', true), 'e2e-run-000001', { endpoint, token })
+    await drain(worker)
+
+    const run = await prisma.run.findFirstOrThrow()
+    expect(run.otelTraceId).toMatch(/^[0-9a-f]{32}$/)
+
+    const execution = await prisma.testExecution.findFirstOrThrow({ where: { attempt: 1 } })
+    expect(execution.otelTraceId).toMatch(/^[0-9a-f]{32}$/)
+    expect(execution.otelSpanId).toMatch(/^[0-9a-f]{16}$/)
+
+    const spans = execution.spans as {
+      spanId: string
+      parentSpanId: string | null
+      name: string
+      kind: string
+      status: string
+      durationMs: number
+    }[]
+    expect(spans).toHaveLength(2)
+
+    const step = spans.find((span) => span.kind === 'step')!
+    const http = spans.find((span) => span.kind === 'http')!
+    expect(step.parentSpanId).toBe(execution.otelSpanId)
+    expect(http.parentSpanId).toBe(step.spanId)
+    expect(http.status).toBe('error')
+    expect(http.durationMs).toBe(50)
   })
 
   it('accumulates history across runs and stays idempotent on re-delivery', async () => {
