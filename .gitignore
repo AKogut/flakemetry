@@ -15,3 +15,13 @@ playwright-report/
 # Next.js generated types
 next-env.d.ts
 *.tsbuildinfo
+
+# Compiled output accidentally emitted next to TypeScript sources
+apps/**/src/**/*.js
+apps/**/src/**/*.js.map
+apps/**/src/**/*.d.ts
+apps/**/src/**/*.d.ts.map
+packages/**/src/**/*.js
+packages/**/src/**/*.js.map
+packages/**/src/**/*.d.ts
+packages/**/src/**/*.d.ts.map

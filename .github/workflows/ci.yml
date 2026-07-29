@@ -60,7 +60,7 @@ jobs:
 
       - name: Apply migrations for test schemas
         run: |
-          for schema in flakemetry_test_db flakemetry_test_api flakemetry_test_worker; do
+          for schema in flakemetry_test_db flakemetry_test_api flakemetry_test_worker flakemetry_test_queries; do
             DATABASE_URL="postgresql://flakemetry:flakemetry@localhost:5432/flakemetry?schema=$schema" \
               pnpm --filter @flakemetry/db exec prisma migrate deploy
           done

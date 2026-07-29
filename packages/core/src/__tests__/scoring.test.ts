@@ -119,6 +119,13 @@ describe('computeFlakyScore', () => {
     const result = computeFlakyScore(balanced, config)
     expect(result.entropy).toBeGreaterThan(0.9)
     expect(result.score).toBeGreaterThan(0)
+    expect(result.reasonCodes.map((r) => r.code)).toContain('MIXED_OUTCOMES')
+  })
+
+  it('explains a recently unstable test with a reason code', () => {
+    const unstable: ExecutionPoint[] = [red('a', 4), red('b', 3), red('c', 2), green('d', 1)]
+    const result = computeFlakyScore(unstable, config)
+    expect(result.reasonCodes.map((r) => r.code)).toContain('RECENT_INSTABILITY')
   })
 
   it('bounds the scoring window to the most recent executions', () => {

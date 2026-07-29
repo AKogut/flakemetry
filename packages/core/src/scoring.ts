@@ -123,6 +123,8 @@ const buildReasonCodes = (signals: {
   sameShaVariance: number
   flipRate: number
   sameShaMixedCommits: number
+  instability: number
+  entropy: number
   failIsolation: number
   failures: number
   sampleSize: number
@@ -134,16 +136,28 @@ const buildReasonCodes = (signals: {
       message: `different results on ${signals.sameShaMixedCommits} identical commit(s)`,
     })
   }
-  if (signals.passOnRerunRate > 0.2) {
+  if (signals.instability > 0.35) {
     codes.push({
-      code: 'PASS_ON_RERUN',
-      message: `passed on rerun in ${percent(signals.passOnRerunRate)}% of retried runs`,
+      code: 'RECENT_INSTABILITY',
+      message: `recently unstable — ${percent(signals.instability)}% time-decayed failure weight`,
     })
   }
   if (signals.flipRate > 0.3) {
     codes.push({
       code: 'HIGH_FLIP_RATE',
       message: `flipped pass/fail at ${percent(signals.flipRate)}% of run transitions`,
+    })
+  }
+  if (signals.passOnRerunRate > 0.2) {
+    codes.push({
+      code: 'PASS_ON_RERUN',
+      message: `passed on rerun in ${percent(signals.passOnRerunRate)}% of retried runs`,
+    })
+  }
+  if (signals.entropy > 0.5) {
+    codes.push({
+      code: 'MIXED_OUTCOMES',
+      message: `unpredictable pass/fail mix (entropy ${signals.entropy.toFixed(2)} of 1.00)`,
     })
   }
   if (signals.failIsolation > 0.5 && signals.failures >= 2) {
@@ -230,6 +244,8 @@ export const computeFlakyScore = (
     sameShaVariance,
     flipRate,
     sameShaMixedCommits,
+    instability,
+    entropy,
     failIsolation,
     failures,
     sampleSize,
