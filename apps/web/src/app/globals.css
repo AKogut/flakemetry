@@ -488,3 +488,100 @@ label {
   color: var(--flaky);
   border-color: var(--flaky);
 }
+
+.wf-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 900px) {
+  .wf-layout {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.waterfall {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wf-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 30%) 1fr 56px;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.25rem 0.4rem;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+
+.wf-row:hover {
+  background: var(--surface-2);
+}
+
+.wf-row-active {
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+
+.wf-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+}
+
+.wf-track {
+  position: relative;
+  height: 14px;
+  background: var(--surface-2);
+  border-radius: 4px;
+}
+
+.wf-bar {
+  position: absolute;
+  top: 0;
+  height: 14px;
+  min-width: 2px;
+  border-radius: 4px;
+  opacity: 0.9;
+}
+
+.wf-dur {
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+.wf-drawer {
+  position: sticky;
+  top: 1rem;
+}
+
+.wf-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.artifact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.9rem;
+}
+
+.artifact-thumb {
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  display: block;
+}

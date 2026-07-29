@@ -131,11 +131,21 @@ export default async function TestDetailPage({
                     {point.status === 'fail' ? (
                       <a
                         href={`${base}?execution=${point.executionId}`}
-                        style={{ color: 'var(--accent)', fontSize: '0.85rem' }}
+                        style={{
+                          color: 'var(--accent)',
+                          fontSize: '0.85rem',
+                          marginRight: '0.9rem',
+                        }}
                       >
                         {point.hasRca ? 'View RCA' : 'Inspect'}
                       </a>
                     ) : null}
+                    <a
+                      href={`${base}/executions/${point.executionId}`}
+                      style={{ color: 'var(--accent)', fontSize: '0.85rem' }}
+                    >
+                      Trace
+                    </a>
                   </td>
                 </tr>
               ))}
