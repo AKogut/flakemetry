@@ -60,6 +60,7 @@ services:
     restart: 'no'
 
   api:
+    restart: unless-stopped
     build:
       context: .
       target: api
@@ -86,6 +87,7 @@ services:
       retries: 6
 
   worker:
+    restart: unless-stopped
     build:
       context: .
       target: worker
@@ -114,8 +116,11 @@ services:
       FLAKEMETRY_S3_FORCE_PATH_STYLE: 'true'
       FLAKEMETRY_ARTIFACT_RETENTION_DAYS: ${FLAKEMETRY_ARTIFACT_RETENTION_DAYS:-}
       FLAKEMETRY_EXECUTION_RETENTION_DAYS: ${FLAKEMETRY_EXECUTION_RETENTION_DAYS:-}
+      FLAKEMETRY_QUEUE_VISIBILITY_MS: ${FLAKEMETRY_QUEUE_VISIBILITY_MS:-}
+      FLAKEMETRY_AI_TIMEOUT_MS: ${FLAKEMETRY_AI_TIMEOUT_MS:-}
 
   web:
+    restart: unless-stopped
     build:
       context: .
       target: web

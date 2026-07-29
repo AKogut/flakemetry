@@ -97,6 +97,29 @@ describe.skipIf(!hasDb)('processJob', () => {
     expect(await prisma.testIdentity.count()).toBe(1)
   })
 
+  it('auto-quarantines a flaky candidate when the policy enables it', async () => {
+    const ctx = {
+      ...(await seedProject()),
+      now: NOW,
+      threshold: 0.01,
+      minSamples: 1,
+      quarantineEnabled: true,
+    }
+    await processJob(prisma, batch(), ctx)
+
+    const identity = await prisma.testIdentity.findFirstOrThrow()
+    expect(identity.quarantined).toBe(true)
+    expect(identity.quarantineReason).toContain('auto')
+  })
+
+  it('does not quarantine when the policy leaves it disabled', async () => {
+    const ctx = { ...(await seedProject()), now: NOW, threshold: 0.01, minSamples: 1 }
+    await processJob(prisma, batch(), ctx)
+
+    const identity = await prisma.testIdentity.findFirstOrThrow()
+    expect(identity.quarantined).toBe(false)
+  })
+
   it('emits domain events for identities, scores and the processed run', async () => {
     const events = createEventBus()
     const created: DomainEventMap['identity.created'][] = []

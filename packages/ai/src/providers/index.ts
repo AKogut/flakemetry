@@ -19,17 +19,20 @@ export const resolveProvider = (
   const selected = (env.FLAKEMETRY_AI_PROVIDER ?? '').toLowerCase()
   const apiKey = env.FLAKEMETRY_AI_API_KEY || env.ANTHROPIC_API_KEY
   const model = env.FLAKEMETRY_AI_MODEL || undefined
+  const rawTimeout = Number(env.FLAKEMETRY_AI_TIMEOUT_MS)
+  const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : undefined
 
   if (selected === 'ollama') {
     return makeOllama({
       endpoint: env.FLAKEMETRY_AI_ENDPOINT || env.OLLAMA_HOST || undefined,
       model,
+      timeoutMs,
     })
   }
 
   if (selected === 'claude' || (selected === '' && apiKey)) {
     if (!apiKey) return null
-    return makeClaude({ apiKey, model })
+    return makeClaude({ apiKey, model, timeoutMs })
   }
 
   return null

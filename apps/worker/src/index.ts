@@ -48,7 +48,13 @@ const startArtifactRetention = (): void => {
 }
 
 const prisma = getPrismaClient()
-const queue = new IngestionQueue(prisma)
+const visibilityTimeoutMs = Number(process.env.FLAKEMETRY_QUEUE_VISIBILITY_MS)
+const queue = new IngestionQueue(
+  prisma,
+  Number.isFinite(visibilityTimeoutMs) && visibilityTimeoutMs > 0 ? { visibilityTimeoutMs } : {},
+)
+
+const SHUTDOWN_DEADLINE_MS = 15_000
 
 const selfOtelEndpoint = process.env.FLAKEMETRY_SELF_OTEL_ENDPOINT
 const shutdownTelemetry = selfOtelEndpoint
@@ -66,13 +72,20 @@ const worker = createWorker(prisma, queue, {
   events,
 })
 
-const shutdown = () => {
+let shuttingDown = false
+const shutdown = async (): Promise<void> => {
+  if (shuttingDown) return
+  shuttingDown = true
   process.stdout.write('worker: shutting down\n')
   worker.stop()
-  void shutdownTelemetry?.()
+  const deadline = new Promise<void>((resolve) => setTimeout(resolve, SHUTDOWN_DEADLINE_MS).unref())
+  await Promise.race([worker.drain(), deadline])
+  await shutdownTelemetry?.()
+  await prisma.$disconnect().catch(() => {})
+  process.exit(0)
 }
-process.on('SIGINT', shutdown)
-process.on('SIGTERM', shutdown)
+process.on('SIGINT', () => void shutdown())
+process.on('SIGTERM', () => void shutdown())
 
 startArtifactRetention()
 startExecutionRetention(prisma)

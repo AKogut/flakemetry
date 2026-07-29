@@ -10,14 +10,9 @@ const port = Number(process.env.PORT ?? 4000)
 const host = process.env.HOST ?? '0.0.0.0'
 
 const selfOtelEndpoint = process.env.FLAKEMETRY_SELF_OTEL_ENDPOINT
-if (selfOtelEndpoint) {
-  const shutdown = initSelfTelemetry({ endpoint: selfOtelEndpoint })
-  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-    process.on(signal, () => {
-      void shutdown()
-    })
-  }
-}
+const shutdownTelemetry = selfOtelEndpoint
+  ? initSelfTelemetry({ endpoint: selfOtelEndpoint })
+  : undefined
 
 const maxQueueDepth = process.env.FLAKEMETRY_MAX_QUEUE_DEPTH
   ? Number(process.env.FLAKEMETRY_MAX_QUEUE_DEPTH)
@@ -38,6 +33,19 @@ const app = buildApp({
   },
   maxQueueDepth,
 })
+
+let shuttingDown = false
+const shutdown = async (): Promise<void> => {
+  if (shuttingDown) return
+  shuttingDown = true
+  process.stdout.write('api: shutting down\n')
+  await app.close().catch(() => {})
+  await shutdownTelemetry?.()
+  await prisma.$disconnect().catch(() => {})
+  process.exit(0)
+}
+process.on('SIGINT', () => void shutdown())
+process.on('SIGTERM', () => void shutdown())
 
 app
   .listen({ port, host })

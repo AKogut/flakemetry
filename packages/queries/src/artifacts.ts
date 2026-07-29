@@ -11,16 +11,28 @@ export interface SignedArtifact {
   url: string | null
 }
 
+export interface SignArtifactsOptions {
+  keyPrefix?: string | null
+  ttlSeconds?: number
+}
+
 export const signArtifacts = async (
   signer: ArtifactSigner | null | undefined,
   refs: readonly ArtifactRef[],
-  ttlSeconds?: number,
+  options: SignArtifactsOptions = {},
 ): Promise<SignedArtifact[]> =>
   Promise.all(
-    refs.map(async (ref) => ({
-      name: ref.name,
-      contentType: ref.contentType,
-      sizeBytes: ref.sizeBytes ?? null,
-      url: signer && ref.key ? await signer.presignDownload(ref.key, ttlSeconds) : null,
-    })),
+    refs.map(async (ref) => {
+      const withinTenant =
+        Boolean(ref.key) && (!options.keyPrefix || ref.key!.startsWith(options.keyPrefix))
+      return {
+        name: ref.name,
+        contentType: ref.contentType,
+        sizeBytes: ref.sizeBytes ?? null,
+        url:
+          signer && withinTenant
+            ? await signer.presignDownload(ref.key!, options.ttlSeconds)
+            : null,
+      }
+    }),
   )

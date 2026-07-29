@@ -3,6 +3,7 @@ import type { PrismaClient } from '@flakemetry/db'
 
 export interface ExecutionTrace {
   id: string
+  orgId: string
   testIdentityId: string
   title: string
   suite: string
@@ -30,6 +31,7 @@ export const getExecutionTrace = async (
     where: { id: executionId, projectId },
     select: {
       id: true,
+      orgId: true,
       testIdentityId: true,
       status: true,
       attempt: true,
@@ -49,6 +51,7 @@ export const getExecutionTrace = async (
 
   return {
     id: execution.id,
+    orgId: execution.orgId,
     testIdentityId: execution.testIdentityId,
     title: execution.identity.title,
     suite: execution.identity.suite,

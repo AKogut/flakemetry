@@ -125,4 +125,24 @@ describe('signArtifacts', () => {
     expect(signed[0]?.sizeBytes).toBe(12)
     expect(signed[1]?.url).toBeNull()
   })
+
+  it('refuses to sign a key outside the tenant prefix (cross-tenant BOLA guard)', async () => {
+    const store = createMemoryObjectStore()
+    const signed = await signArtifacts(
+      store,
+      [
+        { name: 'mine.png', contentType: 'image/png', path: 'a', key: 'org/me/proj/p/0/mine.png' },
+        {
+          name: 'victim.png',
+          contentType: 'image/png',
+          path: 'a',
+          key: 'org/victim/proj/q/0/victim.png',
+        },
+      ],
+      { keyPrefix: 'org/me/proj/p/' },
+    )
+
+    expect(signed[0]?.url).toContain('org/me/proj/p/0/mine.png')
+    expect(signed[1]?.url).toBeNull()
+  })
 })
