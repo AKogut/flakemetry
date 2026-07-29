@@ -87,14 +87,30 @@ describe.skipIf(!hasDb)('processJob', () => {
     expect((score.reasonCodes as { code: string }[]).length).toBeGreaterThan(0)
   })
 
-  it('is idempotent: re-processing the same batch does not duplicate executions', async () => {
+  it('is idempotent: re-processing keeps stable execution ids and occurrence counts', async () => {
     const ctx = { ...(await seedProject()), now: NOW }
+    const ids = async () =>
+      (
+        await prisma.testExecution.findMany({ orderBy: { ordinal: 'asc' }, select: { id: true } })
+      ).map((row) => row.id)
+
     await processJob(prisma, batch(), ctx)
+    const before = await ids()
+    const sigBefore = await prisma.errorSignature.findFirstOrThrow({
+      select: { occurrenceCount: true },
+    })
+
     await processJob(prisma, batch(), ctx)
+    const after = await ids()
+    const sigAfter = await prisma.errorSignature.findFirstOrThrow({
+      select: { occurrenceCount: true },
+    })
 
     expect(await prisma.run.count()).toBe(1)
     expect(await prisma.testExecution.count()).toBe(2)
     expect(await prisma.testIdentity.count()).toBe(1)
+    expect(after).toEqual(before)
+    expect(sigAfter.occurrenceCount).toBe(sigBefore.occurrenceCount)
   })
 
   it('auto-quarantines a flaky candidate when the policy enables it', async () => {

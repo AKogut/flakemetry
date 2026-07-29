@@ -297,6 +297,7 @@ model TestExecution {
   projectId        String     @map("project_id") @db.Uuid
   runId            String     @map("run_id") @db.Uuid
   testIdentityId   String     @map("test_identity_id") @db.Uuid
+  ordinal          Int?
   attempt          Int        @default(1)
   retryOf          String?    @map("retry_of") @db.Uuid
   status           TestStatus
@@ -316,6 +317,7 @@ model TestExecution {
   errorSignature ErrorSignature? @relation(fields: [errorSignatureId], references: [id], onDelete: SetNull)
   rcaReport      RcaReport?
 
+  @@unique([runId, ordinal])
   @@index([orgId])
   @@index([runId])
   @@index([testIdentityId, startedAt(sort: Desc)])
