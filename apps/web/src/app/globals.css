@@ -585,3 +585,40 @@ label {
   border: 1px solid var(--border);
   display: block;
 }
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.kpi {
+  padding: 1rem 1.1rem;
+}
+
+.kpi-value {
+  font-size: 1.7rem;
+  font-weight: 700;
+  margin-top: 0.3rem;
+}
+
+.trend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.board-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+@media (min-width: 900px) {
+  .board-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
