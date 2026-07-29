@@ -20,8 +20,9 @@ export const createMemoryObjectStore = (
     name: 'memory',
     objects,
 
-    async presignUpload(key, _contentType, ttlSeconds = 900) {
-      return `${baseUrl}/${key}?upload=1&ttl=${ttlSeconds}`
+    async presignUpload(key, _contentType, options = {}) {
+      const len = options.contentLength !== undefined ? `&len=${options.contentLength}` : ''
+      return `${baseUrl}/${key}?upload=1&ttl=${options.ttlSeconds ?? 900}${len}`
     },
 
     async presignDownload(key, ttlSeconds = 900) {

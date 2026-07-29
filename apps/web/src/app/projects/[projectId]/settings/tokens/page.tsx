@@ -1,8 +1,10 @@
 import { getPrismaClient } from '@flakemetry/db'
+import { cookies } from 'next/headers'
 
 import { createIngestToken, revokeIngestToken } from '@/lib/actions'
 import { requireUser } from '@/lib/session'
 import { requireProjectAccess } from '@/lib/tenant'
+import { NEW_TOKEN_COOKIE } from '@/lib/token-cookie'
 
 const prisma = getPrismaClient()
 
@@ -13,17 +15,12 @@ const formatDate = (date: Date | null): string =>
       )
     : '—'
 
-export default async function TokensPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ projectId: string }>
-  searchParams: Promise<{ created?: string }>
-}) {
+export default async function TokensPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params
-  const { created } = await searchParams
   const user = await requireUser()
   await requireProjectAccess(user.id, projectId)
+
+  const created = (await cookies()).get(NEW_TOKEN_COOKIE)?.value ?? null
 
   const tokens = await prisma.ingestToken.findMany({
     where: { projectId },

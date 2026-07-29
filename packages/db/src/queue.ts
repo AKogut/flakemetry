@@ -45,27 +45,31 @@ export class IngestionQueue {
   }
 
   async enqueue(input: EnqueueInput): Promise<EnqueueResult> {
-    const existing = await this.prisma.ingestionJob.findUnique({
-      where: {
-        projectId_idempotencyKey: {
-          projectId: input.projectId,
-          idempotencyKey: input.idempotencyKey,
-        },
-      },
-      select: { id: true },
-    })
-    if (existing) return { jobId: existing.id, deduplicated: true }
-
-    const job = await this.prisma.ingestionJob.create({
-      data: {
-        orgId: input.orgId,
+    const where = {
+      projectId_idempotencyKey: {
         projectId: input.projectId,
         idempotencyKey: input.idempotencyKey,
-        payload: input.payload,
       },
-      select: { id: true },
-    })
-    return { jobId: job.id, deduplicated: false }
+    }
+    try {
+      const job = await this.prisma.ingestionJob.create({
+        data: {
+          orgId: input.orgId,
+          projectId: input.projectId,
+          idempotencyKey: input.idempotencyKey,
+          payload: input.payload,
+        },
+        select: { id: true },
+      })
+      return { jobId: job.id, deduplicated: false }
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'P2002') throw error
+      const existing = await this.prisma.ingestionJob.findUniqueOrThrow({
+        where,
+        select: { id: true },
+      })
+      return { jobId: existing.id, deduplicated: true }
+    }
   }
 
   async dequeue(limit = 1): Promise<QueuedJob[]> {

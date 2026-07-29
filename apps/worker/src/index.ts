@@ -28,8 +28,17 @@ const startExecutionRetention = (prisma: ReturnType<typeof getPrismaClient>): vo
 
 const startArtifactRetention = (): void => {
   const store = resolveObjectStore(process.env)
-  const days = Number(process.env.FLAKEMETRY_ARTIFACT_RETENTION_DAYS ?? 0)
-  if (!store || !Number.isFinite(days) || days <= 0) return
+  const configured = Number(process.env.FLAKEMETRY_ARTIFACT_RETENTION_DAYS ?? 0)
+  if (!store || !Number.isFinite(configured) || configured <= 0) return
+
+  const executionDays = Number(process.env.FLAKEMETRY_EXECUTION_RETENTION_DAYS ?? 0)
+  const days =
+    Number.isFinite(executionDays) && executionDays > configured ? executionDays : configured
+  if (days > configured) {
+    process.stdout.write(
+      `worker: artifact retention raised to ${days}d to outlive execution retention\n`,
+    )
+  }
 
   const sweep = (): void => {
     void pruneArtifacts(store, { olderThanDays: days })

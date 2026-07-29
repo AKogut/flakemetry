@@ -4,14 +4,16 @@ import { projectPolicyInputSchema } from '@flakemetry/contracts'
 import { generateToken, getPrismaClient, hashToken } from '@flakemetry/db'
 import { updateProjectPolicy as persistProjectPolicy } from '@flakemetry/queries'
 import { revalidatePath } from 'next/cache'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 import { requireUser } from './session'
 import { requireProjectAccess } from './tenant'
+import { NEW_TOKEN_COOKIE } from './token-cookie'
 
 const prisma = getPrismaClient()
 
-const canEditPolicy = (role: string): boolean => role === 'owner' || role === 'admin'
+const canManage = (role: string): boolean => role === 'owner' || role === 'admin'
 
 const numberField = (formData: FormData, name: string, integer: boolean): number | null => {
   const raw = String(formData.get(name) ?? '').trim()
@@ -74,21 +76,32 @@ export const createIngestToken = async (formData: FormData): Promise<void> => {
   const projectId = String(formData.get('projectId') ?? '')
   const name = String(formData.get('name') ?? '').trim() || 'ci'
   const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.role)) throw new Error('only owners and admins can manage ingest tokens')
 
   const raw = generateToken()
   await prisma.ingestToken.create({
     data: { orgId: project.orgId, projectId: project.id, name, tokenHash: hashToken(raw) },
   })
 
+  const store = await cookies()
+  store.set(NEW_TOKEN_COOKIE, raw, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: `/projects/${projectId}/settings/tokens`,
+    maxAge: 120,
+  })
+
   revalidatePath(`/projects/${projectId}/settings/tokens`)
-  redirect(`/projects/${projectId}/settings/tokens?created=${encodeURIComponent(raw)}`)
+  redirect(`/projects/${projectId}/settings/tokens?created=1`)
 }
 
 export const revokeIngestToken = async (formData: FormData): Promise<void> => {
   const user = await requireUser()
   const projectId = String(formData.get('projectId') ?? '')
   const tokenId = String(formData.get('tokenId') ?? '')
-  await requireProjectAccess(user.id, projectId)
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.role)) throw new Error('only owners and admins can manage ingest tokens')
 
   await prisma.ingestToken.updateMany({
     where: { id: tokenId, projectId, revokedAt: null },
@@ -102,7 +115,7 @@ export const updateProjectPolicy = async (formData: FormData): Promise<void> => 
   const user = await requireUser()
   const projectId = String(formData.get('projectId') ?? '')
   const project = await requireProjectAccess(user.id, projectId)
-  if (!canEditPolicy(project.role)) throw new Error('only owners and admins can edit policy')
+  if (!canManage(project.role)) throw new Error('only owners and admins can edit policy')
 
   const input = projectPolicyInputSchema.parse({
     flakyThreshold: numberField(formData, 'flakyThreshold', false),

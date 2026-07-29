@@ -100,8 +100,16 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
 
   void app.register(fastifyTRPCPlugin, {
     prefix: '/trpc',
-    trpcOptions: { router: appRouter, createContext: createContextFactory(prisma) },
+    trpcOptions: { router: appRouter, createContext: createContextFactory(prisma, limiter) },
   })
+
+  const rateLimited = (projectId: string, reply: FastifyReply): boolean => {
+    const decision = limiter.check(projectId)
+    if (decision.allowed) return false
+    apiMetrics.rateLimited.add(1)
+    setRetryAfter(reply, decision.retryAfterMs)
+    return true
+  }
 
   app.post('/v1/ingest', async (request, reply) => {
     const project = await authenticateProject(prisma, request)
@@ -150,6 +158,10 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
       return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
     }
 
+    if (rateLimited(project.projectId, reply)) {
+      return reply.code(429).send({ error: 'rate_limited' })
+    }
+
     const store = options.store
     if (!store) {
       return reply.code(501).send({ error: 'artifacts_disabled' })
@@ -188,7 +200,9 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
           executionIndex: artifact.executionIndex,
           name: artifact.name,
           key,
-          uploadUrl: await store.presignUpload(key, artifact.contentType),
+          uploadUrl: await store.presignUpload(key, artifact.contentType, {
+            contentLength: artifact.sizeBytes,
+          }),
         }
       }),
     )
@@ -200,6 +214,10 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     const project = await authenticateProject(prisma, request)
     if (!project) {
       return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
+    }
+
+    if (rateLimited(project.projectId, reply)) {
+      return reply.code(429).send({ error: 'rate_limited' })
     }
 
     const commitSha = (request.query as { commitSha?: string }).commitSha

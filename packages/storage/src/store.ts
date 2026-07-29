@@ -4,9 +4,14 @@ export interface StoredObject {
   lastModified: Date
 }
 
+export interface PresignUploadOptions {
+  contentLength?: number
+  ttlSeconds?: number
+}
+
 export interface ObjectStore {
   readonly name: string
-  presignUpload(key: string, contentType: string, ttlSeconds?: number): Promise<string>
+  presignUpload(key: string, contentType: string, options?: PresignUploadOptions): Promise<string>
   presignDownload(key: string, ttlSeconds?: number): Promise<string>
   put(key: string, body: Uint8Array, contentType: string): Promise<void>
   remove(keys: string[]): Promise<void>

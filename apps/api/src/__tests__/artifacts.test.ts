@@ -56,6 +56,32 @@ describe.skipIf(!hasDb)('POST /v1/artifacts/presign', () => {
     expect(body.items).toHaveLength(2)
     expect(body.items[0]?.key).toContain(`proj/${projectId}/run/gh-990001-1/0/shot.png`)
     expect(body.items[0]?.uploadUrl).toContain('upload=1')
+    expect(body.items[0]?.uploadUrl).toContain('len=2048')
+  })
+
+  it('rate-limits presign requests per project', async () => {
+    const { raw } = await seedToken()
+    app = buildApp({
+      prisma,
+      store: createMemoryObjectStore(),
+      rateLimit: { max: 1, windowMs: 60_000 },
+    })
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/v1/artifacts/presign',
+      headers: { authorization: `Bearer ${raw}` },
+      payload: presignBody,
+    })
+    const second = await app.inject({
+      method: 'POST',
+      url: '/v1/artifacts/presign',
+      headers: { authorization: `Bearer ${raw}` },
+      payload: presignBody,
+    })
+
+    expect(first.statusCode).toBe(200)
+    expect(second.statusCode).toBe(429)
   })
 
   it('rejects an unsupported content type with 415', async () => {
