@@ -14,6 +14,8 @@ export type ProjectPolicyValues = {
   quarantineEnabled: boolean
   quarantineCooldownRuns: number
   aiRcaEnabled: boolean
+  executionRetentionDays: number
+  artifactRetentionDays: number
 }
 
 export const POLICY_FIELDS = [
@@ -22,6 +24,8 @@ export const POLICY_FIELDS = [
   'quarantineEnabled',
   'quarantineCooldownRuns',
   'aiRcaEnabled',
+  'executionRetentionDays',
+  'artifactRetentionDays',
 ] as const
 
 export type PolicyField = (typeof POLICY_FIELDS)[number]
@@ -33,6 +37,8 @@ export const projectPolicyInputSchema = z
     quarantineEnabled: z.boolean().nullable(),
     quarantineCooldownRuns: z.number().int().min(1).nullable(),
     aiRcaEnabled: z.boolean().nullable(),
+    executionRetentionDays: z.number().int().min(1).nullable(),
+    artifactRetentionDays: z.number().int().min(1).nullable(),
   })
   .strict()
   .partial()
@@ -61,7 +67,7 @@ export type PolicyLayers = {
   env?: PolicyOverrides | null
 }
 
-const resolveField = <K extends PolicyField>(
+const resolveField = <K extends keyof typeof POLICY_DEFAULTS>(
   field: K,
   layers: PolicyLayers,
 ): ResolvedPolicyField<ProjectPolicyValues[K]> => {
@@ -95,7 +101,12 @@ export const normalizePolicyOverrides = (
   return overrides
 }
 
-export const effectivePolicyValues = (policy: EffectiveProjectPolicy): ProjectPolicyValues => ({
+export type ScoringPolicyValues = Pick<
+  ProjectPolicyValues,
+  'flakyThreshold' | 'minSamples' | 'quarantineEnabled' | 'quarantineCooldownRuns' | 'aiRcaEnabled'
+>
+
+export const effectivePolicyValues = (policy: EffectiveProjectPolicy): ScoringPolicyValues => ({
   flakyThreshold: policy.flakyThreshold.value,
   minSamples: policy.minSamples.value,
   quarantineEnabled: policy.quarantineEnabled.value,

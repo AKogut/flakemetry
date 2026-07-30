@@ -132,7 +132,10 @@ Daily aggregates are materialized on ingest — the worker recomputes `daily_tes
 
 | Variable | Effect |
 |---|---|
-| `FLAKEMETRY_EXECUTION_RETENTION_DAYS` | Worker prunes raw executions older than this on a periodic sweep; rollups are untouched. Unset keeps every execution |
+| `FLAKEMETRY_EXECUTION_RETENTION_DAYS` | Global default: worker prunes raw executions older than this on a periodic sweep; rollups are untouched. Unset keeps every execution |
+| `FLAKEMETRY_ARTIFACT_RETENTION_DAYS` | Global default for artifact pruning (also under Artifact storage above) |
+
+Retention is resolved **per project**: a project can set its own execution/artifact retention in **Settings → Policy**, which overrides the global env default (blank inherits it). The worker sweeps each project at its own window, and artifact retention is always clamped to at least the execution window so signed refs never outlive their objects.
 
 Recompute is idempotent: re-delivering a run recomputes the same day's aggregates rather than double-counting.
 

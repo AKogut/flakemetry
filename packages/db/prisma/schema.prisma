@@ -165,6 +165,8 @@ model ProjectPolicy {
   quarantineEnabled      Boolean? @map("quarantine_enabled")
   quarantineCooldownRuns Int?     @map("quarantine_cooldown_runs")
   aiRcaEnabled           Boolean? @map("ai_rca_enabled")
+  executionRetentionDays Int?     @map("execution_retention_days")
+  artifactRetentionDays  Int?     @map("artifact_retention_days")
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 
