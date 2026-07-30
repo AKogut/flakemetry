@@ -1,0 +1,36 @@
+{
+  "name": "@flakemetry/notify",
+  "version": "0.0.1",
+  "description": "Notification abstraction and channel adapters (Slack, Discord)",
+  "license": "MIT",
+  "author": "Andrii Kohut",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "clean": "rm -rf dist .turbo",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@flakemetry/eslint-config": "workspace:*",
+    "@flakemetry/tsconfig": "workspace:*",
+    "@flakemetry/tsup-config": "workspace:*",
+    "@types/node": "^22.10.5",
+    "vitest": "^3.2.4"
+  },
+  "private": true
+}

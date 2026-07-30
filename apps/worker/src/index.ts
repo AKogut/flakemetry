@@ -2,6 +2,7 @@ import { getPrismaClient, IngestionQueue } from '@flakemetry/db'
 import { pruneArtifacts, resolveObjectStore } from '@flakemetry/storage'
 
 import { createEventBus } from './events'
+import { startNotifications } from './notify'
 import { pruneRawExecutions } from './rollups'
 import { createWorker } from './runner'
 import { initSelfTelemetry, observeQueueDepth } from './telemetry'
@@ -75,6 +76,10 @@ observeQueueDepth(() => queue.depth())
 const events = createEventBus((error) => {
   process.stderr.write(`worker: event handler failed ${String(error)}\n`)
 })
+
+if (startNotifications(events)) {
+  process.stdout.write('worker: notifications enabled\n')
+}
 
 const worker = createWorker(prisma, queue, {
   pollIntervalMs: Number(process.env.POLL_INTERVAL_MS ?? 1_000),

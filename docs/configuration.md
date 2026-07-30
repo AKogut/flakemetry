@@ -94,7 +94,18 @@ Rate-limit and backpressure state are held per API process (in-memory). Running 
 | `POLL_INTERVAL_MS` | Idle poll interval between dequeue attempts |
 | `FLAKEMETRY_SELF_OTEL_ENDPOINT` | OTLP endpoint for the worker's own metrics (processing lag, throughput, error rate, queue depth) |
 
-The worker emits domain events (`run.processed`, `identity.created`, `identity.moved`, `score.updated`) after each job commits — the seam downstream stages such as signature clustering and AI RCA subscribe to.
+The worker emits domain events (`run.processed`, `identity.created`, `identity.moved`, `score.updated`, `flaky.detected`, `quarantine.changed`, `rca.created`) after each job commits — the seam downstream stages such as signature clustering, AI RCA, and notifications subscribe to.
+
+### Notifications
+
+The worker pushes intelligence to Slack and Discord via incoming webhooks. Configure a webhook and it lights up automatically; unset, notifications are off. Delivery is best-effort and de-duplicated per channel so a flapping test can't spam a channel.
+
+| Variable | Effect |
+|---|---|
+| `FLAKEMETRY_SLACK_WEBHOOK` | Slack incoming-webhook URL to post to |
+| `FLAKEMETRY_DISCORD_WEBHOOK` | Discord webhook URL to post to |
+| `FLAKEMETRY_NOTIFY_EVENTS` | Comma-separated event filter: `flaky_detected`, `quarantine_changed`, `rca_ready` (default: all) |
+| `FLAKEMETRY_DASHBOARD_URL` | Public dashboard base URL, used to deep-link notifications back to the test |
 
 ### Artifact storage
 

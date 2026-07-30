@@ -113,6 +113,30 @@ describe.skipIf(!hasDb)('processJob', () => {
     expect(sigAfter.occurrenceCount).toBe(sigBefore.occurrenceCount)
   })
 
+  it('emits flaky.detected and quarantine.changed when a test crosses into quarantine', async () => {
+    const events = createEventBus()
+    const flaky: DomainEventMap['flaky.detected'][] = []
+    const quarantine: DomainEventMap['quarantine.changed'][] = []
+    events.on('flaky.detected', (payload) => flaky.push(payload))
+    events.on('quarantine.changed', (payload) => quarantine.push(payload))
+
+    const ctx = {
+      ...(await seedProject()),
+      now: NOW,
+      threshold: 0.01,
+      minSamples: 1,
+      quarantineEnabled: true,
+      events,
+    }
+    await processJob(prisma, batch(), ctx)
+
+    expect(flaky).toHaveLength(1)
+    expect(flaky[0]?.title).toBe('logs in')
+    expect(flaky[0]?.suite).toBe('auth')
+    expect(quarantine).toHaveLength(1)
+    expect(quarantine[0]?.quarantined).toBe(true)
+  })
+
   it('auto-quarantines a flaky candidate when the policy enables it', async () => {
     const ctx = {
       ...(await seedProject()),
