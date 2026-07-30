@@ -1,3 +1,4 @@
+export * from './clustering'
 export * from './codeowners'
 export * from './error-signature'
 export * from './fingerprint'

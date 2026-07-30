@@ -1,6 +1,7 @@
 import { getPrismaClient, IngestionQueue } from '@flakemetry/db'
 import { resolveObjectStore } from '@flakemetry/storage'
 
+import { backfillSignatureClusters } from './clustering'
 import { createEventBus } from './events'
 import { startNotifications } from './notify'
 import { startRetention } from './retention'
@@ -52,6 +53,14 @@ process.on('SIGINT', () => void shutdown())
 process.on('SIGTERM', () => void shutdown())
 
 startRetention(prisma, resolveObjectStore(process.env))
+
+void backfillSignatureClusters(prisma)
+  .then((assigned) => {
+    if (assigned > 0) process.stdout.write(`worker: clustered ${assigned} error signature(s)\n`)
+  })
+  .catch((error: unknown) => {
+    process.stderr.write(`worker: cluster backfill failed ${String(error)}\n`)
+  })
 
 process.stdout.write('worker: started\n')
 worker.start().catch((error: unknown) => {
