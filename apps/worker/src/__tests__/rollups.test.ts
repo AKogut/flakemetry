@@ -119,6 +119,56 @@ describe.skipIf(!hasDb)('trend rollups', () => {
     expect(leaderboards.mostFailing[0]?.failRate).toBe(1)
   })
 
+  it('rolls up each UTC day a midnight-straddling run touches', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(
+      prisma,
+      batch({
+        idempotencyKey: 'run-straddle',
+        run: { status: 'failed', startedAt: new Date('2026-07-16T23:59:00Z') },
+        executions: [
+          {
+            filePath: 'e2e/login.spec.ts',
+            suite: 'auth',
+            title: 'logs in',
+            status: 'fail',
+            attempt: 1,
+            startedAt: new Date('2026-07-16T23:59:30Z'),
+            durationMs: 1000,
+            error: { message: 'Timeout 30000ms exceeded' },
+          },
+          {
+            filePath: 'e2e/login.spec.ts',
+            suite: 'auth',
+            title: 'logs in',
+            status: 'flaky',
+            attempt: 2,
+            retryOfIndex: 0,
+            startedAt: new Date('2026-07-17T00:00:30Z'),
+            durationMs: 1200,
+          },
+        ],
+      }),
+      ctx,
+    )
+
+    const daily = await prisma.dailyTestStats.findMany({ orderBy: { day: 'asc' } })
+    expect(daily).toHaveLength(2)
+    expect(daily[0]?.day.toISOString().slice(0, 10)).toBe('2026-07-16')
+    expect(daily[0]?.total).toBe(1)
+    expect(daily[0]?.failed).toBe(1)
+    expect(daily[0]?.avgDurationMs).toBe(1000)
+    expect(daily[1]?.day.toISOString().slice(0, 10)).toBe('2026-07-17')
+    expect(daily[1]?.total).toBe(1)
+    expect(daily[1]?.flaky).toBe(1)
+    expect(daily[1]?.avgDurationMs).toBe(1200)
+
+    const suite = await prisma.suiteDaily.findMany({ orderBy: { day: 'asc' } })
+    expect(suite).toHaveLength(2)
+    expect(suite[0]?.total).toBe(1)
+    expect(suite[1]?.total).toBe(1)
+  })
+
   it('stays idempotent when the same run is re-delivered', async () => {
     const ctx = { ...(await seedProject()), now: NOW }
     await processJob(prisma, batch(), ctx)

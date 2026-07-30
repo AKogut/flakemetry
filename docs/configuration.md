@@ -80,10 +80,12 @@ Unknown keys are rejected with an error naming the offending path — typos fail
 | Variable | Effect |
 |---|---|
 | `LOG_LEVEL` | Structured (pino) log level; `authorization` header is redacted |
-| `FLAKEMETRY_MAX_QUEUE_DEPTH` | Backpressure threshold — return `503` once pending jobs reach it |
+| `FLAKEMETRY_MAX_QUEUE_DEPTH` | Backpressure threshold — return `503` once pending jobs reach it. Defaults to `10000`; set `0` to disable |
 | `FLAKEMETRY_SELF_OTEL_ENDPOINT` | OTLP endpoint to export the API's own metrics to (dogfooding); metrics are no-ops when unset |
 
 The API also rate-limits per project token (fixed window) and returns `429` with `Retry-After` when exceeded.
+
+Rate-limit and backpressure state are held per API process (in-memory). Running multiple API replicas multiplies the effective limits — each replica counts only its own traffic — so front them with a shared gateway limiter if you need a cluster-wide cap.
 
 ### Processing worker
 

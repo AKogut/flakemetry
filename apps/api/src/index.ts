@@ -14,9 +14,14 @@ const shutdownTelemetry = selfOtelEndpoint
   ? initSelfTelemetry({ endpoint: selfOtelEndpoint })
   : undefined
 
-const maxQueueDepth = process.env.FLAKEMETRY_MAX_QUEUE_DEPTH
-  ? Number(process.env.FLAKEMETRY_MAX_QUEUE_DEPTH)
-  : undefined
+const DEFAULT_MAX_QUEUE_DEPTH = 10_000
+const configuredMaxQueueDepth = process.env.FLAKEMETRY_MAX_QUEUE_DEPTH
+const parsedMaxQueueDepth =
+  configuredMaxQueueDepth == null || configuredMaxQueueDepth === ''
+    ? DEFAULT_MAX_QUEUE_DEPTH
+    : Number(configuredMaxQueueDepth)
+const maxQueueDepth =
+  Number.isFinite(parsedMaxQueueDepth) && parsedMaxQueueDepth > 0 ? parsedMaxQueueDepth : undefined
 
 const prisma = getPrismaClient()
 const queue = new IngestionQueue(prisma)
