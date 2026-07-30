@@ -118,6 +118,33 @@ if (!result) skip(`no processed run found for ${commitSha.slice(0, 7)} yet`)
 
 const gate = result.gate
 const prNumber = event.pull_request?.number ?? event.number
+
+const annotationText = (value) => String(value).replace(/\r?\n/g, ' ').replace(/::/g, ':')
+
+const emitCommand = (line) => process.stdout.write(`${line}\n`)
+
+const annotate = () => {
+  for (const test of gate.tests || []) {
+    const where = `file=${annotationText(test.filePath)},line=1`
+    const score = typeof test.score === 'number' ? ` (flaky score ${test.score.toFixed(2)})` : ''
+    const title = annotationText(test.title)
+    if (test.classification === 'new_failure') {
+      emitCommand(
+        `::error ${where},title=Flakemetry — new failure::${title} newly ${test.status === 'fail' ? 'failed' : 'flaked'} against ${baseBranch}${score}`,
+      )
+    } else if (test.quarantined) {
+      emitCommand(
+        `::notice ${where},title=Flakemetry — quarantined::${title} is quarantined${score} — not blocking this build`,
+      )
+    } else {
+      emitCommand(
+        `::warning ${where},title=Flakemetry — known flake::${title} is a known flake${score} — not blocking this build`,
+      )
+    }
+  }
+}
+
+annotate()
 const description =
   gate.verdict === 'block'
     ? `${gate.newFailures} new failure(s), ${gate.knownFlakes} known flake(s)`

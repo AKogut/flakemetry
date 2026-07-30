@@ -175,6 +175,14 @@ describe('renderGateComment', () => {
     expect(md).toContain('20% of 10')
   })
 
+  it('marks a quarantined test distinctly from a plain known flake', () => {
+    const gate = baseGate()
+    gate.tests[1]!.quarantined = true
+    const md = renderGateComment(gate)
+    expect(md).toContain('🔒 quarantined')
+    expect(md).not.toContain('🟡 known flake')
+  })
+
   it('renders a clean pass when nothing failed', () => {
     const md = renderGateComment(
       baseGate({ verdict: 'pass', newFailures: 0, knownFlakes: 0, tests: [] }),
