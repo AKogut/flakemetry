@@ -151,7 +151,9 @@ export const deleteNotificationChannel = async (formData: FormData): Promise<voi
   const project = await requireProjectAccess(user.id, projectId)
   if (!canManage(project.role)) throw new Error('only owners and admins can manage notifications')
 
-  await prisma.notificationChannel.deleteMany({ where: { id: channelId, projectId } })
+  await prisma.notificationChannel.deleteMany({
+    where: { id: channelId, projectId, source: 'dashboard' },
+  })
   revalidatePath(`/projects/${projectId}/settings/notifications`)
 }
 

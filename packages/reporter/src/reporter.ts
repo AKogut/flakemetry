@@ -29,6 +29,7 @@ import {
   statusFromResult,
   type SuiteNode,
 } from './mapping'
+import { findNotificationRouting, uploadNotificationRouting } from './notifications'
 
 export interface FlakemetryReporterOptions {
   endpoint?: string
@@ -119,6 +120,7 @@ export default class FlakemetryReporter implements Reporter {
 
     await this.maybeUploadArtifacts(idempotencyKey)
     await this.maybeUploadCodeowners()
+    await this.maybeUploadNotificationRouting()
 
     const batch = this.recorder.toIngestBatch(idempotencyKey)
     this.writeOutput(batch)
@@ -138,6 +140,26 @@ export default class FlakemetryReporter implements Reporter {
     } catch (error) {
       process.stderr.write(
         `flakemetry: CODEOWNERS sync skipped (${error instanceof Error ? error.message : String(error)})\n`,
+      )
+    }
+  }
+
+  private async maybeUploadNotificationRouting(): Promise<void> {
+    const endpoint = this.options.endpoint ?? this.env.FLAKEMETRY_ENDPOINT
+    const token = this.options.token ?? this.env.FLAKEMETRY_TOKEN
+    if (!endpoint || !token) return
+
+    try {
+      const routing = findNotificationRouting(this.rootDir)
+      if (!routing) return
+      const ok = await uploadNotificationRouting({ endpoint, token, routing })
+      if (ok)
+        process.stderr.write(
+          `flakemetry: synced ${routing.channels.length} notification channel(s) from config\n`,
+        )
+    } catch (error) {
+      process.stderr.write(
+        `flakemetry: notification routing sync skipped (${error instanceof Error ? error.message : String(error)})\n`,
       )
     }
   }

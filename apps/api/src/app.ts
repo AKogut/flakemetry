@@ -5,6 +5,7 @@ import {
   codeownersUploadSchema,
   ingestRunBatchSchema,
   isAllowedArtifactContentType,
+  notificationRoutingSchema,
   otlpToIngestBatch,
   otlpTraceRequestSchema,
 } from '@flakemetry/contracts'
@@ -260,6 +261,40 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     })
 
     return reply.code(200).send({ ok: true })
+  })
+
+  app.put('/v1/notifications/routing', async (request, reply) => {
+    const project = await authenticateProject(prisma, request)
+    if (!project) {
+      return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
+    }
+
+    if (rateLimited(project.projectId, reply)) {
+      return reply.code(429).send({ error: 'rate_limited' })
+    }
+
+    const parsed = notificationRoutingSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid_payload' })
+    }
+
+    await prisma.$transaction([
+      prisma.notificationChannel.deleteMany({
+        where: { projectId: project.projectId, source: 'config' },
+      }),
+      prisma.notificationChannel.createMany({
+        data: parsed.data.channels.map((channel) => ({
+          orgId: project.orgId,
+          projectId: project.projectId,
+          kind: channel.kind,
+          target: channel.target,
+          events: channel.events,
+          source: 'config',
+        })),
+      }),
+    ])
+
+    return reply.code(200).send({ ok: true, channels: parsed.data.channels.length })
   })
 
   app.get('/v1/runs/gate', async (request, reply) => {
