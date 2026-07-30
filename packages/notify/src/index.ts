@@ -1,4 +1,5 @@
 export * from './discord'
+export * from './email'
 export * from './message'
 export * from './notifier'
 export * from './slack'

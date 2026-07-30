@@ -9,7 +9,8 @@ import {
 
 import type { ProjectChannelLoader } from './notify'
 
-const isChannelKind = (kind: string): kind is ChannelKind => kind === 'slack' || kind === 'discord'
+const isChannelKind = (kind: string): kind is ChannelKind =>
+  kind === 'slack' || kind === 'discord' || kind === 'email'
 
 export interface ChannelRow {
   id: string

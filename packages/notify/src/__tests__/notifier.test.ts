@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { formatDiscord } from '../discord'
+import type { EmailSender } from '../email'
 import type { NotificationEvent } from '../message'
 import { type Channel, createDispatcher, type NotificationSender } from '../notifier'
 import { formatSlack } from '../slack'
@@ -119,6 +120,44 @@ describe('createDispatcher', () => {
     await dispatcher.dispatch(flakyEvent)
 
     expect(send).toHaveBeenCalledTimes(2)
+    expect(errors).toHaveLength(1)
+  })
+
+  it('routes an email channel to the email sender with a formatted message', async () => {
+    const send: NotificationSender = vi.fn(async () => ({ ok: true, status: 200 }))
+    const sendEmail: EmailSender = vi.fn(async () => ({ ok: true, status: 200 }))
+    const emailChannel: Channel = {
+      id: 'email-1',
+      kind: 'email',
+      webhookUrl: 'alerts@acme.com',
+      types: ['flaky_detected'],
+    }
+    const dispatcher = createDispatcher({ channels: [emailChannel], send, sendEmail })
+
+    await dispatcher.dispatch(flakyEvent)
+
+    expect(send).not.toHaveBeenCalled()
+    expect(sendEmail).toHaveBeenCalledWith(
+      'alerts@acme.com',
+      expect.objectContaining({ subject: expect.stringContaining('New flaky test detected') }),
+    )
+  })
+
+  it('reports an error when an email channel has no configured sender', async () => {
+    const errors: unknown[] = []
+    const emailChannel: Channel = {
+      id: 'email-1',
+      kind: 'email',
+      webhookUrl: 'alerts@acme.com',
+      types: ['flaky_detected'],
+    }
+    const dispatcher = createDispatcher({
+      channels: [emailChannel],
+      onError: (error) => errors.push(error),
+    })
+
+    await dispatcher.dispatch(flakyEvent)
+
     expect(errors).toHaveLength(1)
   })
 })
