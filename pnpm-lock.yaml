@@ -93,6 +93,9 @@ importers:
       '@flakemetry/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@flakemetry/notify':
+        specifier: workspace:*
+        version: link:../../packages/notify
       '@flakemetry/queries':
         specifier: workspace:*
         version: link:../../packages/queries

@@ -148,7 +148,13 @@ const rollupDay = async (
       update: data,
     })
   }
+}
 
+const writeFlakyTrend = async (
+  prisma: PrismaClient,
+  ctx: RollupContext,
+  day: Date,
+): Promise<void> => {
   const [aggregate, flakyCount, quarantinedCount] = await Promise.all([
     prisma.flakyScore.aggregate({ where: { projectId: ctx.projectId }, _avg: { score: true } }),
     prisma.flakyScore.count({ where: { projectId: ctx.projectId, quarantineCandidate: true } }),
@@ -173,6 +179,7 @@ export const updateRollups = async (
   ctx: RollupContext,
   executionDays: readonly Date[],
   testIdentityIds: readonly string[],
+  now: Date = new Date(),
 ): Promise<void> => {
   if (testIdentityIds.length === 0) return
   const days = distinctDays(executionDays)
@@ -188,4 +195,6 @@ export const updateRollups = async (
   for (const day of days) {
     await rollupDay(prisma, ctx, day, suites, identityIds)
   }
+
+  await writeFlakyTrend(prisma, ctx, dayStart(now))
 }

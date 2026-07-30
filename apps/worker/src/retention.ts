@@ -40,6 +40,8 @@ export const resolveRetentionPlan = (
   let artifactDays = positive(input.artifactRetentionDays) ?? globals.artifactDays
   if (executionDays !== null) {
     artifactDays = Math.max(artifactDays ?? executionDays, executionDays)
+  } else if (artifactDays !== null) {
+    artifactDays = null
   }
   return { projectId: input.projectId, orgId: input.orgId, executionDays, artifactDays }
 }

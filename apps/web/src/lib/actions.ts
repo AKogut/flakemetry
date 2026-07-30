@@ -2,6 +2,7 @@
 
 import { projectPolicyInputSchema } from '@flakemetry/contracts'
 import { generateToken, getPrismaClient, hashToken } from '@flakemetry/db'
+import { isSafeWebhookUrl } from '@flakemetry/notify'
 import { updateProjectPolicy as persistProjectPolicy } from '@flakemetry/queries'
 import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
@@ -123,8 +124,8 @@ export const createNotificationChannel = async (formData: FormData): Promise<voi
   const kind = String(formData.get('kind') ?? '')
   const target = String(formData.get('target') ?? '').trim()
   const events = NOTIFY_EVENTS.filter((event) => formData.get(`event:${event}`) === 'on')
-  if (!CHANNEL_KINDS.includes(kind) || !/^https?:\/\//.test(target)) {
-    throw new Error('a channel needs a kind and an https webhook URL')
+  if (!CHANNEL_KINDS.includes(kind) || !isSafeWebhookUrl(target)) {
+    throw new Error('a channel needs a kind and a public https webhook URL')
   }
 
   await prisma.notificationChannel.create({

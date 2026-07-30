@@ -31,23 +31,35 @@ const translate = (glob: string): string => {
   return out
 }
 
+const collapseAdjacentWildcards = (regex: string): string =>
+  regex
+    .replace(/(?:\(\?:\.\*\/\)\?)+/g, '(?:.*/)?')
+    .replace(/\.\*(?:\.\*|\[\^\/\]\*)+/g, '.*')
+    .replace(/\[\^\/\]\*(?:\[\^\/\]\*)+/g, '[^/]*')
+    .replace(/\(\?:\.\*\/\)\?(?:\.\*|\[\^\/\]\*)/g, '.*')
+
 const compile = (pattern: string): RegExp => {
   const anchored = pattern.startsWith('/') || pattern.replace(/\/$/, '').includes('/')
-  let body = pattern.replace(/^\//, '')
+  let body = pattern.replace(/^\//, '').replace(/\*{3,}/g, '**')
   const dirOnly = body.endsWith('/')
   if (dirOnly) body = body.replace(/\/$/, '')
   const prefix = anchored ? '^' : '^(?:.*/)?'
   const suffix = dirOnly ? '(?:/.*)?$' : '$'
-  return new RegExp(prefix + translate(body) + suffix)
+  return new RegExp(collapseAdjacentWildcards(prefix + translate(body) + suffix))
 }
+
+const MAX_PATTERN_LENGTH = 512
+const MAX_RULES = 2000
 
 export const parseCodeowners = (text: string): CodeownersRule[] => {
   const rules: CodeownersRule[] = []
   for (const rawLine of text.split(/\r?\n/)) {
+    if (rules.length >= MAX_RULES) break
     const line = rawLine.trim()
     if (line.length === 0 || line.startsWith('#')) continue
     const parts = line.split(/\s+/)
     const pattern = parts[0]!
+    if (pattern.length > MAX_PATTERN_LENGTH) continue
     const owners = parts.slice(1).filter((owner) => owner.length > 0)
     if (owners.length === 0) continue
     try {

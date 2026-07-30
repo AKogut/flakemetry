@@ -1,6 +1,7 @@
 import { formatDiscord } from './discord'
 import type { NotificationEvent, NotificationType } from './message'
 import { formatSlack } from './slack'
+import { assertSafeWebhookUrl, WEBHOOK_TIMEOUT_MS } from './webhook'
 
 export type ChannelKind = 'slack' | 'discord'
 
@@ -32,10 +33,12 @@ export interface Dispatcher {
 }
 
 const defaultSender: NotificationSender = async (url, payload) => {
+  assertSafeWebhookUrl(url)
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
   })
   return { ok: response.ok, status: response.status }
 }
@@ -50,8 +53,15 @@ export const createDispatcher = (options: DispatcherOptions): Dispatcher => {
   const onError = options.onError ?? (() => undefined)
   const lastSentAt = new Map<string, number>()
 
+  const prune = (at: number): void => {
+    for (const [key, sentAt] of lastSentAt) {
+      if (at - sentAt >= window) lastSentAt.delete(key)
+    }
+  }
+
   return {
     async dispatch(event) {
+      prune(now())
       const dynamic = options.channelsFor ? await options.channelsFor(event) : []
       const targets = [...options.channels, ...dynamic].filter((channel) =>
         channel.types.includes(event.type),

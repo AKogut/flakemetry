@@ -37,6 +37,15 @@ describe('resolveRetentionPlan', () => {
     expect(plan.artifactDays).toBe(90)
   })
 
+  it('keeps artifacts forever when executions are kept forever', () => {
+    const plan = resolveRetentionPlan(
+      { projectId: 'p', orgId: 'o', executionRetentionDays: null, artifactRetentionDays: 30 },
+      { executionDays: null, artifactDays: null },
+    )
+    expect(plan.executionDays).toBeNull()
+    expect(plan.artifactDays).toBeNull()
+  })
+
   it('treats missing config as "keep everything"', () => {
     const plan = resolveRetentionPlan(
       { projectId: 'p', orgId: 'o', executionRetentionDays: null, artifactRetentionDays: null },

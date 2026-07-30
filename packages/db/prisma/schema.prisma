@@ -311,6 +311,7 @@ model Run {
   @@index([projectId, startedAt(sort: Desc)])
   @@index([projectId, branch, startedAt(sort: Desc)])
   @@index([projectId, commitSha])
+  @@index([projectId, ciRunId])
   @@map("run")
 }
 
@@ -392,6 +393,7 @@ model ErrorSignature {
 
   @@unique([projectId, normalizedHash])
   @@index([orgId])
+  @@index([projectId, lastSeenAt(sort: Desc)])
   @@map("error_signature")
 }
 

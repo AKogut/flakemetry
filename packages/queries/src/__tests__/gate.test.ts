@@ -1,7 +1,7 @@
 import { type Prisma, PrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { getPrGate } from '../gate'
+import { getPrGate, type PrGate, renderGateComment } from '../gate'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
 const prisma = new PrismaClient()
@@ -120,6 +120,102 @@ const seed = async (): Promise<Seed> => {
 
   return { projectId: project.id, newlyBrokenId: newlyBroken.id, knownFlakeId: knownFlake.id }
 }
+
+const baseGate = (overrides: Partial<PrGate> = {}): PrGate => ({
+  commitSha: 'deadbeefcafe',
+  branch: 'feature/login',
+  baseBranch: 'main',
+  prNumber: 7,
+  runStatus: 'failed',
+  newFailures: 1,
+  knownFlakes: 1,
+  strictness: 'new',
+  verdict: 'block',
+  tests: [
+    {
+      testIdentityId: 't1',
+      filePath: 'e2e/login.spec.ts',
+      suite: 'auth',
+      title: 'logs in',
+      status: 'fail',
+      errorMessage: null,
+      topReason: null,
+      score: 0,
+      quarantined: false,
+      classification: 'new_failure',
+      baseFailRate: 0,
+      baseSampleSize: 0,
+    },
+    {
+      testIdentityId: 't2',
+      filePath: 'e2e/cart.spec.ts',
+      suite: 'shop',
+      title: 'adds to cart',
+      status: 'flaky',
+      errorMessage: null,
+      topReason: null,
+      score: 0.7,
+      quarantined: false,
+      classification: 'known_flake',
+      baseFailRate: 0.2,
+      baseSampleSize: 10,
+    },
+  ],
+  ...overrides,
+})
+
+describe('renderGateComment', () => {
+  it('renders verdict, marker and a per-test table', () => {
+    const md = renderGateComment(baseGate())
+    expect(md).toContain('<!-- flakemetry:pr-gate -->')
+    expect(md).toContain('🚫 **Blocked** — 1 new failure(s)')
+    expect(md).toContain('| Test | In this run | Verdict | On base |')
+    expect(md).toContain('🔴 new failure')
+    expect(md).toContain('🟡 known flake')
+    expect(md).toContain('20% of 10')
+  })
+
+  it('renders a clean pass when nothing failed', () => {
+    const md = renderGateComment(
+      baseGate({ verdict: 'pass', newFailures: 0, knownFlakes: 0, tests: [] }),
+    )
+    expect(md).toContain('✅ **Passed** — no failing or flaky tests')
+    expect(md).not.toContain('| Test |')
+  })
+
+  it('neutralises markdown injection from branch and test fields', () => {
+    const md = renderGateComment(
+      baseGate({
+        branch: '`[click](http://evil)`',
+        baseBranch: 'main`\n# pwned',
+        tests: [
+          {
+            testIdentityId: 't1',
+            filePath: 'a`.ts',
+            suite: 's',
+            title: 'boom` | ` <img src=x>',
+            status: 'fail',
+            errorMessage: null,
+            topReason: null,
+            score: 0,
+            quarantined: false,
+            classification: 'new_failure',
+            baseFailRate: 0,
+            baseSampleSize: 0,
+          },
+        ],
+      }),
+    )
+    expect(md).not.toMatch(/``/)
+    expect(md).not.toMatch(/^#\s*pwned/m)
+    const summaryLine = md.split('\n').find((line) => line.includes('click'))
+    expect(summaryLine).toMatch(/`\[click\]\(http:\/\/evil\)`/)
+    const tableRow = md.split('\n').find((line) => line.includes('boom'))
+    expect(tableRow).toBeDefined()
+    expect(tableRow).not.toMatch(/``/)
+    expect(tableRow).toContain('boom \\|')
+  })
+})
 
 describe.skipIf(!hasDb)('getPrGate', () => {
   beforeEach(async () => {
