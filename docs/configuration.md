@@ -96,6 +96,7 @@ Rate-limit and backpressure state are held per API process (in-memory). Running 
 |---|---|
 | `POLL_INTERVAL_MS` | Idle poll interval between dequeue attempts |
 | `FLAKEMETRY_SELF_OTEL_ENDPOINT` | OTLP endpoint for the worker's own metrics (processing lag, throughput, error rate, queue depth) |
+| `FLAKEMETRY_CLUSTER_THRESHOLD` | Jaccard similarity (0–1) above which a new error signature joins an existing cluster (default `0.5`) |
 
 The worker emits domain events (`run.processed`, `identity.created`, `identity.moved`, `score.updated`, `flaky.detected`, `quarantine.changed`, `rca.created`) after each job commits — the seam downstream stages such as signature clustering, AI RCA, and notifications subscribe to.
 
