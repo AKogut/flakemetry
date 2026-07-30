@@ -123,7 +123,15 @@ async function main() {
   })
 
   const project = await prisma.project.create({
-    data: { orgId: org.id, name: 'Acme Web', slug: 'web', defaultBranch: 'main' },
+    data: {
+      orgId: org.id,
+      name: 'Acme Web',
+      slug: 'web',
+      defaultBranch: 'main',
+      codeowners: ['*.spec.ts @acme/qa', 'e2e/checkout/ @acme/payments', 'e2e/ @acme/web'].join(
+        '\n',
+      ),
+    },
   })
 
   const tenant = { orgId: org.id, projectId: project.id }

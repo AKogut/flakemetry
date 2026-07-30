@@ -134,6 +134,7 @@ model Project {
   name          String
   slug          String
   defaultBranch String   @default("main") @map("default_branch")
+  codeowners    String?
   createdAt     DateTime @default(now()) @map("created_at")
 
   org             Org              @relation(fields: [orgId], references: [id], onDelete: Cascade)

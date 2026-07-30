@@ -2,6 +2,7 @@ import { createGunzip } from 'node:zlib'
 
 import {
   artifactPresignRequestSchema,
+  codeownersUploadSchema,
   ingestRunBatchSchema,
   isAllowedArtifactContentType,
   otlpToIngestBatch,
@@ -229,6 +230,30 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     if (!summary) return reply.code(200).send({ found: false })
 
     return reply.code(200).send({ found: true, summary, markdown: renderPrComment(summary) })
+  })
+
+  app.put('/v1/codeowners', async (request, reply) => {
+    const project = await authenticateProject(prisma, request)
+    if (!project) {
+      return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
+    }
+
+    if (rateLimited(project.projectId, reply)) {
+      return reply.code(429).send({ error: 'rate_limited' })
+    }
+
+    const parsed = codeownersUploadSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid_payload' })
+    }
+
+    const content = parsed.data.content.trim()
+    await prisma.project.update({
+      where: { id: project.projectId },
+      data: { codeowners: content.length > 0 ? content : null },
+    })
+
+    return reply.code(200).send({ ok: true })
   })
 
   app.post('/v1/traces', async (request, reply) => {
