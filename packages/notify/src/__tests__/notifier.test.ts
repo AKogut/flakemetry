@@ -63,6 +63,26 @@ describe('createDispatcher', () => {
     expect(send).toHaveBeenCalledWith(slackChannel.webhookUrl, expect.anything())
   })
 
+  it('also dispatches to per-event dynamic channels', async () => {
+    const send: NotificationSender = vi.fn(async () => ({ ok: true, status: 200 }))
+    const dynamic: Channel = {
+      id: 'db:1',
+      kind: 'discord',
+      webhookUrl: 'https://discord.test/hook',
+      types: ['flaky_detected'],
+    }
+    const dispatcher = createDispatcher({
+      channels: [slackChannel],
+      channelsFor: async () => [dynamic],
+      send,
+    })
+
+    await dispatcher.dispatch(flakyEvent)
+
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(send).toHaveBeenCalledWith(dynamic.webhookUrl, expect.anything())
+  })
+
   it('suppresses duplicate events within the dedupe window and re-sends after it', async () => {
     const send: NotificationSender = vi.fn(async () => ({ ok: true, status: 200 }))
     let clock = 1_000

@@ -9,6 +9,7 @@ const COLOR: Record<NotificationType, number> = {
   flaky_detected: 0xf5a800,
   quarantine_changed: 0xe11d48,
   rca_ready: 0x5319e7,
+  suite_regressed: 0xdc2626,
 }
 
 export const formatDiscord = (event: NotificationEvent): DiscordPayload => ({

@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
+import { NOTIFY_EVENTS } from './notify-events'
 import { requireUser } from './session'
 import { requireProjectAccess } from './tenant'
 import { NEW_TOKEN_COOKIE } from './token-cookie'
@@ -109,6 +110,45 @@ export const revokeIngestToken = async (formData: FormData): Promise<void> => {
   })
 
   revalidatePath(`/projects/${projectId}/settings/tokens`)
+}
+
+const CHANNEL_KINDS = ['slack', 'discord']
+
+export const createNotificationChannel = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.role)) throw new Error('only owners and admins can manage notifications')
+
+  const kind = String(formData.get('kind') ?? '')
+  const target = String(formData.get('target') ?? '').trim()
+  const events = NOTIFY_EVENTS.filter((event) => formData.get(`event:${event}`) === 'on')
+  if (!CHANNEL_KINDS.includes(kind) || !/^https?:\/\//.test(target)) {
+    throw new Error('a channel needs a kind and an https webhook URL')
+  }
+
+  await prisma.notificationChannel.create({
+    data: {
+      orgId: project.orgId,
+      projectId,
+      kind,
+      target,
+      events: events.length > 0 ? events : NOTIFY_EVENTS,
+    },
+  })
+
+  revalidatePath(`/projects/${projectId}/settings/notifications`)
+}
+
+export const deleteNotificationChannel = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const channelId = String(formData.get('channelId') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.role)) throw new Error('only owners and admins can manage notifications')
+
+  await prisma.notificationChannel.deleteMany({ where: { id: channelId, projectId } })
+  revalidatePath(`/projects/${projectId}/settings/notifications`)
 }
 
 export const updateProjectPolicy = async (formData: FormData): Promise<void> => {

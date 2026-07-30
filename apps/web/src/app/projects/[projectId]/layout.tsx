@@ -35,6 +35,7 @@ export default async function ProjectLayout({
           <a href={`/projects/${projectId}/suite-health`}>Suite health</a>
           <a href={`/projects/${projectId}/settings/policy`}>Policy</a>
           <a href={`/projects/${projectId}/settings/tokens`}>Ingest tokens</a>
+          <a href={`/projects/${projectId}/settings/notifications`}>Notifications</a>
         </nav>
 
         <div className="user">

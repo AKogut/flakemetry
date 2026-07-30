@@ -102,13 +102,13 @@ The worker emits domain events (`run.processed`, `identity.created`, `identity.m
 
 ### Notifications
 
-The worker pushes intelligence to Slack and Discord via incoming webhooks. Configure a webhook and it lights up automatically; unset, notifications are off. Delivery is best-effort and de-duplicated per channel so a flapping test can't spam a channel.
+The worker pushes intelligence to Slack and Discord via incoming webhooks. Delivery is best-effort and de-duplicated per channel so a flapping test can't spam a channel. Channels come from two places, applied together: **global env webhooks** (below) and **per-project channels** configured in **Settings → Notifications** (add a Slack/Discord webhook with an event filter). Events: `flaky_detected`, `quarantine_changed`, `rca_ready`, and `suite_regressed` (a suite's fail-rate crossing its trailing baseline).
 
 | Variable | Effect |
 |---|---|
-| `FLAKEMETRY_SLACK_WEBHOOK` | Slack incoming-webhook URL to post to |
-| `FLAKEMETRY_DISCORD_WEBHOOK` | Discord webhook URL to post to |
-| `FLAKEMETRY_NOTIFY_EVENTS` | Comma-separated event filter: `flaky_detected`, `quarantine_changed`, `rca_ready` (default: all) |
+| `FLAKEMETRY_SLACK_WEBHOOK` | Global Slack incoming-webhook URL to post to (applies to every project) |
+| `FLAKEMETRY_DISCORD_WEBHOOK` | Global Discord webhook URL to post to |
+| `FLAKEMETRY_NOTIFY_EVENTS` | Comma-separated event filter for the global webhooks (default: all) |
 | `FLAKEMETRY_DASHBOARD_URL` | Public dashboard base URL, used to deep-link notifications back to the test |
 
 ### Artifact storage
