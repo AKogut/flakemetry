@@ -280,6 +280,8 @@ model TestIdentity {
   @@unique([projectId, fingerprint])
   @@index([orgId])
   @@index([projectId, lastSeenAt(sort: Desc)])
+  @@index([projectId, suite, title])
+  @@index([aliases], type: Gin)
   @@map("test_identity")
 }
 
