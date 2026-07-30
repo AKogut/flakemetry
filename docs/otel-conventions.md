@@ -56,7 +56,7 @@ M1 emits `test.run` + `test.case`. `test.step` and network/browser child spans a
 
 ## Fingerprint (L1)
 
-`sha256(normalized_file_path + ' ' + suite + ' ' + title + ' ' + params_hash)` where the path is workspace-relative, POSIX-separated and lowercased. This is the exact-match layer; the server-side identity engine resolves moves and renames on top of it (#18).
+`sha256(normalized_file_path + ' ' + suite + ' ' + title + ' ' + params_hash)` where the path is workspace-relative, POSIX-separated and lowercased. This is the exact-match layer (L1). The server-side identity engine stitches history on top of it: **L2** re-links a test whose file moved (same suite + title + params), and **L3** re-links a renamed test when — within the same file, suite and params bucket — exactly one prior test has a sufficiently similar title (token-Jaccard ≥ 0.5); ambiguous matches are left as new to avoid collapsing distinct tests. Parameterized cases stay distinct by `params_hash`.
 
 ## OTLP → contracts mapping
 

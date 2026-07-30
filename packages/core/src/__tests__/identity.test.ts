@@ -72,3 +72,97 @@ describe('resolveIdentity', () => {
     expect(changed.kind).toBe('new')
   })
 })
+
+const inFile: ExistingIdentity = {
+  id: 'id-1',
+  fingerprint: 'sha256:aaa',
+  suite: 'auth',
+  title: 'logs in',
+  paramsHash: null,
+  aliases: [],
+  filePath: 'e2e/auth.spec.ts',
+}
+
+describe('resolveIdentity L3 rename', () => {
+  it('stitches a close, unambiguous rename in the same file and stays confident', () => {
+    const result = resolveIdentity(
+      {
+        fingerprint: 'sha256:new',
+        suite: 'auth',
+        title: 'logs in successfully',
+        paramsHash: null,
+        filePath: 'e2e/auth.spec.ts',
+      },
+      [inFile],
+    )
+    expect(result.kind).toBe('renamed')
+    if (result.kind === 'renamed') {
+      expect(result.identityId).toBe('id-1')
+      expect(result.addAlias).toBe('sha256:new')
+      expect(result.level).toBe('L3')
+      expect(result.confidence).toBeGreaterThanOrEqual(0.5)
+    }
+  })
+
+  it('does not rename when the title change is too large', () => {
+    const result = resolveIdentity(
+      {
+        fingerprint: 'sha256:new',
+        suite: 'auth',
+        title: 'renders the dashboard',
+        paramsHash: null,
+        filePath: 'e2e/auth.spec.ts',
+      },
+      [inFile],
+    )
+    expect(result.kind).toBe('new')
+  })
+
+  it('does not rename across different files', () => {
+    const result = resolveIdentity(
+      {
+        fingerprint: 'sha256:new',
+        suite: 'auth',
+        title: 'logs in successfully',
+        paramsHash: null,
+        filePath: 'e2e/other.spec.ts',
+      },
+      [inFile],
+    )
+    expect(result.kind).toBe('new')
+  })
+
+  it('refuses an ambiguous rename when two candidates match', () => {
+    const a: ExistingIdentity = {
+      ...inFile,
+      id: 'id-a',
+      fingerprint: 'sha256:a',
+      title: 'logs in ok',
+    }
+    const b: ExistingIdentity = {
+      ...inFile,
+      id: 'id-b',
+      fingerprint: 'sha256:b',
+      title: 'logs in now',
+    }
+    const result = resolveIdentity(
+      {
+        fingerprint: 'sha256:new',
+        suite: 'auth',
+        title: 'logs in',
+        paramsHash: null,
+        filePath: 'e2e/auth.spec.ts',
+      },
+      [a, b],
+    )
+    expect(result.kind).toBe('new')
+  })
+
+  it('does not attempt a rename when file path is unknown', () => {
+    const result = resolveIdentity(
+      { fingerprint: 'sha256:new', suite: 'auth', title: 'logs in successfully', paramsHash: null },
+      [inFile],
+    )
+    expect(result.kind).toBe('new')
+  })
+})

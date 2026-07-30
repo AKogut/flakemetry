@@ -282,6 +282,7 @@ model TestIdentity {
   @@index([orgId])
   @@index([projectId, lastSeenAt(sort: Desc)])
   @@index([projectId, suite, title])
+  @@index([projectId, filePath])
   @@index([aliases], type: Gin)
   @@map("test_identity")
 }
