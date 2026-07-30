@@ -90,21 +90,7 @@ export const processJob = async (
       select: { id: true },
     })
 
-    const identities = await tx.testIdentity.findMany({
-      where: { projectId: ctx.projectId },
-      select: {
-        id: true,
-        fingerprint: true,
-        suite: true,
-        title: true,
-        paramsHash: true,
-        aliases: true,
-      },
-    })
-    const existing: ExistingIdentity[] = identities.map((identity) => ({ ...identity }))
-
-    const createdIds: string[] = []
-    for (const execution of batch.executions) {
+    const prepared = batch.executions.map((execution) => {
       const paramsHash = hashParams(execution.params ?? null)
       const fingerprint = computeFingerprint({
         filePath: execution.filePath,
@@ -112,6 +98,38 @@ export const processJob = async (
         title: execution.title,
         paramsHash,
       })
+      return { execution, paramsHash, fingerprint }
+    })
+
+    const fingerprints = [...new Set(prepared.map((item) => item.fingerprint))]
+    const suites = [...new Set(prepared.map((item) => item.execution.suite))]
+    const titles = [...new Set(prepared.map((item) => item.execution.title))]
+
+    const identities =
+      prepared.length === 0
+        ? []
+        : await tx.testIdentity.findMany({
+            where: {
+              projectId: ctx.projectId,
+              OR: [
+                { fingerprint: { in: fingerprints } },
+                { aliases: { hasSome: fingerprints } },
+                { suite: { in: suites }, title: { in: titles } },
+              ],
+            },
+            select: {
+              id: true,
+              fingerprint: true,
+              suite: true,
+              title: true,
+              paramsHash: true,
+              aliases: true,
+            },
+          })
+    const existing: ExistingIdentity[] = identities.map((identity) => ({ ...identity }))
+
+    const createdIds: string[] = []
+    for (const { execution, paramsHash, fingerprint } of prepared) {
       const resolution = resolveIdentity(
         { fingerprint, suite: execution.suite, title: execution.title, paramsHash },
         existing,
