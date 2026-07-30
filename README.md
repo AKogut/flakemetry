@@ -138,10 +138,24 @@ step runs even when tests fail and never blocks the build:
   with:
     token: ${{ secrets.FLAKEMETRY_TOKEN }}
     endpoint: ${{ secrets.FLAKEMETRY_ENDPOINT }}
+
+- name: Quality gate — block only new failures
+  if: always()
+  uses: AKogut/flakemetry/.github/actions/flakemetry-gate@main
+  with:
+    token: ${{ secrets.FLAKEMETRY_TOKEN }}
+    endpoint: ${{ secrets.FLAKEMETRY_ENDPOINT }}
+    strictness: new
 ```
 
 The comment step needs `permissions: pull-requests: write` on the job. It posts one sticky
 comment and updates it on every run; it never fails the build.
+
+The gate step compares the PR run against the base branch and distinguishes *new* failures
+this change introduced from tests that already flake on the base. It posts a sticky verdict
+comment, sets a `flakemetry/gate` commit status, and fails the step only on new failures
+(`strictness: new`) — flip to `any` to block known flakes too, or `off` for report-only. It
+needs `permissions: pull-requests: write` and `statuses: write`.
 
 Prefer sending straight from your own tooling? `flakemetry upload flakemetry-results.json`
 (from `@flakemetry/cli`) does the same over any CI provider, reading

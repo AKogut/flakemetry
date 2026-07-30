@@ -9,7 +9,13 @@ import {
   otlpTraceRequestSchema,
 } from '@flakemetry/contracts'
 import { IngestionQueue, type PrismaClient } from '@flakemetry/db'
-import { getRunSummaryByCommit, renderPrComment } from '@flakemetry/queries'
+import {
+  type GateStrictness,
+  getPrGate,
+  getRunSummaryByCommit,
+  renderGateComment,
+  renderPrComment,
+} from '@flakemetry/queries'
 import { artifactKey, type ObjectStore } from '@flakemetry/storage'
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify'
 import Fastify, {
@@ -254,6 +260,37 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     })
 
     return reply.code(200).send({ ok: true })
+  })
+
+  app.get('/v1/runs/gate', async (request, reply) => {
+    const project = await authenticateProject(prisma, request)
+    if (!project) {
+      return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
+    }
+
+    if (rateLimited(project.projectId, reply)) {
+      return reply.code(429).send({ error: 'rate_limited' })
+    }
+
+    const query = request.query as { commitSha?: string; baseBranch?: string; strictness?: string }
+    if (!query.commitSha || !/^[0-9a-f]{7,40}$/i.test(query.commitSha)) {
+      return reply.code(400).send({ error: 'invalid_commit_sha' })
+    }
+    if (!query.baseBranch) {
+      return reply.code(400).send({ error: 'missing_base_branch' })
+    }
+    const strictnessValues: GateStrictness[] = ['off', 'new', 'any']
+    const strictness = strictnessValues.includes(query.strictness as GateStrictness)
+      ? (query.strictness as GateStrictness)
+      : 'new'
+
+    const gate = await getPrGate(prisma, project.projectId, query.commitSha, {
+      baseBranch: query.baseBranch,
+      strictness,
+    })
+    if (!gate) return reply.code(200).send({ found: false })
+
+    return reply.code(200).send({ found: true, gate, markdown: renderGateComment(gate) })
   })
 
   app.post('/v1/traces', async (request, reply) => {
