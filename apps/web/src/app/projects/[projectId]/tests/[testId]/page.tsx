@@ -1,3 +1,4 @@
+import { matchCodeowners, parseCodeowners } from '@flakemetry/core'
 import { getPrismaClient } from '@flakemetry/db'
 import { getRca, getTest } from '@flakemetry/queries'
 import { notFound } from 'next/navigation'
@@ -43,6 +44,14 @@ export default async function TestDetailPage({
   const test = await getTest(prisma, projectId, testId, HISTORY_LIMIT)
   if (!test) notFound()
 
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { codeowners: true },
+  })
+  const owners = project?.codeowners
+    ? matchCodeowners(parseCodeowners(project.codeowners), test.filePath)
+    : []
+
   const timeline = [...test.history].reverse()
   const failures = timeline.filter((point) => point.status === 'fail')
   const selected =
@@ -59,6 +68,21 @@ export default async function TestDetailPage({
           <p className="page-subtitle" style={{ marginBottom: 0 }}>
             <span className="mono">{test.suite}</span> ·{' '}
             <span className="mono">{test.filePath}</span>
+            {owners.length > 0 ? (
+              <>
+                {' · '}
+                {owners.map((ownerHandle) => (
+                  <a
+                    key={ownerHandle}
+                    href={`/projects/${projectId}/flaky?owner=${encodeURIComponent(ownerHandle)}`}
+                    className="mono"
+                    style={{ marginRight: '0.4rem' }}
+                  >
+                    {ownerHandle}
+                  </a>
+                ))}
+              </>
+            ) : null}
           </p>
         </div>
         <div style={{ textAlign: 'right' }}>

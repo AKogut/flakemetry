@@ -25,6 +25,7 @@
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
     "@flakemetry/contracts": "workspace:*",
+    "@flakemetry/core": "workspace:*",
     "@flakemetry/db": "workspace:*",
     "@flakemetry/queries": "workspace:*",
     "next": "^16.2.10",

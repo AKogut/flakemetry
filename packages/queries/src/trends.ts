@@ -26,6 +26,23 @@ export interface SuiteHealthRow {
   days: SuiteDayPoint[]
 }
 
+export const SUITE_REGRESSION = { minTotal: 20, minFailRate: 0.1, minDelta: 0.15 }
+
+export const isSuiteRegressed = (
+  days: readonly Pick<SuiteDayPoint, 'total' | 'failed' | 'flaky'>[],
+): boolean => {
+  if (days.length < 2) return false
+  const today = days[days.length - 1]!
+  if (today.total < SUITE_REGRESSION.minTotal) return false
+  const prior = days.slice(0, -1).filter((day) => day.total >= SUITE_REGRESSION.minTotal)
+  if (prior.length === 0) return false
+  const priorTotal = prior.reduce((sum, day) => sum + day.total, 0)
+  const priorBad = prior.reduce((sum, day) => sum + day.failed + day.flaky, 0)
+  const baseline = priorTotal > 0 ? priorBad / priorTotal : 0
+  const rate = (today.failed + today.flaky) / today.total
+  return rate >= SUITE_REGRESSION.minFailRate && rate - baseline >= SUITE_REGRESSION.minDelta
+}
+
 export const getSuiteHealth = async (
   prisma: PrismaClient,
   projectId: string,
