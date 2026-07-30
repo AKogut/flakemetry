@@ -1,4 +1,5 @@
 export * from './artifacts'
+export * from './cluster'
 export * from './flaky'
 export * from './gate'
 export * from './policy'
