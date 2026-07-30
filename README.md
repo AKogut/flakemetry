@@ -193,8 +193,8 @@ Built with pnpm workspaces + Turborepo. Rationale in [ADR-0001](https://github.c
 |---|---|
 | **M0** | Foundation & DevEx — monorepo, contracts, schema, CI, one-command local dev |
 | **M1** | MVP — OTel-native ingestion, test identity, explainable flaky scoring, AI RCA, dashboard, GitHub Action |
-| **M2** | Deep observability — full traces, artifacts, waterfall, suite health |
-| **M3** | Test intelligence — clustering, known-issue detection, auto-quarantine |
+| **M2** | Deep observability & test intelligence — full traces, artifacts, waterfall, suite health, signature clustering, auto-quarantine, PR quality gate, notifications, code ownership |
+| **M3** | Known-issue detection, cross-run correlation, deeper root-cause analysis |
 | **M4** | Platform — multi-framework reporters, plugins, public API |
 | **M5** | SaaS & scale — multi-tenant, RBAC/SSO, columnar span store |
 | **M6** | Community, docs & launch |

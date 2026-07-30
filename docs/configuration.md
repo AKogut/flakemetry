@@ -75,6 +75,7 @@ Unknown keys are rejected with an error naming the offending path — typos fail
 | `FLAKEMETRY_SAMPLE_RATE` | Fraction (0–1) of **passing** runs to deliver; runs containing a failure or flake are always delivered |
 | `FLAKEMETRY_COMPRESSION` | `gzip` to compress OTLP export (the ingestion API decompresses gzip request bodies) |
 | `FLAKEMETRY_CODEOWNERS_FILE` | Explicit path to a CODEOWNERS file to sync; otherwise the reporter looks for `CODEOWNERS`, `.github/CODEOWNERS`, or `docs/CODEOWNERS` walking up from the test root |
+| `FLAKEMETRY_IDEMPOTENCY_KEY` | Explicit idempotency key for the run; makes re-delivery safe. Defaults to the run span trace id. Sharded runs get a per-shard `-shard<index>` suffix automatically |
 
 The reporter also syncs the repo's CODEOWNERS to the project on each run, so the flaky board and per-owner filters attribute each test to its owning team or user.
 
@@ -98,7 +99,7 @@ Rate-limit and backpressure state are held per API process (in-memory). Running 
 | `FLAKEMETRY_SELF_OTEL_ENDPOINT` | OTLP endpoint for the worker's own metrics (processing lag, throughput, error rate, queue depth) |
 | `FLAKEMETRY_CLUSTER_THRESHOLD` | Jaccard similarity (0–1) above which a new error signature joins an existing cluster (default `0.5`) |
 
-The worker emits domain events (`run.processed`, `identity.created`, `identity.moved`, `score.updated`, `flaky.detected`, `quarantine.changed`, `rca.created`) after each job commits — the seam downstream stages such as signature clustering, AI RCA, and notifications subscribe to.
+The worker emits domain events (`run.processed`, `identity.created`, `identity.moved`, `score.updated`, `flaky.detected`, `quarantine.changed`, `suite.regressed`, `rca.created`) after each job commits — the seam downstream stages such as signature clustering, AI RCA, and notifications subscribe to.
 
 ### Notifications
 

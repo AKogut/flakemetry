@@ -28,7 +28,7 @@ M1 emits `test.run` + `test.case`. `test.step` and network/browser child spans a
 | `vcs.branch` | `main` | branch |
 | `vcs.pr_number` | `42` | pull request, when applicable |
 | `flakemetry.trigger` | `push` | run trigger (`push`/`pull_request`/`schedule`/`manual`/`other`) |
-| `flakemetry.idempotency_key` | `gh-9000001-1` | one per run; makes re-delivery safe (falls back to the run span trace id) |
+| `flakemetry.idempotency_key` | `gh-9000001-1` | one per ingested run; makes re-delivery safe (falls back to the run span trace id). A sharded run sends one key per shard — the reporter appends `-shard<index>` so parallel shards don't overwrite each other |
 | `flakemetry.contract_version` | `0.1.0` | conventions/contract version stamp |
 
 ## Case span attributes

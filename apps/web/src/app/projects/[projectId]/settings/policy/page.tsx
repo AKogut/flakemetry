@@ -52,11 +52,6 @@ function EnvNote({ source }: { source: PolicySource }) {
   )
 }
 
-function PendingNote({ live }: { live: boolean }) {
-  if (live) return null
-  return <p className="policy-help">Stored now; enforced once the consuming feature ships.</p>
-}
-
 export default async function PolicyPage({
   params,
   searchParams,
@@ -172,7 +167,10 @@ export default async function PolicyPage({
                 value={eff.quarantineEnabled.value}
                 source={eff.quarantineEnabled.source}
               />
-              <PendingNote live={false} />
+              <p className="policy-help">
+                When on, a test that stays a quarantine candidate is automatically quarantined so it
+                stops failing the build. Enforced during scoring.
+              </p>
               <EnvNote source={eff.quarantineEnabled.source} />
             </div>
 
@@ -195,7 +193,10 @@ export default async function PolicyPage({
                 value={eff.quarantineCooldownRuns.value}
                 source={eff.quarantineCooldownRuns.source}
               />
-              <PendingNote live={false} />
+              <p className="policy-help">
+                Consecutive clean runs a quarantined test needs before it is automatically released.
+                Enforced during scoring.
+              </p>
               <EnvNote source={eff.quarantineCooldownRuns.source} />
             </div>
 
@@ -213,7 +214,10 @@ export default async function PolicyPage({
                 </select>
               </div>
               <Effective value={eff.aiRcaEnabled.value} source={eff.aiRcaEnabled.source} />
-              <PendingNote live={false} />
+              <p className="policy-help">
+                When on, each new failure signature gets an AI root-cause analysis. Enforced by the
+                worker.
+              </p>
               <EnvNote source={eff.aiRcaEnabled.source} />
             </div>
 

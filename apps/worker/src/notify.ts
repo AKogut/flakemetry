@@ -105,7 +105,7 @@ export const startNotifications = (
       projectId: payload.projectId,
       heading: 'Root-cause analysis ready',
       summary: `AI root-cause analysis generated for a new failure signature (${payload.model})`,
-      url: dashboardUrl ? `${dashboardUrl}/projects/${payload.projectId}/tests` : null,
+      url: dashboardUrl ? `${dashboardUrl}/projects/${payload.projectId}/flaky` : null,
       dedupeKey: `rca_ready:${payload.signatureId}`,
     })
   })
