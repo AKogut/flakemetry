@@ -214,6 +214,56 @@ describe.skipIf(!hasDb)('processFailures', () => {
     expect(await prisma.rcaReport.count()).toBe(1)
   })
 
+  it('links prior root causes on the same test as similarPast', async () => {
+    const ctx = await seed()
+    const provider = fakeProvider()
+    const aiCtx = {
+      orgId: ctx.orgId,
+      projectId: ctx.projectId,
+      now: NOW,
+      provider,
+      aiEnabled: true,
+      dailyTokenBudget: 200_000,
+    }
+
+    await processFailures(prisma, aiCtx, [failure(ctx.executionId)])
+
+    const firstSignature = await prisma.errorSignature.findFirstOrThrow({
+      where: { projectId: ctx.projectId },
+    })
+
+    const second = await prisma.testExecution.create({
+      data: {
+        orgId: ctx.orgId,
+        projectId: ctx.projectId,
+        runId: (await prisma.run.findFirstOrThrow({ where: { projectId: ctx.projectId } })).id,
+        testIdentityId: (
+          await prisma.testIdentity.findFirstOrThrow({ where: { projectId: ctx.projectId } })
+        ).id,
+        attempt: 1,
+        status: 'fail',
+        durationMs: 900,
+        errorMessage: 'Element not found in the DOM',
+        startedAt: NOW,
+      },
+    })
+
+    await processFailures(prisma, aiCtx, [failure(second.id, 'Element not found in the DOM')])
+
+    const secondReport = await prisma.rcaReport.findFirstOrThrow({
+      where: { executionId: second.id },
+    })
+    const similar = secondReport.similarPast as {
+      signatureId: string
+      summary: string
+      resolution: string | null
+    }[]
+    expect(similar).toHaveLength(1)
+    expect(similar[0]?.signatureId).toBe(firstSignature.id)
+    expect(similar[0]?.summary).toBe('network flake')
+    expect(similar[0]?.resolution).toBe('add retry')
+  })
+
   it('dedupes a repeated signature and only reports it once', async () => {
     const ctx = await seed()
     const second = await prisma.testExecution.create({

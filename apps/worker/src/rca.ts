@@ -31,6 +31,7 @@ const startOfUtcDay = (now: Date): Date =>
 interface SignatureGroup {
   signatureId: string
   representative: FailureRecord
+  testIdentityId: string | null
   isNew: boolean
 }
 
@@ -49,7 +50,7 @@ export const processFailures = async (
     const signature = computeErrorSignature(scrubbedMessage, scrubbedStack)
     const execution = await prisma.testExecution.findUnique({
       where: { id: failure.executionId },
-      select: { errorSignatureId: true },
+      select: { errorSignatureId: true, testIdentityId: true },
     })
     const existing = await prisma.errorSignature.findUnique({
       where: {
@@ -98,7 +99,12 @@ export const processFailures = async (
     }
 
     if (!groups.has(signature.normalizedHash))
-      groups.set(signature.normalizedHash, { signatureId, representative: failure, isNew })
+      groups.set(signature.normalizedHash, {
+        signatureId,
+        representative: failure,
+        testIdentityId: execution?.testIdentityId ?? null,
+        isNew,
+      })
   }
 
   const provider = ctx.provider
@@ -148,6 +154,25 @@ export const processFailures = async (
       continue
     }
 
+    const similarPast = group.testIdentityId
+      ? (
+          await prisma.rcaReport.findMany({
+            where: {
+              projectId: ctx.projectId,
+              signatureId: { not: group.signatureId },
+              execution: { testIdentityId: group.testIdentityId },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 3,
+            select: { signatureId: true, summary: true, suggestedAction: true },
+          })
+        ).map((prior) => ({
+          signatureId: prior.signatureId,
+          summary: prior.summary,
+          resolution: prior.suggestedAction,
+        }))
+      : []
+
     await prisma.rcaReport.create({
       data: {
         orgId: ctx.orgId,
@@ -158,7 +183,7 @@ export const processFailures = async (
         likelyCause: outcome.analysis.likelyCause,
         suggestedAction: outcome.analysis.suggestedAction,
         confidence: outcome.analysis.confidence,
-        similarPast: [],
+        similarPast,
         llmModel: outcome.model,
         tokenCost: outcome.tokenCost,
       },
