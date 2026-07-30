@@ -264,6 +264,53 @@ describe.skipIf(!hasDb)('processFailures', () => {
     expect(similar[0]?.resolution).toBe('add retry')
   })
 
+  it('clusters near-duplicate signatures together and keeps unrelated ones apart', async () => {
+    const ctx = await seed()
+    const run = await prisma.run.findFirstOrThrow({ where: { projectId: ctx.projectId } })
+    const identity = await prisma.testIdentity.findFirstOrThrow({
+      where: { projectId: ctx.projectId },
+    })
+    const makeExecution = async (message: string) =>
+      prisma.testExecution.create({
+        data: {
+          orgId: ctx.orgId,
+          projectId: ctx.projectId,
+          runId: run.id,
+          testIdentityId: identity.id,
+          attempt: 1,
+          status: 'fail',
+          durationMs: 500,
+          errorMessage: message,
+          startedAt: NOW,
+        },
+      })
+
+    const loginMsg = 'Element #login is not visible in the viewport'
+    const logoutMsg = 'Element #logout is not visible in the viewport'
+    const httpMsg = 'Request failed with status code 500 Internal Server Error'
+    const a = await makeExecution(loginMsg)
+    const b = await makeExecution(logoutMsg)
+    const c = await makeExecution(httpMsg)
+
+    await processFailures(prisma, { orgId: ctx.orgId, projectId: ctx.projectId, now: NOW }, [
+      failure(a.id, loginMsg),
+      failure(b.id, logoutMsg),
+      failure(c.id, httpMsg),
+    ])
+
+    const signatures = await prisma.errorSignature.findMany({
+      where: { projectId: ctx.projectId },
+      select: { sampleMessage: true, clusterId: true },
+    })
+    expect(signatures).toHaveLength(3)
+    const clusterOf = (needle: string) =>
+      signatures.find((row) => row.sampleMessage.includes(needle))?.clusterId
+
+    expect(clusterOf('#login')).toBeTruthy()
+    expect(clusterOf('#login')).toBe(clusterOf('#logout'))
+    expect(clusterOf('status code')).not.toBe(clusterOf('#login'))
+  })
+
   it('dedupes a repeated signature and only reports it once', async () => {
     const ctx = await seed()
     const second = await prisma.testExecution.create({
