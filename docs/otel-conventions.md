@@ -21,7 +21,9 @@ M1 emits `test.run` + `test.case`. `test.step` and network/browser child spans a
 | `service.name` | `flakemetry-reporter` | standard OTel service identity |
 | `flakemetry.project` | `acme/web` | project the results belong to |
 | `ci.provider` | `github_actions` | CI provider |
-| `ci.run_id` | `9000001` | provider run id |
+| `ci.run_id` | `9000001` | provider run id — correlates parallel shards into one logical run |
+| `test.shard.index` | `2` | shard number (1-based), when the run is sharded across parallel jobs |
+| `test.shard.total` | `4` | total shard count, when sharded |
 | `vcs.commit_sha` | `a1b2c3d` | commit under test — enables the same-sha flake signal |
 | `vcs.branch` | `main` | branch |
 | `vcs.pr_number` | `42` | pull request, when applicable |

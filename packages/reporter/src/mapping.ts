@@ -62,7 +62,15 @@ const prNumberFromRef = (ref: string | undefined): number | null => {
 const pick = (value: string | undefined): string | undefined =>
   value && value.length > 0 ? value : undefined
 
-export const resolveRunContext = (env: Record<string, string | undefined>): RunContext => {
+export interface ShardInfo {
+  current: number
+  total: number
+}
+
+export const resolveRunContext = (
+  env: Record<string, string | undefined>,
+  shard?: ShardInfo | null,
+): RunContext => {
   const onGithub = env.GITHUB_ACTIONS === 'true'
   const ciProvider: CiProvider = onGithub ? 'github_actions' : 'local'
   const trigger: RunTrigger = onGithub
@@ -81,6 +89,8 @@ export const resolveRunContext = (env: Record<string, string | undefined>): RunC
     trigger,
     ciRunId: pick(env.GITHUB_RUN_ID) ?? null,
     prNumber: prNumberFromRef(pick(env.GITHUB_REF)),
+    shardIndex: shard && shard.total > 1 ? shard.current : null,
+    shardTotal: shard && shard.total > 1 ? shard.total : null,
   }
 }
 
@@ -90,7 +100,10 @@ export const buildIdempotencyKey = (
 ): string => {
   const explicit = env.FLAKEMETRY_IDEMPOTENCY_KEY
   if (explicit) return explicit
-  if (context.ciRunId)
-    return `${context.ciProvider}-${context.ciRunId}-${env.GITHUB_RUN_ATTEMPT ?? '1'}`
+  if (context.ciRunId) {
+    const attempt = env.GITHUB_RUN_ATTEMPT ?? '1'
+    const shard = context.shardIndex != null ? `-shard${context.shardIndex}` : ''
+    return `${context.ciProvider}-${context.ciRunId}-${attempt}${shard}`
+  }
   return `local-${randomUUID()}`
 }

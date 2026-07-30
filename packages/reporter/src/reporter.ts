@@ -65,7 +65,7 @@ export default class FlakemetryReporter implements Reporter {
 
   onBegin(config: FullConfig, _suite: Suite): void {
     this.rootDir = config.rootDir
-    this.context = resolveRunContext(this.env)
+    this.context = resolveRunContext(this.env, config.shard)
     this.recorder = new TestRunRecorder(this.context)
     this.recorder.startRun(new Date())
   }

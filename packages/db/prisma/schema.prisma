@@ -273,6 +273,8 @@ model Run {
   prNumber       Int?       @map("pr_number")
   ciProvider     CiProvider @map("ci_provider")
   ciRunId        String?    @map("ci_run_id")
+  shardIndex     Int?       @map("shard_index")
+  shardTotal     Int?       @map("shard_total")
   trigger        RunTrigger
   status         RunStatus
   startedAt      DateTime   @map("started_at")
