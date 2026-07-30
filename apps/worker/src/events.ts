@@ -45,6 +45,14 @@ export interface DomainEventMap {
     model: string
     tokenCost: number
   }
+  'suite.regressed': {
+    projectId: string
+    suite: string
+    day: string
+    failRate: number
+    baselineFailRate: number
+    total: number
+  }
 }
 
 export type DomainEventName = keyof DomainEventMap

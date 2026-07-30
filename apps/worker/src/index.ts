@@ -1,6 +1,7 @@
 import { getPrismaClient, IngestionQueue } from '@flakemetry/db'
 import { resolveObjectStore } from '@flakemetry/storage'
 
+import { createProjectChannelLoader } from './channels'
 import { backfillSignatureClusters } from './clustering'
 import { createEventBus } from './events'
 import { startNotifications } from './notify'
@@ -28,7 +29,7 @@ const events = createEventBus((error) => {
   process.stderr.write(`worker: event handler failed ${String(error)}\n`)
 })
 
-if (startNotifications(events)) {
+if (startNotifications(events, process.env, createProjectChannelLoader(prisma))) {
   process.stdout.write('worker: notifications enabled\n')
 }
 

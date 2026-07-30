@@ -20,6 +20,7 @@ export type NotificationSender = (url: string, payload: unknown) => Promise<Send
 
 export interface DispatcherOptions {
   channels: readonly Channel[]
+  channelsFor?: (event: NotificationEvent) => Promise<readonly Channel[]>
   send?: NotificationSender
   now?: () => number
   dedupeWindowMs?: number
@@ -51,7 +52,10 @@ export const createDispatcher = (options: DispatcherOptions): Dispatcher => {
 
   return {
     async dispatch(event) {
-      const targets = options.channels.filter((channel) => channel.types.includes(event.type))
+      const dynamic = options.channelsFor ? await options.channelsFor(event) : []
+      const targets = [...options.channels, ...dynamic].filter((channel) =>
+        channel.types.includes(event.type),
+      )
       for (const channel of targets) {
         const key = `${channel.id}:${event.dedupeKey}`
         const previous = lastSentAt.get(key)
