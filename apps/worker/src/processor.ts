@@ -225,9 +225,12 @@ export const processJob = async (
     await scoreIdentity(prisma, identityId, ctx)
   }
 
-  await updateRollups(prisma, { orgId: ctx.orgId, projectId: ctx.projectId }, startedAt, [
-    ...affected,
-  ])
+  await updateRollups(
+    prisma,
+    { orgId: ctx.orgId, projectId: ctx.projectId },
+    [startedAt, ...batch.executions.map((execution) => execution.startedAt)],
+    [...affected],
+  )
 
   await processFailures(
     prisma,

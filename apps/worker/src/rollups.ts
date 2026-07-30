@@ -57,26 +57,30 @@ const addStatus = (
 
 const avg = (sum: number, total: number): number => (total > 0 ? Math.round(sum / total) : 0)
 
-export const updateRollups = async (
+const DAY_MS = 24 * 60 * 60 * 1000
+
+const distinctDays = (dates: readonly Date[]): Date[] => {
+  const seen = new Map<number, Date>()
+  for (const date of dates) {
+    const start = dayStart(date)
+    seen.set(start.getTime(), start)
+  }
+  return [...seen.values()].sort((a, b) => a.getTime() - b.getTime())
+}
+
+const rollupDay = async (
   prisma: PrismaClient,
   ctx: RollupContext,
-  runStartedAt: Date,
+  day: Date,
+  suites: readonly string[],
   testIdentityIds: readonly string[],
 ): Promise<void> => {
-  if (testIdentityIds.length === 0) return
-  const day = dayStart(runStartedAt)
-  const end = new Date(day.getTime() + 24 * 60 * 60 * 1000)
+  const end = new Date(day.getTime() + DAY_MS)
 
-  const identities = await prisma.testIdentity.findMany({
-    where: { id: { in: [...testIdentityIds] } },
-    select: { id: true, suite: true },
-  })
-  const suites = [...new Set(identities.map((identity) => identity.suite))]
-
-  for (const identity of identities) {
+  for (const testIdentityId of testIdentityIds) {
     const grouped = await prisma.testExecution.groupBy({
       by: ['status'],
-      where: { testIdentityId: identity.id, startedAt: { gte: day, lt: end } },
+      where: { testIdentityId, startedAt: { gte: day, lt: end } },
       _count: { _all: true },
       _sum: { durationMs: true },
     })
@@ -84,7 +88,10 @@ export const updateRollups = async (
     for (const row of grouped) {
       addStatus(bucket, row.status, row._count._all, row._sum.durationMs ?? 0)
     }
-    if (bucket.total === 0) continue
+    if (bucket.total === 0) {
+      await prisma.dailyTestStats.deleteMany({ where: { testIdentityId, day } })
+      continue
+    }
 
     const data = {
       orgId: ctx.orgId,
@@ -97,34 +104,30 @@ export const updateRollups = async (
       avgDurationMs: avg(bucket.sumDuration, bucket.total),
     }
     await prisma.dailyTestStats.upsert({
-      where: { testIdentityId_day: { testIdentityId: identity.id, day } },
-      create: { testIdentityId: identity.id, day, ...data },
+      where: { testIdentityId_day: { testIdentityId, day } },
+      create: { testIdentityId, day, ...data },
       update: data,
     })
   }
 
   for (const suite of suites) {
-    const rows = await prisma.dailyTestStats.findMany({
-      where: { projectId: ctx.projectId, day, identity: { suite } },
-      select: {
-        total: true,
-        passed: true,
-        failed: true,
-        flaky: true,
-        skipped: true,
-        avgDurationMs: true,
+    const grouped = await prisma.testExecution.groupBy({
+      by: ['status'],
+      where: {
+        projectId: ctx.projectId,
+        startedAt: { gte: day, lt: end },
+        identity: { suite },
       },
+      _count: { _all: true },
+      _sum: { durationMs: true },
     })
-    if (rows.length === 0) continue
-
     const bucket = emptyBucket()
-    for (const row of rows) {
-      bucket.total += row.total
-      bucket.passed += row.passed
-      bucket.failed += row.failed
-      bucket.flaky += row.flaky
-      bucket.skipped += row.skipped
-      bucket.sumDuration += row.avgDurationMs * row.total
+    for (const row of grouped) {
+      addStatus(bucket, row.status, row._count._all, row._sum.durationMs ?? 0)
+    }
+    if (bucket.total === 0) {
+      await prisma.suiteDaily.deleteMany({ where: { projectId: ctx.projectId, suite, day } })
+      continue
     }
 
     const data = {
@@ -160,4 +163,26 @@ export const updateRollups = async (
     create: { projectId: ctx.projectId, day, ...trend },
     update: trend,
   })
+}
+
+export const updateRollups = async (
+  prisma: PrismaClient,
+  ctx: RollupContext,
+  executionDays: readonly Date[],
+  testIdentityIds: readonly string[],
+): Promise<void> => {
+  if (testIdentityIds.length === 0) return
+  const days = distinctDays(executionDays)
+  if (days.length === 0) return
+
+  const identities = await prisma.testIdentity.findMany({
+    where: { id: { in: [...testIdentityIds] } },
+    select: { id: true, suite: true },
+  })
+  const suites = [...new Set(identities.map((identity) => identity.suite))]
+  const identityIds = identities.map((identity) => identity.id)
+
+  for (const day of days) {
+    await rollupDay(prisma, ctx, day, suites, identityIds)
+  }
 }
