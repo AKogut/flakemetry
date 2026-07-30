@@ -27,7 +27,7 @@ export default async function NotificationsPage({
   const channels = await prisma.notificationChannel.findMany({
     where: { projectId },
     orderBy: { createdAt: 'asc' },
-    select: { id: true, kind: true, target: true, events: true, enabled: true },
+    select: { id: true, kind: true, target: true, events: true, enabled: true, source: true },
   })
 
   const maskTarget = (target: string): string =>
@@ -42,6 +42,8 @@ export default async function NotificationsPage({
         <span className="mono">FLAKEMETRY_SLACK_WEBHOOK</span> /{' '}
         <span className="mono">FLAKEMETRY_DISCORD_WEBHOOK</span> /{' '}
         <span className="mono">FLAKEMETRY_EMAIL_TO</span> channels still apply on top of these.
+        Channels declared in <span className="mono">flakemetry.yml</span> are managed in code and
+        shown here read-only.
       </p>
 
       {!canEdit ? (
@@ -66,7 +68,14 @@ export default async function NotificationsPage({
             <tbody>
               {channels.map((channel) => (
                 <tr key={channel.id}>
-                  <td className="mono">{channel.kind}</td>
+                  <td className="mono">
+                    {channel.kind}
+                    {channel.source === 'config' ? (
+                      <span className="pill pill-candidate" style={{ marginLeft: '0.5rem' }}>
+                        flakemetry.yml
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="mono muted">{maskTarget(channel.target)}</td>
                   <td className="muted">
                     {channel.events.length === 0
@@ -74,7 +83,7 @@ export default async function NotificationsPage({
                       : channel.events.map((event) => EVENT_LABELS[event] ?? event).join(', ')}
                   </td>
                   <td>
-                    {canEdit ? (
+                    {canEdit && channel.source !== 'config' ? (
                       <form action={deleteNotificationChannel}>
                         <input type="hidden" name="projectId" value={projectId} />
                         <input type="hidden" name="channelId" value={channel.id} />
@@ -82,6 +91,10 @@ export default async function NotificationsPage({
                           Remove
                         </button>
                       </form>
+                    ) : channel.source === 'config' ? (
+                      <span className="muted" style={{ fontSize: '0.8rem' }}>
+                        managed in config
+                      </span>
                     ) : null}
                   </td>
                 </tr>

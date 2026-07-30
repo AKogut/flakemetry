@@ -1,5 +1,30 @@
 import { z } from 'zod'
 
+export const NOTIFICATION_EVENTS = [
+  'flaky_detected',
+  'quarantine_changed',
+  'rca_ready',
+  'suite_regressed',
+] as const
+
+export const notificationChannelConfigSchema = z
+  .object({
+    kind: z.enum(['slack', 'discord', 'email']),
+    target: z.string().min(1),
+    events: z.array(z.enum(NOTIFICATION_EVENTS)).default([]),
+  })
+  .strict()
+
+export type NotificationChannelConfig = z.infer<typeof notificationChannelConfigSchema>
+
+export const notificationRoutingSchema = z
+  .object({
+    channels: z.array(notificationChannelConfigSchema).max(50).default([]),
+  })
+  .strict()
+
+export type NotificationRouting = z.infer<typeof notificationRoutingSchema>
+
 export const flakemetryConfigSchema = z
   .object({
     project: z.string().min(1).optional(),
@@ -32,6 +57,7 @@ export const flakemetryConfigSchema = z
       })
       .strict()
       .default({}),
+    notifications: notificationRoutingSchema.default({}),
   })
   .strict()
 

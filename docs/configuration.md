@@ -33,6 +33,14 @@ ignore:
 
 retention:
   rawDays: 90
+
+notifications:
+  channels:
+    - kind: slack
+      target: https://hooks.slack.com/services/T/B/x
+      events: [flaky_detected, suite_regressed]
+    - kind: email
+      target: alerts@acme.com
 ```
 
 ## Options
@@ -49,6 +57,7 @@ retention:
 | `ai.dailyTokenBudget` | int ≥ 0 | `200000` | Per-project daily LLM token cap; RCA pauses when exceeded |
 | `ignore` | string[] | `[]` | Glob patterns of test files excluded from analysis |
 | `retention.rawDays` | int ≥ 1 | `90` | Days raw executions are kept; rollups live longer |
+| `notifications.channels` | array | `[]` | Notification channels declared in code. Each is `{ kind: slack \| discord \| email, target, events? }` — `target` is a webhook URL (Slack/Discord) or address (email); `events` filters by type (default: all). Synced to the project on each run and shown read-only in **Settings → Notifications** alongside dashboard-added channels. |
 
 Unknown keys are rejected with an error naming the offending path — typos fail fast instead of being silently ignored.
 

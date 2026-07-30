@@ -166,6 +166,7 @@ model NotificationChannel {
   target    String
   events    String[]
   enabled   Boolean  @default(true)
+  source    String   @default("dashboard")
   createdAt DateTime @default(now()) @map("created_at")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)

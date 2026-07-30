@@ -30,6 +30,29 @@ describe('flakemetry config schema', () => {
   it('rejects unknown keys to catch typos', () => {
     expect(() => parseFlakemetryConfig({ flakey: {} })).toThrow(ConfigValidationError)
   })
+
+  it('parses a notifications routing section and defaults events to all', () => {
+    const config = parseFlakemetryConfig({
+      notifications: {
+        channels: [
+          { kind: 'slack', target: 'https://hooks.slack.com/x', events: ['flaky_detected'] },
+          { kind: 'email', target: 'alerts@acme.com' },
+        ],
+      },
+    })
+    expect(config.notifications.channels).toHaveLength(2)
+    expect(config.notifications.channels[1]).toEqual({
+      kind: 'email',
+      target: 'alerts@acme.com',
+      events: [],
+    })
+  })
+
+  it('rejects an unknown notification channel kind', () => {
+    expect(() =>
+      parseFlakemetryConfig({ notifications: { channels: [{ kind: 'sms', target: 'x' }] } }),
+    ).toThrow(ConfigValidationError)
+  })
 })
 
 describe('config precedence', () => {

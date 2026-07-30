@@ -45,7 +45,8 @@
   },
   "dependencies": {
     "@flakemetry/contracts": "workspace:*",
-    "@flakemetry/sdk": "workspace:*"
+    "@flakemetry/sdk": "workspace:*",
+    "yaml": "^2.7.0"
   },
   "peerDependencies": {
     "@playwright/test": ">=1.44"
