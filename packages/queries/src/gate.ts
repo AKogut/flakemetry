@@ -111,7 +111,10 @@ const shortSha = (sha: string): string => sha.slice(0, 7)
 const inlineCode = (value: string): string => `\`${value.replace(/[`\r\n]/g, '')}\``
 
 const escapeCell = (value: string): string =>
-  value.replace(/`/g, '').replace(/\|/g, '\\|').replace(/[\r\n]/g, ' ')
+  value
+    .replace(/`/g, '')
+    .replace(/\|/g, '\\|')
+    .replace(/[\r\n]/g, ' ')
 
 export const renderGateComment = (gate: PrGate): string => {
   const verdict =
