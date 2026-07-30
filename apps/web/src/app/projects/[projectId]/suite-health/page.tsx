@@ -5,6 +5,7 @@ import {
   getProjectHealthKpis,
   getSuiteHealth,
   getTestLeaderboards,
+  isSuiteRegressed,
 } from '@flakemetry/queries'
 
 import { MiniTrend } from '@/components/mini-trend'
@@ -206,7 +207,14 @@ export default async function SuiteHealthPage({
                 <tbody>
                   {suites.map((suite) => (
                     <tr key={suite.suite}>
-                      <td className="mono">{suite.suite || '(root)'}</td>
+                      <td className="mono">
+                        {suite.suite || '(root)'}
+                        {isSuiteRegressed(suite.days) ? (
+                          <span className="pill pill-candidate" style={{ marginLeft: '0.5rem' }}>
+                            regressed
+                          </span>
+                        ) : null}
+                      </td>
                       <td
                         style={{
                           textAlign: 'right',

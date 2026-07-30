@@ -44,9 +44,18 @@ export default async function FlakyBoardPage({
   })
 
   const base = `/projects/${projectId}/flaky`
+  const hrefWith = (patch: { filter?: string; owner?: string }): string => {
+    const next = new URLSearchParams()
+    const nextFilter = 'filter' in patch ? patch.filter : filter
+    const nextOwner = 'owner' in patch ? patch.owner : owner
+    if (nextFilter) next.set('filter', nextFilter)
+    if (nextOwner) next.set('owner', nextOwner)
+    const qs = next.toString()
+    return qs ? `${base}?${qs}` : base
+  }
   const tab = (key: string | undefined, label: string) => (
     <a
-      href={key ? `${base}?filter=${key}` : base}
+      href={hrefWith({ filter: key })}
       className="filter-tab"
       data-active={(filter ?? '') === (key ?? '')}
     >
@@ -70,7 +79,7 @@ export default async function FlakyBoardPage({
       {owner ? (
         <p className="muted" style={{ marginTop: '0.6rem' }}>
           Filtered to tests owned by <span className="mono">{owner}</span> ·{' '}
-          <a href={base}>clear</a>
+          <a href={hrefWith({ owner: undefined })}>clear</a>
         </p>
       ) : null}
 
@@ -118,7 +127,7 @@ export default async function FlakyBoardPage({
                       item.owners.map((ownerHandle) => (
                         <a
                           key={ownerHandle}
-                          href={`${base}?owner=${encodeURIComponent(ownerHandle)}`}
+                          href={hrefWith({ owner: ownerHandle })}
                           className="mono"
                           style={{ marginRight: '0.4rem' }}
                         >

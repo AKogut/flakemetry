@@ -1,8 +1,22 @@
 import type { FlakyBoardInput, FlakyBoardResult, FlakyTrend } from '@flakemetry/contracts'
 import { matchCodeowners, parseCodeowners } from '@flakemetry/core'
-import type { PrismaClient } from '@flakemetry/db'
+import { Prisma, type PrismaClient } from '@flakemetry/db'
 
 const TREND_EPSILON = 0.15
+
+const scoreSelect = Prisma.validator<Prisma.FlakyScoreSelect>()({
+  testIdentityId: true,
+  score: true,
+  flipRate: true,
+  passOnRerunRate: true,
+  quarantineCandidate: true,
+  lastFlakedAt: true,
+  identity: {
+    select: { filePath: true, suite: true, title: true, quarantined: true },
+  },
+})
+
+type ScoreRow = Prisma.FlakyScoreGetPayload<{ select: typeof scoreSelect }>
 
 const mean = (values: number[]): number =>
   values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length
@@ -55,28 +69,46 @@ export const flakyBoard = async (
     select: { codeowners: true },
   })
   const rules = project?.codeowners ? parseCodeowners(project.codeowners) : []
-  const fetchLimit = input.owner ? Math.max(input.limit, 500) : input.limit
 
-  const scores = await prisma.flakyScore.findMany({
-    where: {
-      projectId,
-      score: { gte: input.minScore },
-      ...(input.includeQuarantined ? {} : { identity: { quarantined: false } }),
-    },
-    orderBy: { score: 'desc' },
-    take: fetchLimit,
-    select: {
-      testIdentityId: true,
-      score: true,
-      flipRate: true,
-      passOnRerunRate: true,
-      quarantineCandidate: true,
-      lastFlakedAt: true,
-      identity: {
-        select: { filePath: true, suite: true, title: true, quarantined: true },
-      },
-    },
-  })
+  const where: Prisma.FlakyScoreWhereInput = {
+    projectId,
+    score: { gte: input.minScore },
+    ...(input.includeQuarantined ? {} : { identity: { quarantined: false } }),
+  }
+
+  let scores: ScoreRow[]
+  if (input.owner) {
+    const owner = input.owner
+    const collected: ScoreRow[] = []
+    const PAGE = 200
+    let cursor: string | undefined
+    while (collected.length < input.limit) {
+      const page = await prisma.flakyScore.findMany({
+        where,
+        orderBy: [{ score: 'desc' }, { testIdentityId: 'asc' }],
+        take: PAGE,
+        ...(cursor ? { skip: 1, cursor: { testIdentityId: cursor } } : {}),
+        select: scoreSelect,
+      })
+      if (page.length === 0) break
+      for (const row of page) {
+        if (matchCodeowners(rules, row.identity.filePath).includes(owner)) {
+          collected.push(row)
+          if (collected.length >= input.limit) break
+        }
+      }
+      cursor = page[page.length - 1]!.testIdentityId
+      if (page.length < PAGE) break
+    }
+    scores = collected
+  } else {
+    scores = await prisma.flakyScore.findMany({
+      where,
+      orderBy: { score: 'desc' },
+      take: input.limit,
+      select: scoreSelect,
+    })
+  }
 
   const trends = await trendByIdentity(
     prisma,
@@ -84,7 +116,7 @@ export const flakyBoard = async (
     scores.map((score) => score.testIdentityId),
   )
 
-  const resolved = scores.map((score) => ({
+  const items = scores.map((score) => ({
     testIdentityId: score.testIdentityId,
     filePath: score.identity.filePath,
     suite: score.identity.suite,
@@ -99,9 +131,5 @@ export const flakyBoard = async (
     owners: matchCodeowners(rules, score.identity.filePath),
   }))
 
-  const filtered = input.owner
-    ? resolved.filter((item) => item.owners.includes(input.owner!))
-    : resolved
-
-  return { items: filtered.slice(0, input.limit) }
+  return { items }
 }

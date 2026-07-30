@@ -87,6 +87,9 @@ importers:
       '@flakemetry/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@flakemetry/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@flakemetry/db':
         specifier: workspace:*
         version: link:../../packages/db
