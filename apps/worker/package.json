@@ -28,6 +28,7 @@
     "@flakemetry/contracts": "workspace:*",
     "@flakemetry/core": "workspace:*",
     "@flakemetry/db": "workspace:*",
+    "@flakemetry/notify": "workspace:*",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/exporter-metrics-otlp-http": "^0.220.0",
     "@opentelemetry/resources": "^2.0.0",

@@ -22,6 +22,22 @@ export interface DomainEventMap {
     score: number
     quarantineCandidate: boolean
   }
+  'flaky.detected': {
+    testIdentityId: string
+    projectId: string
+    title: string
+    suite: string
+    filePath: string
+    score: number
+  }
+  'quarantine.changed': {
+    testIdentityId: string
+    projectId: string
+    title: string
+    suite: string
+    quarantined: boolean
+    reason: string | null
+  }
   'rca.created': {
     executionId: string
     projectId: string

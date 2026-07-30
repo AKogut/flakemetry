@@ -266,21 +266,30 @@ export const processJob = async (
 const enforceQuarantine = async (
   prisma: PrismaClient,
   identityId: string,
+  identity: { quarantined: boolean; title: string; suite: string },
   isCandidate: boolean,
   recent: readonly { status: string }[],
   cooldownRuns: number,
+  projectId: string,
+  events?: EventBus,
 ): Promise<void> => {
-  const identity = await prisma.testIdentity.findUnique({
-    where: { id: identityId },
-    select: { quarantined: true },
-  })
-  if (!identity) return
+  const emit = (quarantined: boolean, reason: string | null): void =>
+    events?.emit('quarantine.changed', {
+      testIdentityId: identityId,
+      projectId,
+      title: identity.title,
+      suite: identity.suite,
+      quarantined,
+      reason,
+    })
 
   if (isCandidate && !identity.quarantined) {
+    const reason = 'auto: flaky score above threshold'
     await prisma.testIdentity.update({
       where: { id: identityId },
-      data: { quarantined: true, quarantineReason: 'auto: flaky score above threshold' },
+      data: { quarantined: true, quarantineReason: reason },
     })
+    emit(true, reason)
     return
   }
 
@@ -295,6 +304,7 @@ const enforceQuarantine = async (
         where: { id: identityId },
         data: { quarantined: false, quarantineReason: null },
       })
+      emit(false, null)
     }
   }
 }
@@ -319,6 +329,17 @@ const scoreIdentity = async (
     take: SCORING_WINDOW,
   })
   const executions = recent.reverse()
+
+  const [identity, previousScore] = await Promise.all([
+    prisma.testIdentity.findUnique({
+      where: { id: identityId },
+      select: { title: true, suite: true, filePath: true, quarantined: true },
+    }),
+    prisma.flakyScore.findUnique({
+      where: { testIdentityId: identityId },
+      select: { quarantineCandidate: true },
+    }),
+  ])
 
   const runIds = [...new Set(executions.map((execution) => execution.runId))]
   const failuresByRun = new Map<string, number>()
@@ -372,13 +393,27 @@ const scoreIdentity = async (
     update: data,
   })
 
-  if (ctx.quarantineEnabled) {
+  if (identity && result.quarantineCandidate && !previousScore?.quarantineCandidate) {
+    ctx.events?.emit('flaky.detected', {
+      testIdentityId: identityId,
+      projectId: ctx.projectId,
+      title: identity.title,
+      suite: identity.suite,
+      filePath: identity.filePath,
+      score: result.score,
+    })
+  }
+
+  if (ctx.quarantineEnabled && identity) {
     await enforceQuarantine(
       prisma,
       identityId,
+      identity,
       result.quarantineCandidate,
       executions,
       ctx.quarantineCooldownRuns ?? 0,
+      ctx.projectId,
+      ctx.events,
     )
   }
 
