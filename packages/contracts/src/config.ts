@@ -5,6 +5,7 @@ export const NOTIFICATION_EVENTS = [
   'quarantine_changed',
   'rca_ready',
   'suite_regressed',
+  'suite_slowed',
 ] as const
 
 export const notificationChannelConfigSchema = z

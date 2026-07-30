@@ -1,7 +1,12 @@
 import { PrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { detectRegressions, detectSuiteRegressions, type SuiteDayRow } from '../regressions'
+import {
+  detectDurationRegressions,
+  detectRegressions,
+  detectSuiteRegressions,
+  type SuiteDayRow,
+} from '../regressions'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
 const prisma = new PrismaClient()
@@ -46,6 +51,44 @@ describe('detectRegressions', () => {
 
   it('needs prior history to compare against', () => {
     expect(detectRegressions([row('auth', '2026-07-29', 40, 30)], '2026-07-29')).toHaveLength(0)
+  })
+})
+
+const drow = (day: string, total: number, avgDurationMs: number): SuiteDayRow => ({
+  suite: 'checkout',
+  day,
+  total,
+  failed: 0,
+  flaky: 0,
+  avgDurationMs,
+})
+
+describe('detectDurationRegressions', () => {
+  it('flags a suite whose average duration jumps well above baseline', () => {
+    const rows = [
+      drow('2026-07-27', 40, 1000),
+      drow('2026-07-28', 40, 1000),
+      drow('2026-07-29', 40, 1600),
+    ]
+    const regressions = detectDurationRegressions(rows, '2026-07-29')
+    expect(regressions).toHaveLength(1)
+    expect(regressions[0]?.avgDurationMs).toBe(1600)
+    expect(regressions[0]?.baselineDurationMs).toBe(1000)
+  })
+
+  it('ignores a modest slowdown under the ratio threshold', () => {
+    const rows = [drow('2026-07-28', 40, 1000), drow('2026-07-29', 40, 1200)]
+    expect(detectDurationRegressions(rows, '2026-07-29')).toHaveLength(0)
+  })
+
+  it('ignores fast suites below the minimum average', () => {
+    const rows = [drow('2026-07-28', 40, 100), drow('2026-07-29', 40, 400)]
+    expect(detectDurationRegressions(rows, '2026-07-29')).toHaveLength(0)
+  })
+
+  it('ignores a latest day below the minimum sample size', () => {
+    const rows = [drow('2026-07-28', 40, 1000), drow('2026-07-29', 5, 3000)]
+    expect(detectDurationRegressions(rows, '2026-07-29')).toHaveLength(0)
   })
 })
 

@@ -12,6 +12,7 @@ const EVENT_LABELS: Record<string, string> = {
   quarantine_changed: 'Quarantine changed',
   rca_ready: 'RCA ready',
   suite_regressed: 'Suite regression',
+  suite_slowed: 'Suite slowdown',
 }
 
 export default async function NotificationsPage({
