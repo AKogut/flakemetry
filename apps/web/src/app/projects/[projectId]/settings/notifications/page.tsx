@@ -37,10 +37,11 @@ export default async function NotificationsPage({
     <>
       <h1 className="page-title">Notifications</h1>
       <p className="page-subtitle">
-        Post flaky detections, quarantine changes, RCA reports, and suite regressions to Slack or
-        Discord for this project. Global <span className="mono">FLAKEMETRY_SLACK_WEBHOOK</span> /{' '}
-        <span className="mono">FLAKEMETRY_DISCORD_WEBHOOK</span> channels still apply on top of
-        these.
+        Post flaky detections, quarantine changes, RCA reports, and suite regressions to Slack,
+        Discord, or email for this project. Global{' '}
+        <span className="mono">FLAKEMETRY_SLACK_WEBHOOK</span> /{' '}
+        <span className="mono">FLAKEMETRY_DISCORD_WEBHOOK</span> /{' '}
+        <span className="mono">FLAKEMETRY_EMAIL_TO</span> channels still apply on top of these.
       </p>
 
       {!canEdit ? (
@@ -103,19 +104,24 @@ export default async function NotificationsPage({
                 <select id="kind" name="kind" defaultValue="slack">
                   <option value="slack">Slack</option>
                   <option value="discord">Discord</option>
+                  <option value="email">Email</option>
                 </select>
               </div>
             </div>
             <div className="policy-field">
               <div>
-                <label htmlFor="target">Webhook URL</label>
+                <label htmlFor="target">Webhook URL or email address</label>
                 <input
                   id="target"
                   name="target"
-                  type="url"
-                  placeholder="https://hooks.slack.com/services/…"
+                  type="text"
+                  placeholder="https://hooks.slack.com/services/…  or  alerts@acme.com"
                   required
                 />
+                <p className="policy-help">
+                  Slack/Discord take an https webhook URL; email takes a recipient address (requires{' '}
+                  <span className="mono">FLAKEMETRY_SMTP_*</span> on the worker).
+                </p>
               </div>
             </div>
             <div className="policy-field">

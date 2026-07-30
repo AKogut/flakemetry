@@ -17,10 +17,18 @@ describe('mapChannelRows', () => {
   it('drops unknown kinds and empty targets', () => {
     expect(
       mapChannelRows([
-        { id: '1', kind: 'email', target: 'x@y.z', events: [] },
+        { id: '1', kind: 'webhook', target: 'https://x.test', events: [] },
         { id: '2', kind: 'slack', target: '', events: [] },
       ]),
     ).toHaveLength(0)
+  })
+
+  it('keeps an email channel', () => {
+    const channels = mapChannelRows([
+      { id: '3', kind: 'email', target: 'alerts@acme.com', events: ['rca_ready'] },
+    ])
+    expect(channels).toHaveLength(1)
+    expect(channels[0]).toMatchObject({ id: 'db:3', kind: 'email', webhookUrl: 'alerts@acme.com' })
   })
 })
 

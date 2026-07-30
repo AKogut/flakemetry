@@ -1,9 +1,10 @@
 import { formatDiscord } from './discord'
+import { type EmailSender, formatEmail } from './email'
 import type { NotificationEvent, NotificationType } from './message'
 import { formatSlack } from './slack'
 import { assertSafeWebhookUrl, WEBHOOK_TIMEOUT_MS } from './webhook'
 
-export type ChannelKind = 'slack' | 'discord'
+export type ChannelKind = 'slack' | 'discord' | 'email'
 
 export interface Channel {
   id: string
@@ -23,6 +24,7 @@ export interface DispatcherOptions {
   channels: readonly Channel[]
   channelsFor?: (event: NotificationEvent) => Promise<readonly Channel[]>
   send?: NotificationSender
+  sendEmail?: EmailSender
   now?: () => number
   dedupeWindowMs?: number
   onError?: (error: unknown) => void
@@ -46,8 +48,13 @@ const defaultSender: NotificationSender = async (url, payload) => {
 const format = (channel: Channel, event: NotificationEvent): unknown =>
   channel.kind === 'slack' ? formatSlack(event) : formatDiscord(event)
 
+const defaultEmailSender: EmailSender = async () => {
+  throw new Error('notify: email channel requires SMTP configuration')
+}
+
 export const createDispatcher = (options: DispatcherOptions): Dispatcher => {
   const send = options.send ?? defaultSender
+  const sendEmail = options.sendEmail ?? defaultEmailSender
   const now = options.now ?? (() => Date.now())
   const window = options.dedupeWindowMs ?? 6 * 60 * 60 * 1000
   const onError = options.onError ?? (() => undefined)
@@ -72,7 +79,10 @@ export const createDispatcher = (options: DispatcherOptions): Dispatcher => {
         if (previous != null && now() - previous < window) continue
         lastSentAt.set(key, now())
         try {
-          const result = await send(channel.webhookUrl, format(channel, event))
+          const result =
+            channel.kind === 'email'
+              ? await sendEmail(channel.webhookUrl, formatEmail(event))
+              : await send(channel.webhookUrl, format(channel, event))
           if (!result.ok) {
             lastSentAt.delete(key)
             onError(

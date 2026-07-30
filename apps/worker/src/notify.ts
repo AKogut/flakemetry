@@ -1,9 +1,12 @@
 import {
   type Channel,
   createDispatcher,
+  createSmtpSender,
+  type EmailSender,
   isNotificationType,
   NOTIFICATION_TYPES,
   type NotificationType,
+  parseSmtpConfig,
 } from '@flakemetry/notify'
 
 import type { EventBus } from './events'
@@ -42,12 +45,23 @@ export const startNotifications = (
   loadProjectChannels?: ProjectChannelLoader,
 ): boolean => {
   const channels = buildChannels(env)
+  const smtp = parseSmtpConfig(env)
+  const sendEmail: EmailSender | undefined = smtp ? createSmtpSender(smtp) : undefined
+  if (smtp && env.FLAKEMETRY_EMAIL_TO) {
+    channels.push({
+      id: 'email',
+      kind: 'email',
+      webhookUrl: env.FLAKEMETRY_EMAIL_TO,
+      types: parseTypes(env.FLAKEMETRY_NOTIFY_EVENTS),
+    })
+  }
   if (channels.length === 0 && !loadProjectChannels) return false
 
   const dashboardUrl = (env.FLAKEMETRY_DASHBOARD_URL ?? '').replace(/\/+$/, '') || null
   const dispatcher = createDispatcher({
     channels,
     channelsFor: loadProjectChannels ? (event) => loadProjectChannels(event.projectId) : undefined,
+    sendEmail,
     onError: (error) => process.stderr.write(`notify: ${String(error)}\n`),
   })
   const testUrl = (projectId: string, testId: string): string | null =>

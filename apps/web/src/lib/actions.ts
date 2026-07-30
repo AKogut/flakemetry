@@ -2,7 +2,7 @@
 
 import { projectPolicyInputSchema } from '@flakemetry/contracts'
 import { generateToken, getPrismaClient, hashToken } from '@flakemetry/db'
-import { isSafeWebhookUrl } from '@flakemetry/notify'
+import { isEmailAddress, isSafeWebhookUrl } from '@flakemetry/notify'
 import { updateProjectPolicy as persistProjectPolicy } from '@flakemetry/queries'
 import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
@@ -113,7 +113,10 @@ export const revokeIngestToken = async (formData: FormData): Promise<void> => {
   revalidatePath(`/projects/${projectId}/settings/tokens`)
 }
 
-const CHANNEL_KINDS = ['slack', 'discord']
+const CHANNEL_KINDS = ['slack', 'discord', 'email']
+
+const isValidTarget = (kind: string, target: string): boolean =>
+  kind === 'email' ? isEmailAddress(target) : isSafeWebhookUrl(target)
 
 export const createNotificationChannel = async (formData: FormData): Promise<void> => {
   const user = await requireUser()
@@ -124,8 +127,8 @@ export const createNotificationChannel = async (formData: FormData): Promise<voi
   const kind = String(formData.get('kind') ?? '')
   const target = String(formData.get('target') ?? '').trim()
   const events = NOTIFY_EVENTS.filter((event) => formData.get(`event:${event}`) === 'on')
-  if (!CHANNEL_KINDS.includes(kind) || !isSafeWebhookUrl(target)) {
-    throw new Error('a channel needs a kind and a public https webhook URL')
+  if (!CHANNEL_KINDS.includes(kind) || !isValidTarget(kind, target)) {
+    throw new Error('a channel needs a kind and a public https webhook URL or email address')
   }
 
   await prisma.notificationChannel.create({

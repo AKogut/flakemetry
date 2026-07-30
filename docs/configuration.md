@@ -103,14 +103,25 @@ The worker emits domain events (`run.processed`, `identity.created`, `identity.m
 
 ### Notifications
 
-The worker pushes intelligence to Slack and Discord via incoming webhooks. Delivery is best-effort and de-duplicated per channel so a flapping test can't spam a channel. Channels come from two places, applied together: **global env webhooks** (below) and **per-project channels** configured in **Settings → Notifications** (add a Slack/Discord webhook with an event filter). Events: `flaky_detected`, `quarantine_changed`, `rca_ready`, and `suite_regressed` (a suite's fail-rate crossing its trailing baseline).
+The worker pushes intelligence to Slack, Discord and email. Webhook delivery is best-effort and de-duplicated per channel so a flapping test can't spam a channel. Channels come from two places, applied together: **global env channels** (below) and **per-project channels** configured in **Settings → Notifications** (add a Slack/Discord webhook or an email address with an event filter). Events: `flaky_detected`, `quarantine_changed`, `rca_ready`, and `suite_regressed` (a suite's fail-rate crossing its trailing baseline).
 
 | Variable | Effect |
 |---|---|
 | `FLAKEMETRY_SLACK_WEBHOOK` | Global Slack incoming-webhook URL to post to (applies to every project) |
 | `FLAKEMETRY_DISCORD_WEBHOOK` | Global Discord webhook URL to post to |
-| `FLAKEMETRY_NOTIFY_EVENTS` | Comma-separated event filter for the global webhooks (default: all) |
+| `FLAKEMETRY_EMAIL_TO` | Global recipient address for email notifications (requires `FLAKEMETRY_SMTP_*` below) |
+| `FLAKEMETRY_NOTIFY_EVENTS` | Comma-separated event filter for the global channels (default: all) |
 | `FLAKEMETRY_DASHBOARD_URL` | Public dashboard base URL, used to deep-link notifications back to the test |
+
+Email delivery (global recipient and per-project email channels) needs an SMTP relay:
+
+| Variable | Effect |
+|---|---|
+| `FLAKEMETRY_SMTP_HOST` | SMTP server host — enables email delivery when set together with a from address |
+| `FLAKEMETRY_SMTP_FROM` | Envelope/from address for outgoing mail |
+| `FLAKEMETRY_SMTP_PORT` | SMTP port (default `587`; `465` implies TLS) |
+| `FLAKEMETRY_SMTP_SECURE` | `true` to force an implicit-TLS connection |
+| `FLAKEMETRY_SMTP_USER` / `FLAKEMETRY_SMTP_PASS` | SMTP credentials, when the relay requires auth |
 
 ### Artifact storage
 
