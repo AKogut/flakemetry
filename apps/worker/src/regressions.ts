@@ -47,10 +47,12 @@ export const detectRegressions = (
   for (const [suite, suiteRows] of bySuite) {
     const todayRow = suiteRows.find((row) => row.day === today)
     if (!todayRow || todayRow.total < minTotal) continue
-    const prior = suiteRows.filter((row) => row.day < today)
+    const prior = suiteRows.filter((row) => row.day < today && row.total >= minTotal)
     if (prior.length === 0) continue
 
-    const baseline = prior.reduce((sum, row) => sum + failRateOf(row), 0) / prior.length
+    const priorTotal = prior.reduce((sum, row) => sum + row.total, 0)
+    const priorBad = prior.reduce((sum, row) => sum + row.failed + row.flaky, 0)
+    const baseline = priorTotal > 0 ? priorBad / priorTotal : 0
     const rate = failRateOf(todayRow)
     if (rate >= minFailRate && rate - baseline >= minDelta) {
       regressions.push({
