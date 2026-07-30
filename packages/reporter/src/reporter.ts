@@ -19,6 +19,7 @@ import type {
 } from '@playwright/test/reporter'
 
 import { uploadArtifacts } from './artifacts'
+import { findCodeowners, uploadCodeowners } from './codeowners'
 import {
   buildIdempotencyKey,
   deriveSuite,
@@ -117,10 +118,28 @@ export default class FlakemetryReporter implements Reporter {
     const idempotencyKey = buildIdempotencyKey(this.context, this.env)
 
     await this.maybeUploadArtifacts(idempotencyKey)
+    await this.maybeUploadCodeowners()
 
     const batch = this.recorder.toIngestBatch(idempotencyKey)
     this.writeOutput(batch)
     await this.deliver(this.recorder, batch, idempotencyKey)
+  }
+
+  private async maybeUploadCodeowners(): Promise<void> {
+    const endpoint = this.options.endpoint ?? this.env.FLAKEMETRY_ENDPOINT
+    const token = this.options.token ?? this.env.FLAKEMETRY_TOKEN
+    if (!endpoint || !token) return
+
+    try {
+      const content = findCodeowners(this.rootDir, this.env)
+      if (!content) return
+      const ok = await uploadCodeowners({ endpoint, token, content })
+      if (ok) process.stderr.write('flakemetry: synced CODEOWNERS\n')
+    } catch (error) {
+      process.stderr.write(
+        `flakemetry: CODEOWNERS sync skipped (${error instanceof Error ? error.message : String(error)})\n`,
+      )
+    }
   }
 
   private async maybeUploadArtifacts(idempotencyKey: string): Promise<void> {

@@ -340,6 +340,9 @@ importers:
       '@flakemetry/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@flakemetry/core':
+        specifier: workspace:*
+        version: link:../core
       '@flakemetry/db':
         specifier: workspace:*
         version: link:../db

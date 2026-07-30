@@ -1,4 +1,5 @@
 import type { FlakyBoardInput, FlakyBoardResult, FlakyTrend } from '@flakemetry/contracts'
+import { matchCodeowners, parseCodeowners } from '@flakemetry/core'
 import type { PrismaClient } from '@flakemetry/db'
 
 const TREND_EPSILON = 0.15
@@ -49,6 +50,13 @@ export const flakyBoard = async (
   projectId: string,
   input: FlakyBoardInput,
 ): Promise<FlakyBoardResult> => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { codeowners: true },
+  })
+  const rules = project?.codeowners ? parseCodeowners(project.codeowners) : []
+  const fetchLimit = input.owner ? Math.max(input.limit, 500) : input.limit
+
   const scores = await prisma.flakyScore.findMany({
     where: {
       projectId,
@@ -56,7 +64,7 @@ export const flakyBoard = async (
       ...(input.includeQuarantined ? {} : { identity: { quarantined: false } }),
     },
     orderBy: { score: 'desc' },
-    take: input.limit,
+    take: fetchLimit,
     select: {
       testIdentityId: true,
       score: true,
@@ -76,19 +84,24 @@ export const flakyBoard = async (
     scores.map((score) => score.testIdentityId),
   )
 
-  return {
-    items: scores.map((score) => ({
-      testIdentityId: score.testIdentityId,
-      filePath: score.identity.filePath,
-      suite: score.identity.suite,
-      title: score.identity.title,
-      score: score.score,
-      flipRate: score.flipRate,
-      passOnRerunRate: score.passOnRerunRate,
-      trend: trends.get(score.testIdentityId) ?? 'stable',
-      lastFlakedAt: score.lastFlakedAt,
-      quarantineCandidate: score.quarantineCandidate,
-      quarantined: score.identity.quarantined,
-    })),
-  }
+  const resolved = scores.map((score) => ({
+    testIdentityId: score.testIdentityId,
+    filePath: score.identity.filePath,
+    suite: score.identity.suite,
+    title: score.identity.title,
+    score: score.score,
+    flipRate: score.flipRate,
+    passOnRerunRate: score.passOnRerunRate,
+    trend: trends.get(score.testIdentityId) ?? 'stable',
+    lastFlakedAt: score.lastFlakedAt,
+    quarantineCandidate: score.quarantineCandidate,
+    quarantined: score.identity.quarantined,
+    owners: matchCodeowners(rules, score.identity.filePath),
+  }))
+
+  const filtered = input.owner
+    ? resolved.filter((item) => item.owners.includes(input.owner!))
+    : resolved
+
+  return { items: filtered.slice(0, input.limit) }
 }

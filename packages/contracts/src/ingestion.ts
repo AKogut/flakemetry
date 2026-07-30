@@ -135,6 +135,12 @@ export const artifactPresignResponseSchema = z.object({
   items: z.array(artifactPresignItemResultSchema),
 })
 
+export const MAX_CODEOWNERS_BYTES = 200_000
+
+export const codeownersUploadSchema = z.object({
+  content: z.string().max(MAX_CODEOWNERS_BYTES),
+})
+
 export type IngestResource = z.infer<typeof ingestResourceSchema>
 export type IngestError = z.infer<typeof ingestErrorSchema>
 export type ArtifactRef = z.infer<typeof artifactRefSchema>
@@ -149,3 +155,4 @@ export type ArtifactPresignItem = z.infer<typeof artifactPresignItemSchema>
 export type ArtifactPresignRequest = z.infer<typeof artifactPresignRequestSchema>
 export type ArtifactPresignItemResult = z.infer<typeof artifactPresignItemResultSchema>
 export type ArtifactPresignResponse = z.infer<typeof artifactPresignResponseSchema>
+export type CodeownersUpload = z.infer<typeof codeownersUploadSchema>
