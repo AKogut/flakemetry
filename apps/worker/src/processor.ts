@@ -12,7 +12,7 @@ import type { Prisma, PrismaClient } from '@flakemetry/db'
 
 import type { EventBus } from './events'
 import { type FailureRecord, processFailures } from './rca'
-import { detectSuiteRegressions } from './regressions'
+import { detectSuiteDurationRegressions, detectSuiteRegressions } from './regressions'
 import { updateRollups } from './rollups'
 
 export interface ProcessContext {
@@ -260,6 +260,10 @@ export const processJob = async (
     const regressions = await detectSuiteRegressions(prisma, ctx.projectId, day)
     for (const regression of regressions) {
       ctx.events.emit('suite.regressed', { projectId: ctx.projectId, ...regression })
+    }
+    const slowdowns = await detectSuiteDurationRegressions(prisma, ctx.projectId, day)
+    for (const slowdown of slowdowns) {
+      ctx.events.emit('suite.slowed', { projectId: ctx.projectId, ...slowdown })
     }
   }
 

@@ -108,11 +108,11 @@ Rate-limit and backpressure state are held per API process (in-memory). Running 
 | `FLAKEMETRY_SELF_OTEL_ENDPOINT` | OTLP endpoint for the worker's own metrics (processing lag, throughput, error rate, queue depth) |
 | `FLAKEMETRY_CLUSTER_THRESHOLD` | Jaccard similarity (0–1) above which a new error signature joins an existing cluster (default `0.5`) |
 
-The worker emits domain events (`run.processed`, `identity.created`, `identity.moved`, `score.updated`, `flaky.detected`, `quarantine.changed`, `suite.regressed`, `rca.created`) after each job commits — the seam downstream stages such as signature clustering, AI RCA, and notifications subscribe to.
+The worker emits domain events (`run.processed`, `identity.created`, `identity.moved`, `score.updated`, `flaky.detected`, `quarantine.changed`, `suite.regressed`, `suite.slowed`, `rca.created`) after each job commits — the seam downstream stages such as signature clustering, AI RCA, and notifications subscribe to.
 
 ### Notifications
 
-The worker pushes intelligence to Slack, Discord and email. Webhook delivery is best-effort and de-duplicated per channel so a flapping test can't spam a channel. Channels come from two places, applied together: **global env channels** (below) and **per-project channels** configured in **Settings → Notifications** (add a Slack/Discord webhook or an email address with an event filter). Events: `flaky_detected`, `quarantine_changed`, `rca_ready`, and `suite_regressed` (a suite's fail-rate crossing its trailing baseline).
+The worker pushes intelligence to Slack, Discord and email. Webhook delivery is best-effort and de-duplicated per channel so a flapping test can't spam a channel. Channels come from two places, applied together: **global env channels** (below) and **per-project channels** configured in **Settings → Notifications** (add a Slack/Discord webhook or an email address with an event filter). Events: `flaky_detected`, `quarantine_changed`, `rca_ready`, `suite_regressed` (a suite's fail-rate crossing its trailing baseline), and `suite_slowed` (a suite's average duration rising well above its trailing baseline).
 
 | Variable | Effect |
 |---|---|

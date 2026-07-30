@@ -43,6 +43,26 @@ export const isSuiteRegressed = (
   return rate >= SUITE_REGRESSION.minFailRate && rate - baseline >= SUITE_REGRESSION.minDelta
 }
 
+export const SUITE_DURATION_REGRESSION = { minTotal: 20, minAvgMs: 500, minRatio: 1.3 }
+
+export const isSuiteDurationRegressed = (
+  days: readonly Pick<SuiteDayPoint, 'total' | 'avgDurationMs'>[],
+): boolean => {
+  if (days.length < 2) return false
+  const today = days[days.length - 1]!
+  if (today.total < SUITE_DURATION_REGRESSION.minTotal) return false
+  const prior = days.slice(0, -1).filter((day) => day.total >= SUITE_DURATION_REGRESSION.minTotal)
+  if (prior.length === 0) return false
+  const priorTotal = prior.reduce((sum, day) => sum + day.total, 0)
+  const priorDuration = prior.reduce((sum, day) => sum + day.avgDurationMs * day.total, 0)
+  const baseline = priorTotal > 0 ? priorDuration / priorTotal : 0
+  return (
+    today.avgDurationMs >= SUITE_DURATION_REGRESSION.minAvgMs &&
+    baseline > 0 &&
+    today.avgDurationMs >= baseline * SUITE_DURATION_REGRESSION.minRatio
+  )
+}
+
 export const getSuiteHealth = async (
   prisma: PrismaClient,
   projectId: string,

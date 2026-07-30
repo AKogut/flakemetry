@@ -5,6 +5,7 @@ import {
   getProjectHealthKpis,
   getSuiteHealth,
   getTestLeaderboards,
+  isSuiteDurationRegressed,
   isSuiteRegressed,
 } from '@flakemetry/queries'
 
@@ -212,6 +213,11 @@ export default async function SuiteHealthPage({
                         {isSuiteRegressed(suite.days) ? (
                           <span className="pill pill-candidate" style={{ marginLeft: '0.5rem' }}>
                             regressed
+                          </span>
+                        ) : null}
+                        {isSuiteDurationRegressed(suite.days) ? (
+                          <span className="pill pill-candidate" style={{ marginLeft: '0.5rem' }}>
+                            slower
                           </span>
                         ) : null}
                       </td>

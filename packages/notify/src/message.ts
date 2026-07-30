@@ -1,11 +1,12 @@
 export type NotificationType =
-  'flaky_detected' | 'quarantine_changed' | 'rca_ready' | 'suite_regressed'
+  'flaky_detected' | 'quarantine_changed' | 'rca_ready' | 'suite_regressed' | 'suite_slowed'
 
 export const NOTIFICATION_TYPES: readonly NotificationType[] = [
   'flaky_detected',
   'quarantine_changed',
   'rca_ready',
   'suite_regressed',
+  'suite_slowed',
 ]
 
 export interface NotificationField {

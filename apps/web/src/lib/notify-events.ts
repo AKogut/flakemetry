@@ -3,4 +3,5 @@ export const NOTIFY_EVENTS = [
   'quarantine_changed',
   'rca_ready',
   'suite_regressed',
+  'suite_slowed',
 ]

@@ -113,6 +113,23 @@ export const startNotifications = (
     })
   })
 
+  events.on('suite.slowed', (payload) => {
+    const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`
+    void dispatcher.dispatch({
+      type: 'suite_slowed',
+      projectId: payload.projectId,
+      heading: 'Suite duration regression',
+      summary: `\`${payload.suite}\` average duration rose to ${secs(payload.avgDurationMs)} (baseline ${secs(payload.baselineDurationMs)}) across ${payload.total} executions`,
+      url: dashboardUrl ? `${dashboardUrl}/projects/${payload.projectId}/suite-health` : null,
+      fields: [
+        { label: 'Suite', value: payload.suite },
+        { label: 'Avg duration', value: secs(payload.avgDurationMs) },
+        { label: 'Baseline', value: secs(payload.baselineDurationMs) },
+      ],
+      dedupeKey: `suite_slowed:${payload.suite}:${payload.day}`,
+    })
+  })
+
   events.on('rca.created', (payload) => {
     void dispatcher.dispatch({
       type: 'rca_ready',

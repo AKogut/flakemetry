@@ -53,6 +53,14 @@ export interface DomainEventMap {
     baselineFailRate: number
     total: number
   }
+  'suite.slowed': {
+    projectId: string
+    suite: string
+    day: string
+    avgDurationMs: number
+    baselineDurationMs: number
+    total: number
+  }
 }
 
 export type DomainEventName = keyof DomainEventMap
