@@ -157,6 +157,11 @@ comment, sets a `flakemetry/gate` commit status, and fails the step only on new 
 (`strictness: new`) — flip to `any` to block known flakes too, or `off` for report-only. It
 needs `permissions: pull-requests: write` and `statuses: write`.
 
+It also emits per-test workflow annotations that show inline in the PR: an error on each new
+failure, and a non-blocking warning on each known flake — or a distinct notice reading
+`test X is quarantined (flaky score 0.86) — not blocking this build` for auto-quarantined tests,
+so a quarantined flaky test visibly stops failing the build with a clear trail.
+
 Prefer sending straight from your own tooling? `flakemetry upload flakemetry-results.json`
 (from `@flakemetry/cli`) does the same over any CI provider, reading
 `FLAKEMETRY_ENDPOINT` and `FLAKEMETRY_TOKEN` from the environment.

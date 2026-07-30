@@ -138,7 +138,12 @@ export const renderGateComment = (gate: PrGate): string => {
   for (const test of gate.tests) {
     const label = `${inlineCode(escapeCell(test.filePath))} › ${escapeCell(test.title)}`
     const state = test.status === 'fail' ? 'failed' : 'flaked'
-    const flag = test.classification === 'new_failure' ? '🔴 new failure' : '🟡 known flake'
+    const flag =
+      test.classification === 'new_failure'
+        ? '🔴 new failure'
+        : test.quarantined
+          ? '🔒 quarantined'
+          : '🟡 known flake'
     const base =
       test.baseSampleSize === 0
         ? 'unseen'
