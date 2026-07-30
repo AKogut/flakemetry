@@ -1,0 +1,50 @@
+name: Flakemetry PR Gate
+description: Fail a pull request on genuinely new test failures while tolerating known flakes on the base branch.
+branding:
+  icon: shield
+  color: yellow
+inputs:
+  token:
+    description: Flakemetry ingest token (store it as a repository secret).
+    required: true
+  endpoint:
+    description: Query API endpoint, e.g. https://flakemetry.example.com or http://localhost:4000.
+    required: true
+  base-branch:
+    description: Branch to compare against. Defaults to the pull request base ref.
+    required: false
+    default: ''
+  strictness:
+    description: 'off (never block), new (block new failures — default), or any (block any failing/flaky test).'
+    required: false
+    default: 'new'
+  fail-on-gate:
+    description: Fail the step when the gate blocks. Set false to run the gate in report-only mode.
+    required: false
+    default: 'true'
+  github-token:
+    description: GitHub token used to post the sticky comment and commit status. Needs pull-requests:write and statuses:write.
+    required: false
+    default: ${{ github.token }}
+  commit-sha:
+    description: Commit SHA to gate. Defaults to the PR head or the pushed commit.
+    required: false
+    default: ''
+  retries:
+    description: How many times to poll the API while the run is still being processed.
+    required: false
+    default: '10'
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: node "$GITHUB_ACTION_PATH/gate.mjs"
+      env:
+        FLAKEMETRY_TOKEN: ${{ inputs.token }}
+        FLAKEMETRY_ENDPOINT: ${{ inputs.endpoint }}
+        FLAKEMETRY_BASE_BRANCH: ${{ inputs.base-branch }}
+        FLAKEMETRY_STRICTNESS: ${{ inputs.strictness }}
+        FLAKEMETRY_FAIL_ON_GATE: ${{ inputs.fail-on-gate }}
+        FLAKEMETRY_COMMIT_SHA: ${{ inputs.commit-sha }}
+        FLAKEMETRY_RETRIES: ${{ inputs.retries }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}

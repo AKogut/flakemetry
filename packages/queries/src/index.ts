@@ -1,5 +1,6 @@
 export * from './artifacts'
 export * from './flaky'
+export * from './gate'
 export * from './policy'
 export * from './rca'
 export * from './runs'
