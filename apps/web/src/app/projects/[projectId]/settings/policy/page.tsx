@@ -14,6 +14,8 @@ const FIELD_LABELS: Record<string, string> = {
   quarantineEnabled: 'Auto-quarantine',
   quarantineCooldownRuns: 'Quarantine cooldown (runs)',
   aiRcaEnabled: 'AI root-cause analysis',
+  executionRetentionDays: 'Execution retention (days)',
+  artifactRetentionDays: 'Artifact retention (days)',
 }
 
 const formatDateTime = (date: Date): string =>
@@ -72,8 +74,14 @@ export default async function PolicyPage({
   const changes = await listPolicyChanges(prisma, projectId)
 
   const eff = effective
-  const numberValue = (key: 'flakyThreshold' | 'minSamples' | 'quarantineCooldownRuns'): string =>
-    stored[key] === undefined ? '' : String(stored[key])
+  const numberValue = (
+    key:
+      | 'flakyThreshold'
+      | 'minSamples'
+      | 'quarantineCooldownRuns'
+      | 'executionRetentionDays'
+      | 'artifactRetentionDays',
+  ): string => (stored[key] === undefined ? '' : String(stored[key]))
   const tristateValue = (key: 'quarantineEnabled' | 'aiRcaEnabled'): string =>
     stored[key] === undefined ? 'inherit' : stored[key] ? 'on' : 'off'
 
@@ -207,6 +215,49 @@ export default async function PolicyPage({
               <Effective value={eff.aiRcaEnabled.value} source={eff.aiRcaEnabled.source} />
               <PendingNote live={false} />
               <EnvNote source={eff.aiRcaEnabled.source} />
+            </div>
+
+            <div className="policy-field">
+              <div>
+                <label htmlFor="executionRetentionDays">
+                  {FIELD_LABELS.executionRetentionDays}
+                </label>
+                <input
+                  id="executionRetentionDays"
+                  name="executionRetentionDays"
+                  type="number"
+                  step="1"
+                  min="1"
+                  placeholder="inherits FLAKEMETRY_EXECUTION_RETENTION_DAYS"
+                  defaultValue={numberValue('executionRetentionDays')}
+                />
+              </div>
+              <p className="policy-help">
+                Days raw executions are kept for this project before the worker prunes them; rollups
+                persist. Blank inherits the global{' '}
+                <span className="mono">FLAKEMETRY_EXECUTION_RETENTION_DAYS</span> (unset = keep
+                everything).
+              </p>
+            </div>
+
+            <div className="policy-field">
+              <div>
+                <label htmlFor="artifactRetentionDays">{FIELD_LABELS.artifactRetentionDays}</label>
+                <input
+                  id="artifactRetentionDays"
+                  name="artifactRetentionDays"
+                  type="number"
+                  step="1"
+                  min="1"
+                  placeholder="inherits FLAKEMETRY_ARTIFACT_RETENTION_DAYS"
+                  defaultValue={numberValue('artifactRetentionDays')}
+                />
+              </div>
+              <p className="policy-help">
+                Days stored artifacts are kept for this project. Never expires before execution
+                retention. Blank inherits the global{' '}
+                <span className="mono">FLAKEMETRY_ARTIFACT_RETENTION_DAYS</span>.
+              </p>
             </div>
 
             {canEdit ? (

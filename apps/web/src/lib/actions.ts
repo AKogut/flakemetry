@@ -123,6 +123,8 @@ export const updateProjectPolicy = async (formData: FormData): Promise<void> => 
     quarantineEnabled: tristateField(formData, 'quarantineEnabled'),
     quarantineCooldownRuns: numberField(formData, 'quarantineCooldownRuns', true),
     aiRcaEnabled: tristateField(formData, 'aiRcaEnabled'),
+    executionRetentionDays: numberField(formData, 'executionRetentionDays', true),
+    artifactRetentionDays: numberField(formData, 'artifactRetentionDays', true),
   })
 
   const { changed } = await persistProjectPolicy(prisma, { projectId, userId: user.id, input })

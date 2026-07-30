@@ -7,12 +7,15 @@ export interface RollupContext {
 
 export const pruneRawExecutions = async (
   prisma: PrismaClient,
-  options: { olderThanDays: number; now?: Date },
+  options: { olderThanDays: number; projectId?: string; now?: Date },
 ): Promise<number> => {
   const now = options.now ?? new Date()
   const cutoff = new Date(now.getTime() - options.olderThanDays * 24 * 60 * 60 * 1000)
   const { count } = await prisma.testExecution.deleteMany({
-    where: { startedAt: { lt: cutoff } },
+    where: {
+      startedAt: { lt: cutoff },
+      ...(options.projectId ? { projectId: options.projectId } : {}),
+    },
   })
   return count
 }
