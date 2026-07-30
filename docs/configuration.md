@@ -74,6 +74,9 @@ Unknown keys are rejected with an error naming the offending path — typos fail
 | `FLAKEMETRY_BUFFER_DIR` | Directory to buffer runs to when delivery fails; replayed on the next run |
 | `FLAKEMETRY_SAMPLE_RATE` | Fraction (0–1) of **passing** runs to deliver; runs containing a failure or flake are always delivered |
 | `FLAKEMETRY_COMPRESSION` | `gzip` to compress OTLP export (the ingestion API decompresses gzip request bodies) |
+| `FLAKEMETRY_CODEOWNERS_FILE` | Explicit path to a CODEOWNERS file to sync; otherwise the reporter looks for `CODEOWNERS`, `.github/CODEOWNERS`, or `docs/CODEOWNERS` walking up from the test root |
+
+The reporter also syncs the repo's CODEOWNERS to the project on each run, so the flaky board and per-owner filters attribute each test to its owning team or user.
 
 ### Ingestion API service
 

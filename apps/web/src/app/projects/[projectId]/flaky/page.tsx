@@ -23,10 +23,10 @@ export default async function FlakyBoardPage({
   searchParams,
 }: {
   params: Promise<{ projectId: string }>
-  searchParams: Promise<{ filter?: string }>
+  searchParams: Promise<{ filter?: string; owner?: string }>
 }) {
   const { projectId } = await params
-  const { filter } = await searchParams
+  const { filter, owner } = await searchParams
   const user = await requireUser()
   await requireProjectAccess(user.id, projectId)
 
@@ -34,6 +34,7 @@ export default async function FlakyBoardPage({
     limit: BOARD_LIMIT,
     minScore: 0,
     includeQuarantined: true,
+    ...(owner ? { owner } : {}),
   })
 
   const items = board.items.filter((item) => {
@@ -66,6 +67,13 @@ export default async function FlakyBoardPage({
         {tab('rising', 'Getting worse')}
       </div>
 
+      {owner ? (
+        <p className="muted" style={{ marginTop: '0.6rem' }}>
+          Filtered to tests owned by <span className="mono">{owner}</span> ·{' '}
+          <a href={base}>clear</a>
+        </p>
+      ) : null}
+
       <div className="card">
         {items.length === 0 ? (
           <div className="empty">
@@ -79,6 +87,7 @@ export default async function FlakyBoardPage({
               <tr>
                 <th>Score</th>
                 <th>Test</th>
+                <th>Owner</th>
                 <th>Flip rate</th>
                 <th>Pass on rerun</th>
                 <th>Last flaked</th>
@@ -101,6 +110,22 @@ export default async function FlakyBoardPage({
                         {item.suite} · {item.filePath}
                       </div>
                     </a>
+                  </td>
+                  <td className="muted">
+                    {item.owners.length === 0 ? (
+                      <span className="muted">—</span>
+                    ) : (
+                      item.owners.map((ownerHandle) => (
+                        <a
+                          key={ownerHandle}
+                          href={`${base}?owner=${encodeURIComponent(ownerHandle)}`}
+                          className="mono"
+                          style={{ marginRight: '0.4rem' }}
+                        >
+                          {ownerHandle}
+                        </a>
+                      ))
+                    )}
                   </td>
                   <td className="muted">{percent(item.flipRate)}</td>
                   <td className="muted">{percent(item.passOnRerunRate)}</td>

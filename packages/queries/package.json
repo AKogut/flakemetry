@@ -32,6 +32,7 @@
   },
   "dependencies": {
     "@flakemetry/contracts": "workspace:*",
+    "@flakemetry/core": "workspace:*",
     "@flakemetry/db": "workspace:*"
   }
 }

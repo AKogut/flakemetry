@@ -91,6 +91,7 @@ export const flakyBoardItemSchema = z.object({
   lastFlakedAt: timestampSchema.nullable(),
   quarantineCandidate: z.boolean(),
   quarantined: z.boolean(),
+  owners: z.array(z.string()),
 })
 
 export const runsListInputSchema = z.object({
@@ -120,6 +121,7 @@ export const flakyBoardInputSchema = z.object({
   limit: z.number().int().min(1).max(100).default(20),
   minScore: z.number().min(0).max(1).default(0),
   includeQuarantined: z.boolean().default(true),
+  owner: z.string().min(1).optional(),
 })
 
 export const flakyBoardResultSchema = z.object({
