@@ -50,6 +50,7 @@ interface SignatureGroup {
   signatureId: string
   representative: FailureRecord
   testIdentityId: string | null
+  clusterId: string | null
   isNew: boolean
 }
 
@@ -100,13 +101,15 @@ export const processFailures = async (
           normalizedHash: signature.normalizedHash,
         },
       },
-      select: { id: true },
+      select: { id: true, clusterId: true },
     })
 
     let signatureId: string
+    let signatureClusterId: string | null = null
     let isNew = false
     if (existing) {
       signatureId = existing.id
+      signatureClusterId = existing.clusterId
       const alreadyCounted = execution?.errorSignatureId === signatureId
       await prisma.errorSignature.update({
         where: { id: signatureId },
@@ -118,6 +121,7 @@ export const processFailures = async (
     } else {
       const tokens = errorTokens(scrubbedMessage, signature.stackTemplate)
       const clusterId = await assignCluster(tokens)
+      signatureClusterId = clusterId
       const created = await prisma.errorSignature.create({
         data: {
           orgId: ctx.orgId,
@@ -148,6 +152,7 @@ export const processFailures = async (
         signatureId,
         representative: failure,
         testIdentityId: execution?.testIdentityId ?? null,
+        clusterId: signatureClusterId,
         isNew,
       })
   }
@@ -199,24 +204,47 @@ export const processFailures = async (
       continue
     }
 
-    const similarPast = group.testIdentityId
-      ? (
-          await prisma.rcaReport.findMany({
-            where: {
-              projectId: ctx.projectId,
-              signatureId: { not: group.signatureId },
-              execution: { testIdentityId: group.testIdentityId },
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 3,
-            select: { signatureId: true, summary: true, suggestedAction: true },
-          })
-        ).map((prior) => ({
-          signatureId: prior.signatureId,
-          summary: prior.summary,
-          resolution: prior.suggestedAction,
-        }))
+    const sameTest = group.testIdentityId
+      ? await prisma.rcaReport.findMany({
+          where: {
+            projectId: ctx.projectId,
+            signatureId: { not: group.signatureId },
+            execution: { testIdentityId: group.testIdentityId },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 3,
+          select: { signatureId: true, summary: true, suggestedAction: true },
+        })
       : []
+    const clusterSiblings = group.clusterId
+      ? await prisma.rcaReport.findMany({
+          where: {
+            projectId: ctx.projectId,
+            signatureId: { not: group.signatureId },
+            signature: { clusterId: group.clusterId },
+            ...(group.testIdentityId
+              ? { execution: { testIdentityId: { not: group.testIdentityId } } }
+              : {}),
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 3,
+          select: { signatureId: true, summary: true, suggestedAction: true },
+        })
+      : []
+
+    const seenSignatures = new Set<string>()
+    const similarPast = [...sameTest, ...clusterSiblings]
+      .filter((prior) => {
+        if (seenSignatures.has(prior.signatureId)) return false
+        seenSignatures.add(prior.signatureId)
+        return true
+      })
+      .slice(0, 4)
+      .map((prior) => ({
+        signatureId: prior.signatureId,
+        summary: prior.summary,
+        resolution: prior.suggestedAction,
+      }))
 
     await prisma.rcaReport.create({
       data: {

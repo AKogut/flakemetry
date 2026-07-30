@@ -396,6 +396,7 @@ model ErrorSignature {
   @@unique([projectId, normalizedHash])
   @@index([orgId])
   @@index([projectId, lastSeenAt(sort: Desc)])
+  @@index([projectId, clusterId])
   @@map("error_signature")
 }
 

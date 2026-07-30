@@ -1,6 +1,6 @@
 import { matchCodeowners, parseCodeowners } from '@flakemetry/core'
 import { getPrismaClient } from '@flakemetry/db'
-import { getRca, getTest } from '@flakemetry/queries'
+import { getClusterImpact, getRca, getTest } from '@flakemetry/queries'
 import { notFound } from 'next/navigation'
 
 import { RcaPanel } from '@/components/rca-panel'
@@ -57,6 +57,7 @@ export default async function TestDetailPage({
   const selected =
     failures.find((point) => point.executionId === selectedExecutionId) ?? failures[0] ?? null
   const rcaReport = selected ? await getRca(prisma, projectId, selected.executionId) : null
+  const cluster = selected ? await getClusterImpact(prisma, projectId, selected.executionId) : null
 
   const base = `/projects/${projectId}/tests/${testId}`
 
@@ -111,6 +112,37 @@ export default async function TestDetailPage({
       {selected ? (
         <div style={{ marginBottom: '1.25rem' }}>
           <RcaPanel report={rcaReport} errorMessage={selected.errorMessage} />
+        </div>
+      ) : null}
+
+      {cluster ? (
+        <div className="card" style={{ marginBottom: '1.25rem' }}>
+          <div className="row-between" style={{ marginBottom: '0.6rem' }}>
+            <strong>Related failures</strong>
+            <span className="muted" style={{ fontSize: '0.8rem' }}>
+              same error cluster · {cluster.occurrenceCount.toLocaleString()} occurrence
+              {cluster.occurrenceCount === 1 ? '' : 's'}
+            </span>
+          </div>
+          <p className="muted" style={{ marginBottom: '0.6rem' }}>
+            This failure clusters with {cluster.tests.length} other test
+            {cluster.tests.length === 1 ? '' : 's'} — likely one root cause, not{' '}
+            {cluster.tests.length === 1 ? 'an isolated' : 'many isolated'} bug
+            {cluster.tests.length === 1 ? '' : 's'}.
+          </p>
+          <ul className="reasons">
+            {cluster.tests.map((related) => (
+              <li key={related.testIdentityId}>
+                <a href={`/projects/${projectId}/tests/${related.testIdentityId}`}>
+                  {related.title}
+                </a>
+                <span className="mono muted" style={{ fontSize: '0.8rem' }}>
+                  {' '}
+                  · {related.suite} · {related.filePath}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 
