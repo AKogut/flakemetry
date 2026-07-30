@@ -25,6 +25,8 @@ export interface RunContext {
   trigger: RunTrigger
   ciRunId?: string | null
   prNumber?: number | null
+  shardIndex?: number | null
+  shardTotal?: number | null
 }
 
 export interface RecordedStep {
@@ -155,6 +157,8 @@ export class TestRunRecorder {
         branch: this.context.branch,
         prNumber: this.context.prNumber ?? undefined,
         trigger: this.context.trigger,
+        shardIndex: this.context.shardIndex ?? undefined,
+        shardTotal: this.context.shardTotal ?? undefined,
       },
       run: {
         status: this.runStatus,

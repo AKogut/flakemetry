@@ -137,6 +137,83 @@ describe.skipIf(!hasDb)('processJob', () => {
     expect(quarantine[0]?.quarantined).toBe(true)
   })
 
+  it('correlates parallel shards so a co-failing test is not scored as isolated', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    const shard = (
+      idempotencyKey: string,
+      shardIndex: number,
+      executions: IngestRunBatch['executions'],
+    ): IngestRunBatch => ({
+      contractVersion: '0.1.0',
+      idempotencyKey,
+      resource: {
+        ciProvider: 'github_actions',
+        ciRunId: '555',
+        commitSha: 'abc1234',
+        branch: 'main',
+        trigger: 'push',
+        shardIndex,
+        shardTotal: 2,
+      },
+      run: { status: 'failed', startedAt: new Date('2026-07-16T10:00:00Z') },
+      executions,
+    })
+
+    await processJob(
+      prisma,
+      shard('ci-555-1-shard2', 2, [
+        {
+          filePath: 'e2e/b.spec.ts',
+          suite: 's',
+          title: 'Y',
+          status: 'fail',
+          attempt: 1,
+          startedAt: new Date('2026-07-16T10:00:02Z'),
+          durationMs: 100,
+          error: { message: 'boom' },
+        },
+        {
+          filePath: 'e2e/c.spec.ts',
+          suite: 's',
+          title: 'Z',
+          status: 'fail',
+          attempt: 1,
+          startedAt: new Date('2026-07-16T10:00:03Z'),
+          durationMs: 100,
+          error: { message: 'boom' },
+        },
+      ]),
+      ctx,
+    )
+
+    await processJob(
+      prisma,
+      shard('ci-555-1-shard1', 1, [
+        {
+          filePath: 'e2e/a.spec.ts',
+          suite: 's',
+          title: 'X',
+          status: 'fail',
+          attempt: 1,
+          startedAt: new Date('2026-07-16T10:00:01Z'),
+          durationMs: 100,
+          error: { message: 'boom' },
+        },
+      ]),
+      ctx,
+    )
+
+    const x = await prisma.testIdentity.findFirstOrThrow({ where: { title: 'X' } })
+    const score = await prisma.flakyScore.findUniqueOrThrow({ where: { testIdentityId: x.id } })
+    expect(score.failIsolation).toBe(0)
+
+    const runs = await prisma.run.findMany({
+      where: { ciRunId: '555' },
+      select: { shardIndex: true },
+    })
+    expect(runs).toHaveLength(2)
+  })
+
   it('auto-quarantines a flaky candidate when the policy enables it', async () => {
     const ctx = {
       ...(await seedProject()),

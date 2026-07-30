@@ -37,6 +37,8 @@ export const RESOURCE_ATTR = {
   commitSha: 'vcs.commit_sha',
   branch: 'vcs.branch',
   prNumber: 'vcs.pr_number',
+  shardIndex: 'test.shard.index',
+  shardTotal: 'test.shard.total',
 } as const
 
 export const SPAN_ATTR = {
@@ -268,6 +270,10 @@ export const otlpToIngestBatch = (request: OtlpTraceRequest): IngestRunBatch => 
 
   const prNumberRaw =
     resourceAttrs.get(RESOURCE_ATTR.prNumber) ?? runAttrs.get(RESOURCE_ATTR.prNumber)
+  const shardIndexRaw =
+    resourceAttrs.get(RESOURCE_ATTR.shardIndex) ?? runAttrs.get(RESOURCE_ATTR.shardIndex)
+  const shardTotalRaw =
+    resourceAttrs.get(RESOURCE_ATTR.shardTotal) ?? runAttrs.get(RESOURCE_ATTR.shardTotal)
   const idempotencyKey = pick(RESOURCE_ATTR.idempotencyKey) ?? runSpan.traceId
   if (!idempotencyKey) throw new OtlpMappingError('missing idempotency key and trace id')
 
@@ -353,6 +359,8 @@ export const otlpToIngestBatch = (request: OtlpTraceRequest): IngestRunBatch => 
       trigger: trigger as RunTrigger,
       ...(pick(RESOURCE_ATTR.ciRunId) ? { ciRunId: pick(RESOURCE_ATTR.ciRunId) } : {}),
       ...(prNumberRaw !== undefined ? { prNumber: Number(prNumberRaw) } : {}),
+      ...(shardIndexRaw !== undefined ? { shardIndex: Number(shardIndexRaw) } : {}),
+      ...(shardTotalRaw !== undefined ? { shardTotal: Number(shardTotalRaw) } : {}),
     },
     run: {
       status: (runFailed ? 'failed' : 'passed') as RunStatus,

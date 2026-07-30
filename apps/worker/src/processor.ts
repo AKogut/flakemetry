@@ -71,6 +71,8 @@ export const processJob = async (
         prNumber: batch.resource.prNumber ?? null,
         ciProvider: batch.resource.ciProvider,
         ciRunId: batch.resource.ciRunId ?? null,
+        shardIndex: batch.resource.shardIndex ?? null,
+        shardTotal: batch.resource.shardTotal ?? null,
         trigger: batch.resource.trigger,
         status: batch.run.status,
         startedAt,
@@ -323,7 +325,7 @@ const scoreIdentity = async (
       attempt: true,
       startedAt: true,
       runId: true,
-      run: { select: { commitSha: true } },
+      run: { select: { commitSha: true, ciRunId: true } },
     },
     orderBy: { startedAt: 'desc' },
     take: SCORING_WINDOW,
@@ -342,14 +344,34 @@ const scoreIdentity = async (
   ])
 
   const runIds = [...new Set(executions.map((execution) => execution.runId))]
-  const failuresByRun = new Map<string, number>()
-  if (runIds.length > 0) {
+  const ciRunIds = [
+    ...new Set(
+      executions
+        .map((execution) => execution.run.ciRunId)
+        .filter((ciRunId): ciRunId is string => Boolean(ciRunId)),
+    ),
+  ]
+
+  const groupRuns = await prisma.run.findMany({
+    where: {
+      projectId: ctx.projectId,
+      OR: [{ id: { in: runIds } }, ...(ciRunIds.length > 0 ? [{ ciRunId: { in: ciRunIds } }] : [])],
+    },
+    select: { id: true, ciRunId: true },
+  })
+  const keyByRunId = new Map(groupRuns.map((run) => [run.id, run.ciRunId ?? run.id]))
+
+  const failuresByKey = new Map<string, number>()
+  if (groupRuns.length > 0) {
     const grouped = await prisma.testExecution.groupBy({
       by: ['runId'],
-      where: { runId: { in: runIds }, status: 'fail' },
+      where: { runId: { in: groupRuns.map((run) => run.id) }, status: 'fail' },
       _count: { _all: true },
     })
-    for (const row of grouped) failuresByRun.set(row.runId, row._count._all)
+    for (const row of grouped) {
+      const key = keyByRunId.get(row.runId) ?? row.runId
+      failuresByKey.set(key, (failuresByKey.get(key) ?? 0) + row._count._all)
+    }
   }
 
   const history: ExecutionPoint[] = executions.map((execution) => ({
@@ -357,7 +379,7 @@ const scoreIdentity = async (
     attempt: execution.attempt,
     startedAt: execution.startedAt,
     commitSha: execution.run.commitSha,
-    runFailureCount: failuresByRun.get(execution.runId) ?? 0,
+    runFailureCount: failuresByKey.get(keyByRunId.get(execution.runId) ?? execution.runId) ?? 0,
   }))
 
   const result = computeFlakyScore(history, {

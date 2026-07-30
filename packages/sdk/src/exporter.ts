@@ -39,6 +39,8 @@ export const exportRunOverOtlp = async (
     [RESOURCE_ATTR.idempotencyKey]: idempotencyKey,
     ...(context.ciRunId ? { [RESOURCE_ATTR.ciRunId]: context.ciRunId } : {}),
     ...(context.prNumber ? { [RESOURCE_ATTR.prNumber]: context.prNumber } : {}),
+    ...(context.shardIndex ? { [RESOURCE_ATTR.shardIndex]: context.shardIndex } : {}),
+    ...(context.shardTotal ? { [RESOURCE_ATTR.shardTotal]: context.shardTotal } : {}),
   })
 
   const collector = new InMemorySpanExporter()

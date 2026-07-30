@@ -74,6 +74,8 @@ export const emitRunSpans = (
       ...(options.idempotencyKey ? { [RESOURCE_ATTR.idempotencyKey]: options.idempotencyKey } : {}),
       ...(runContext.ciRunId ? { [RESOURCE_ATTR.ciRunId]: runContext.ciRunId } : {}),
       ...(runContext.prNumber ? { [RESOURCE_ATTR.prNumber]: runContext.prNumber } : {}),
+      ...(runContext.shardIndex ? { [RESOURCE_ATTR.shardIndex]: runContext.shardIndex } : {}),
+      ...(runContext.shardTotal ? { [RESOURCE_ATTR.shardTotal]: runContext.shardTotal } : {}),
     },
   })
 

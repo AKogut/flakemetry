@@ -18,6 +18,8 @@ export const ingestResourceSchema = z.object({
   branch: z.string().min(1),
   prNumber: z.number().int().positive().nullish(),
   trigger: runTriggerSchema,
+  shardIndex: z.number().int().min(1).nullish(),
+  shardTotal: z.number().int().min(1).nullish(),
 })
 
 export const ingestErrorSchema = z.object({

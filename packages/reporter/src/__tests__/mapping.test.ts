@@ -103,6 +103,24 @@ describe('resolveRunContext', () => {
     expect(context.project).toBe('acme/web')
   })
 
+  it('captures shard index and total when the run is sharded', () => {
+    const context = resolveRunContext(
+      { GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '9000001' },
+      {
+        current: 2,
+        total: 4,
+      },
+    )
+    expect(context.shardIndex).toBe(2)
+    expect(context.shardTotal).toBe(4)
+  })
+
+  it('ignores a single-shard run', () => {
+    const context = resolveRunContext({ GITHUB_ACTIONS: 'true' }, { current: 1, total: 1 })
+    expect(context.shardIndex).toBeNull()
+    expect(context.shardTotal).toBeNull()
+  })
+
   it('falls back to local defaults off CI', () => {
     const context = resolveRunContext({})
     expect(context.ciProvider).toBe('local')
@@ -134,6 +152,14 @@ describe('buildIdempotencyKey', () => {
 
   it('derives a stable key from the ci run and attempt', () => {
     expect(buildIdempotencyKey(base, { GITHUB_RUN_ATTEMPT: '2' })).toBe('github_actions-9000001-2')
+  })
+
+  it('gives each parallel shard a distinct key so they do not overwrite each other', () => {
+    const shardOne = buildIdempotencyKey({ ...base, shardIndex: 1, shardTotal: 3 }, {})
+    const shardTwo = buildIdempotencyKey({ ...base, shardIndex: 2, shardTotal: 3 }, {})
+    expect(shardOne).toBe('github_actions-9000001-1-shard1')
+    expect(shardTwo).toBe('github_actions-9000001-1-shard2')
+    expect(shardOne).not.toBe(shardTwo)
   })
 
   it('honors an explicit override', () => {
