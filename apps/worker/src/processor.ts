@@ -104,6 +104,7 @@ export const processJob = async (
     const fingerprints = [...new Set(prepared.map((item) => item.fingerprint))]
     const suites = [...new Set(prepared.map((item) => item.execution.suite))]
     const titles = [...new Set(prepared.map((item) => item.execution.title))]
+    const filePaths = [...new Set(prepared.map((item) => item.execution.filePath))]
 
     const identities =
       prepared.length === 0
@@ -115,6 +116,7 @@ export const processJob = async (
                 { fingerprint: { in: fingerprints } },
                 { aliases: { hasSome: fingerprints } },
                 { suite: { in: suites }, title: { in: titles } },
+                { filePath: { in: filePaths } },
               ],
             },
             select: {
@@ -124,6 +126,7 @@ export const processJob = async (
               title: true,
               paramsHash: true,
               aliases: true,
+              filePath: true,
             },
           })
     const existing: ExistingIdentity[] = identities.map((identity) => ({ ...identity }))
@@ -131,7 +134,13 @@ export const processJob = async (
     const createdIds: string[] = []
     for (const { execution, paramsHash, fingerprint } of prepared) {
       const resolution = resolveIdentity(
-        { fingerprint, suite: execution.suite, title: execution.title, paramsHash },
+        {
+          fingerprint,
+          suite: execution.suite,
+          title: execution.title,
+          paramsHash,
+          filePath: execution.filePath,
+        },
         existing,
       )
 
@@ -142,7 +151,7 @@ export const processJob = async (
           where: { id: identityId },
           data: { lastSeenAt: startedAt, filePath: execution.filePath },
         })
-      } else if (resolution.kind === 'moved') {
+      } else if (resolution.kind === 'moved' || resolution.kind === 'renamed') {
         identityId = resolution.identityId
         movedIdentities += 1
         await tx.testIdentity.update({
@@ -150,11 +159,15 @@ export const processJob = async (
           data: {
             aliases: { push: resolution.addAlias },
             filePath: execution.filePath,
+            ...(resolution.kind === 'renamed' ? { title: execution.title } : {}),
             lastSeenAt: startedAt,
           },
         })
         const entry = existing.find((item) => item.id === identityId)
-        if (entry) entry.aliases = [...entry.aliases, resolution.addAlias]
+        if (entry) {
+          entry.aliases = [...entry.aliases, resolution.addAlias]
+          if (resolution.kind === 'renamed') entry.title = execution.title
+        }
         movedEvents.push({
           testIdentityId: identityId,
           projectId: ctx.projectId,
@@ -185,6 +198,7 @@ export const processJob = async (
           title: execution.title,
           paramsHash,
           aliases: [],
+          filePath: execution.filePath,
         })
         createdEvents.push({ testIdentityId: identityId, projectId: ctx.projectId, fingerprint })
       }
