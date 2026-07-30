@@ -108,7 +108,10 @@ const GATE_COMMENT_MARKER = '<!-- flakemetry:pr-gate -->'
 
 const shortSha = (sha: string): string => sha.slice(0, 7)
 
-const escapeCell = (value: string): string => value.replace(/\|/g, '\\|').replace(/\n/g, ' ')
+const inlineCode = (value: string): string => `\`${value.replace(/[`\r\n]/g, '')}\``
+
+const escapeCell = (value: string): string =>
+  value.replace(/`/g, '').replace(/\|/g, '\\|').replace(/[\r\n]/g, ' ')
 
 export const renderGateComment = (gate: PrGate): string => {
   const verdict =
@@ -123,14 +126,14 @@ export const renderGateComment = (gate: PrGate): string => {
     '',
     '### Flakemetry — PR quality gate',
     '',
-    `\`${shortSha(gate.commitSha)}\` on \`${gate.branch}\` vs \`${gate.baseBranch}\` — ${verdict}`,
+    `${inlineCode(shortSha(gate.commitSha))} on ${inlineCode(gate.branch)} vs ${inlineCode(gate.baseBranch)} — ${verdict}`,
   ]
 
   if (gate.tests.length === 0) return lines.join('\n')
 
   lines.push('', '| Test | In this run | Verdict | On base |', '| --- | --- | --- | --- |')
   for (const test of gate.tests) {
-    const label = `\`${escapeCell(test.filePath)}\` › ${escapeCell(test.title)}`
+    const label = `${inlineCode(escapeCell(test.filePath))} › ${escapeCell(test.title)}`
     const state = test.status === 'fail' ? 'failed' : 'flaked'
     const flag = test.classification === 'new_failure' ? '🔴 new failure' : '🟡 known flake'
     const base =

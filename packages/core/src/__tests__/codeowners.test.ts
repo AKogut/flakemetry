@@ -50,3 +50,30 @@ describe('matchCodeowners', () => {
     expect(matchCodeowners([], 'anything.ts')).toEqual([])
   })
 })
+
+describe('parseCodeowners hardening', () => {
+  it('matches adversarial star runs in linear time', () => {
+    const rules = parseCodeowners(`${'*'.repeat(60)}x @org/default`)
+    const input = `${'a'.repeat(50_000)}!`
+    const start = performance.now()
+    const owners = matchCodeowners(rules, input)
+    expect(performance.now() - start).toBeLessThan(1_000)
+    expect(owners).toEqual([])
+  })
+
+  it('matches adversarial globstar runs in linear time', () => {
+    const rules = parseCodeowners(`${'**/'.repeat(40)}x @org/default`)
+    const input = `${'a/'.repeat(20_000)}b`
+    const start = performance.now()
+    const owners = matchCodeowners(rules, input)
+    expect(performance.now() - start).toBeLessThan(1_000)
+    expect(owners).toEqual([])
+  })
+
+  it('caps pattern length and rule count', () => {
+    const long = `${'a'.repeat(600)} @org/a`
+    expect(parseCodeowners(long)).toHaveLength(0)
+    const many = Array.from({ length: 2_500 }, (_, i) => `p${i}.ts @org/a`).join('\n')
+    expect(parseCodeowners(many)).toHaveLength(2_000)
+  })
+})

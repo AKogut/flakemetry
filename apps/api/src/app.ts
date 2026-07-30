@@ -276,8 +276,8 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     if (!query.commitSha || !/^[0-9a-f]{7,40}$/i.test(query.commitSha)) {
       return reply.code(400).send({ error: 'invalid_commit_sha' })
     }
-    if (!query.baseBranch) {
-      return reply.code(400).send({ error: 'missing_base_branch' })
+    if (!query.baseBranch || !/^[\w./-]{1,255}$/.test(query.baseBranch)) {
+      return reply.code(400).send({ error: 'invalid_base_branch' })
     }
     const strictnessValues: GateStrictness[] = ['off', 'new', 'any']
     const strictness = strictnessValues.includes(query.strictness as GateStrictness)

@@ -329,7 +329,7 @@ const scoreIdentity = async (
   ctx: ProcessContext,
 ): Promise<void> => {
   const recent = await prisma.testExecution.findMany({
-    where: { testIdentityId: identityId },
+    where: { projectId: ctx.projectId, testIdentityId: identityId },
     select: {
       status: true,
       attempt: true,
@@ -375,7 +375,11 @@ const scoreIdentity = async (
   if (groupRuns.length > 0) {
     const grouped = await prisma.testExecution.groupBy({
       by: ['runId'],
-      where: { runId: { in: groupRuns.map((run) => run.id) }, status: 'fail' },
+      where: {
+        projectId: ctx.projectId,
+        runId: { in: groupRuns.map((run) => run.id) },
+        status: 'fail',
+      },
       _count: { _all: true },
     })
     for (const row of grouped) {

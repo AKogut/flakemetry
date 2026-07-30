@@ -1,6 +1,7 @@
 import { formatDiscord } from './discord'
 import type { NotificationEvent, NotificationType } from './message'
 import { formatSlack } from './slack'
+import { assertSafeWebhookUrl, WEBHOOK_TIMEOUT_MS } from './webhook'
 
 export type ChannelKind = 'slack' | 'discord'
 
@@ -32,10 +33,12 @@ export interface Dispatcher {
 }
 
 const defaultSender: NotificationSender = async (url, payload) => {
+  assertSafeWebhookUrl(url)
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
   })
   return { ok: response.ok, status: response.status }
 }
