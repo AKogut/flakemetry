@@ -179,3 +179,45 @@ describe.skipIf(!hasDb)('api hardening', () => {
     expect(await prisma.ingestionJob.count()).toBe(1)
   })
 })
+
+describe('security headers', () => {
+  it('sets hardening headers on every response', async () => {
+    const app = buildApp({ prisma })
+    const res = await app.inject({ method: 'GET', url: '/health' })
+
+    expect(res.headers['x-content-type-options']).toBe('nosniff')
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['referrer-policy']).toBe('no-referrer')
+    expect(res.headers['cross-origin-resource-policy']).toBe('same-origin')
+    expect(res.headers['cache-control']).toBe('no-store')
+    await app.close()
+  })
+})
+
+describe('gzip decompression ceiling', () => {
+  const compressed = gzipSync(Buffer.from(JSON.stringify({ x: 'a'.repeat(5_000) })))
+
+  it('rejects a body that inflates past the ceiling before it reaches a handler', async () => {
+    const app = buildApp({ prisma, maxDecompressedBytes: 128 })
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/ingest',
+      headers: { 'content-encoding': 'gzip', 'content-type': 'application/json' },
+      payload: compressed,
+    })
+    expect(res.statusCode).toBe(400)
+    await app.close()
+  })
+
+  it('accepts the same body under a generous ceiling (reaching auth)', async () => {
+    const app = buildApp({ prisma })
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/ingest',
+      headers: { 'content-encoding': 'gzip', 'content-type': 'application/json' },
+      payload: compressed,
+    })
+    expect(res.statusCode).toBe(401)
+    await app.close()
+  })
+})

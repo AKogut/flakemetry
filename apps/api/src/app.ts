@@ -1,3 +1,4 @@
+import { Transform } from 'node:stream'
 import { createGunzip } from 'node:zlib'
 
 import {
@@ -36,6 +37,7 @@ export interface AppOptions {
   queue?: IngestionQueue
   store?: ObjectStore | null
   bodyLimitBytes?: number
+  maxDecompressedBytes?: number
   logger?: FastifyServerOptions['logger']
   maxQueueDepth?: number
   depthCacheMs?: number
@@ -73,11 +75,39 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     return cachedDepth
   }
 
+  const maxDecompressedBytes = options.maxDecompressedBytes ?? 16 * 1024 * 1024
+
+  app.addHook('onRequest', async (_request, reply) => {
+    reply.header('x-content-type-options', 'nosniff')
+    reply.header('x-frame-options', 'DENY')
+    reply.header('referrer-policy', 'no-referrer')
+    reply.header('cross-origin-resource-policy', 'same-origin')
+    reply.header('cache-control', 'no-store')
+    if (process.env.NODE_ENV === 'production') {
+      reply.header('strict-transport-security', 'max-age=63072000; includeSubDomains')
+    }
+  })
+
   app.addHook('preParsing', async (request, _reply, payload) => {
     if (request.headers['content-encoding'] !== 'gzip') return payload
     delete request.headers['content-encoding']
     delete request.headers['content-length']
-    return payload.pipe(createGunzip())
+    const gunzip = createGunzip()
+    let total = 0
+    const cap = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        total += chunk.length
+        if (total > maxDecompressedBytes) {
+          callback(new Error('decompressed body exceeds limit'))
+          return
+        }
+        callback(null, chunk)
+      },
+    })
+    payload.on('error', (error) => gunzip.destroy(error))
+    gunzip.on('error', (error) => cap.destroy(error))
+    payload.pipe(gunzip).pipe(cap)
+    return cap
   })
 
   app.addHook('onResponse', async (request, reply) => {
