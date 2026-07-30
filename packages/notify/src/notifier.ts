@@ -53,8 +53,15 @@ export const createDispatcher = (options: DispatcherOptions): Dispatcher => {
   const onError = options.onError ?? (() => undefined)
   const lastSentAt = new Map<string, number>()
 
+  const prune = (at: number): void => {
+    for (const [key, sentAt] of lastSentAt) {
+      if (at - sentAt >= window) lastSentAt.delete(key)
+    }
+  }
+
   return {
     async dispatch(event) {
+      prune(now())
       const dynamic = options.channelsFor ? await options.channelsFor(event) : []
       const targets = [...options.channels, ...dynamic].filter((channel) =>
         channel.types.includes(event.type),

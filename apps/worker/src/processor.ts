@@ -233,6 +233,7 @@ export const processJob = async (
     { orgId: ctx.orgId, projectId: ctx.projectId },
     [startedAt, ...batch.executions.map((execution) => execution.startedAt)],
     [...affected],
+    ctx.now,
   )
 
   if (ctx.events) {
@@ -371,10 +372,10 @@ const scoreIdentity = async (
   })
   const keyByRunId = new Map(groupRuns.map((run) => [run.id, run.ciRunId ?? run.id]))
 
-  const failuresByKey = new Map<string, number>()
+  const failingTestsByKey = new Map<string, Set<string>>()
   if (groupRuns.length > 0) {
     const grouped = await prisma.testExecution.groupBy({
-      by: ['runId'],
+      by: ['runId', 'testIdentityId'],
       where: {
         projectId: ctx.projectId,
         runId: { in: groupRuns.map((run) => run.id) },
@@ -384,7 +385,9 @@ const scoreIdentity = async (
     })
     for (const row of grouped) {
       const key = keyByRunId.get(row.runId) ?? row.runId
-      failuresByKey.set(key, (failuresByKey.get(key) ?? 0) + row._count._all)
+      const set = failingTestsByKey.get(key) ?? new Set<string>()
+      set.add(row.testIdentityId)
+      failingTestsByKey.set(key, set)
     }
   }
 
@@ -393,7 +396,8 @@ const scoreIdentity = async (
     attempt: execution.attempt,
     startedAt: execution.startedAt,
     commitSha: execution.run.commitSha,
-    runFailureCount: failuresByKey.get(keyByRunId.get(execution.runId) ?? execution.runId) ?? 0,
+    runFailureCount:
+      failingTestsByKey.get(keyByRunId.get(execution.runId) ?? execution.runId)?.size ?? 0,
   }))
 
   const result = computeFlakyScore(history, {
