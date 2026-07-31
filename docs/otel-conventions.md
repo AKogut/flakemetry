@@ -1,6 +1,6 @@
 # OpenTelemetry Test Conventions
 
-The canonical span and attribute model every reporter emits to. The machine-readable source of truth is [`packages/contracts/src/otel.ts`](../packages/contracts/src/otel.ts) (re-exported from `@flakemetry/sdk`); this document is the human-readable spec. Product rationale lives in [ADR-0002](adr/0002-otel-native-ingestion.md) and the [wiki](https://github.com/AKogut/flakemetry/wiki/OTel-Test-Conventions).
+The canonical span and attribute model every reporter emits to. The machine-readable source of truth is [`packages/contracts/src/otel.ts`](https://github.com/AKogut/flakemetry/blob/main/packages/contracts/src/otel.ts) (re-exported from `@flakemetry/sdk`); this document is the human-readable spec. Product rationale lives in [ADR-0002](https://github.com/AKogut/flakemetry/blob/main/docs/adr/0002-otel-native-ingestion.md) and the [wiki](https://github.com/AKogut/flakemetry/wiki/OTel-Test-Conventions).
 
 Conventions version: `0.1.0`.
 

@@ -1,6 +1,6 @@
 # Threat Model
 
-Security model for a self-hosted Flakemetry instance. Scope: the ingestion API, the dashboard, the processing worker, Postgres, and the object store. Companion to [Architecture](architecture.md) and [Configuration](configuration.md).
+Security model for a self-hosted Flakemetry instance. Scope: the ingestion API, the dashboard, the processing worker, Postgres, and the object store. Companion to [Architecture](https://github.com/AKogut/flakemetry/blob/main/docs/architecture.md) and [Configuration](https://github.com/AKogut/flakemetry/blob/main/docs/configuration.md).
 
 ## Assets
 

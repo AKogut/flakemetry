@@ -62,12 +62,12 @@ Dependency direction is strictly downward: apps depend on packages, packages dep
 
 | Decision | Record |
 |---|---|
-| Monorepo: pnpm workspaces + Turborepo, contracts as shared source of truth | [ADR-0001](adr/0001-monorepo-pnpm-turborepo.md) |
-| OTel-native ingestion, tests as traces | [ADR-0002](adr/0002-otel-native-ingestion.md) |
-| Explainable statistical flaky scoring, no black-box ML | [ADR-0003](adr/0003-explainable-flaky-scoring.md) |
-| Async ingestion: 202 + durable Postgres queue | [ADR-0004](adr/0004-async-ingestion-202-queue.md) |
+| Monorepo: pnpm workspaces + Turborepo, contracts as shared source of truth | [ADR-0001](https://github.com/AKogut/flakemetry/blob/main/docs/adr/0001-monorepo-pnpm-turborepo.md) |
+| OTel-native ingestion, tests as traces | [ADR-0002](https://github.com/AKogut/flakemetry/blob/main/docs/adr/0002-otel-native-ingestion.md) |
+| Explainable statistical flaky scoring, no black-box ML | [ADR-0003](https://github.com/AKogut/flakemetry/blob/main/docs/adr/0003-explainable-flaky-scoring.md) |
+| Async ingestion: 202 + durable Postgres queue | [ADR-0004](https://github.com/AKogut/flakemetry/blob/main/docs/adr/0004-async-ingestion-202-queue.md) |
 
-New load-bearing decisions require a new ADR from [the template](adr/template.md); superseded decisions are marked, never deleted.
+New load-bearing decisions require a new ADR from [the template](https://github.com/AKogut/flakemetry/blob/main/docs/adr/template.md); superseded decisions are marked, never deleted.
 
 ## Cross-cutting rules
 
