@@ -1,6 +1,12 @@
 import { matchCodeowners, parseCodeowners } from '@flakemetry/core'
 import { getPrismaClient } from '@flakemetry/db'
-import { findMergeCandidates, getClusterImpact, getRca, getTest } from '@flakemetry/queries'
+import {
+  findMergeCandidates,
+  getClusterImpact,
+  getParamBuckets,
+  getRca,
+  getTest,
+} from '@flakemetry/queries'
 import { notFound } from 'next/navigation'
 
 import { RcaPanel } from '@/components/rca-panel'
@@ -55,6 +61,7 @@ export default async function TestDetailPage({
     : []
 
   const mergeCandidates = canSplit ? await findMergeCandidates(prisma, projectId, testId) : []
+  const paramBuckets = await getParamBuckets(prisma, projectId, testId)
 
   const timeline = [...test.history].reverse()
   const failures = timeline.filter((point) => point.status === 'fail')
@@ -112,6 +119,75 @@ export default async function TestDetailPage({
         </div>
         <ReasonCodes codes={test.reasonCodes} />
       </div>
+
+      {paramBuckets ? (
+        <div className="card" style={{ marginBottom: '1.25rem' }}>
+          <div className="row-between" style={{ marginBottom: '0.6rem' }}>
+            <div className="rca-label">Parameterized variants</div>
+            <span className="muted" style={{ fontSize: '0.8rem' }}>
+              {paramBuckets.buckets.length} variants ·{' '}
+              {Math.round(paramBuckets.totals.passRate * 100)}% pass across{' '}
+              {paramBuckets.totals.total.toLocaleString()} executions
+            </span>
+          </div>
+          <p className="muted" style={{ fontSize: '0.8rem', marginBottom: '0.6rem' }}>
+            This test runs once per parameter set. Each variant keeps its own identity and score, so
+            one bad input never drags the others down — the roll-up below shows which one is
+            actually failing.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Parameters</th>
+                <th style={{ textAlign: 'right' }}>Score</th>
+                <th style={{ textAlign: 'right' }}>Executions</th>
+                <th style={{ textAlign: 'right' }}>Failed</th>
+                <th style={{ textAlign: 'right' }}>Flaky</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paramBuckets.buckets.map((bucket) => (
+                <tr key={bucket.id}>
+                  <td className="mono" style={{ fontSize: '0.74rem' }}>
+                    {bucket.id === testId ? (
+                      <strong>{bucket.label}</strong>
+                    ) : (
+                      <a href={`/projects/${projectId}/tests/${bucket.id}`}>{bucket.label}</a>
+                    )}
+                    {bucket.quarantined ? (
+                      <span className="pill pill-quarantined" style={{ marginLeft: '0.4rem' }}>
+                        quarantined
+                      </span>
+                    ) : null}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <ScoreBadge score={bucket.score} />
+                  </td>
+                  <td style={{ textAlign: 'right' }} className="muted">
+                    {bucket.total}
+                  </td>
+                  <td
+                    style={{
+                      textAlign: 'right',
+                      color: bucket.failed > 0 ? 'var(--fail)' : undefined,
+                    }}
+                  >
+                    {bucket.failed}
+                  </td>
+                  <td
+                    style={{
+                      textAlign: 'right',
+                      color: bucket.flaky > 0 ? 'var(--flaky)' : undefined,
+                    }}
+                  >
+                    {bucket.flaky}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
       {test.aliases.length > 0 || test.stitches.length > 0 || canSplit ? (
         <div className="card" style={{ marginBottom: '1.25rem' }}>

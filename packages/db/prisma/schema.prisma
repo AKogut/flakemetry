@@ -271,6 +271,7 @@ model TestIdentity {
   suite            String
   title            String
   paramsHash       String?   @map("params_hash")
+  params           Json?
   aliases          String[]
   quarantined      Boolean   @default(false)
   quarantineReason String?   @map("quarantine_reason")
@@ -288,6 +289,7 @@ model TestIdentity {
   @@index([orgId])
   @@index([projectId, lastSeenAt(sort: Desc)])
   @@index([projectId, suite, title])
+  @@index([projectId, suite, title, paramsHash])
   @@index([projectId, filePath])
   @@index([aliases], type: Gin)
   @@map("test_identity")

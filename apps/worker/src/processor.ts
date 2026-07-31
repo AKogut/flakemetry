@@ -148,7 +148,11 @@ export const processJob = async (
         identityId = resolution.identityId
         await tx.testIdentity.update({
           where: { id: identityId },
-          data: { lastSeenAt: startedAt, filePath: execution.filePath },
+          data: {
+            lastSeenAt: startedAt,
+            filePath: execution.filePath,
+            params: (execution.params ?? null) as Prisma.InputJsonValue,
+          },
         })
       } else if (resolution.kind === 'moved' || resolution.kind === 'renamed') {
         identityId = resolution.identityId
@@ -197,6 +201,7 @@ export const processJob = async (
             suite: execution.suite,
             title: execution.title,
             paramsHash,
+            params: (execution.params ?? null) as Prisma.InputJsonValue,
             firstSeenAt: startedAt,
             lastSeenAt: startedAt,
           },
