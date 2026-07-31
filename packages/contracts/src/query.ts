@@ -65,6 +65,17 @@ export const testHistoryPointSchema = z.object({
   hasRca: z.boolean(),
 })
 
+export const identityStitchSchema = z.object({
+  level: z.enum(['L2', 'L3']),
+  fromFingerprint: z.string(),
+  fromFilePath: z.string().nullable(),
+  fromTitle: z.string().nullable(),
+  toFilePath: z.string(),
+  toTitle: z.string(),
+  confidence: z.number().min(0).max(1).nullable(),
+  createdAt: timestampSchema,
+})
+
 export const testDetailSchema = z.object({
   id: idSchema,
   fingerprint: z.string(),
@@ -74,6 +85,8 @@ export const testDetailSchema = z.object({
   quarantined: z.boolean(),
   score: z.number().min(0).max(1).nullable(),
   reasonCodes: z.array(reasonCodeSchema),
+  aliases: z.array(z.string()),
+  stitches: z.array(identityStitchSchema),
   history: z.array(testHistoryPointSchema),
 })
 
@@ -200,6 +213,7 @@ export type RunListItem = z.infer<typeof runListItemSchema>
 export type ExecutionListItem = z.infer<typeof executionListItemSchema>
 export type RunDetail = z.infer<typeof runDetailSchema>
 export type TestHistoryPoint = z.infer<typeof testHistoryPointSchema>
+export type IdentityStitch = z.infer<typeof identityStitchSchema>
 export type TestDetail = z.infer<typeof testDetailSchema>
 export type FlakyTrend = z.infer<typeof flakyTrendSchema>
 export type FlakyBoardItem = z.infer<typeof flakyBoardItemSchema>

@@ -154,6 +154,7 @@ export const processJob = async (
       } else if (resolution.kind === 'moved' || resolution.kind === 'renamed') {
         identityId = resolution.identityId
         movedIdentities += 1
+        const entry = existing.find((item) => item.id === identityId)
         await tx.testIdentity.update({
           where: { id: identityId },
           data: {
@@ -163,7 +164,19 @@ export const processJob = async (
             lastSeenAt: startedAt,
           },
         })
-        const entry = existing.find((item) => item.id === identityId)
+        await tx.identityStitch.create({
+          data: {
+            ...tenant,
+            testIdentityId: identityId,
+            level: resolution.level,
+            fromFingerprint: resolution.addAlias,
+            fromFilePath: entry?.filePath ?? null,
+            fromTitle: entry?.title ?? null,
+            toFilePath: execution.filePath,
+            toTitle: execution.title,
+            confidence: resolution.kind === 'renamed' ? resolution.confidence : null,
+          },
+        })
         if (entry) {
           entry.aliases = [...entry.aliases, resolution.addAlias]
           if (resolution.kind === 'renamed') entry.title = execution.title

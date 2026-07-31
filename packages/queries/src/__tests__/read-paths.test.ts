@@ -249,6 +249,8 @@ describe.skipIf(!hasDb)('queries read paths', () => {
     expect(detail?.score).toBeCloseTo(0.82)
     expect(detail?.reasonCodes.length).toBeGreaterThan(0)
     expect(detail?.history[0]?.executionId).toBe(s.flakyExecutionId)
+    expect(detail?.aliases).toEqual([])
+    expect(detail?.stitches).toEqual([])
   })
 
   it('getRunSummaryByCommit rolls up failed and flaky tests', async () => {

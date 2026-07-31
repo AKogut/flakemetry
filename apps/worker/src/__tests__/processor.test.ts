@@ -333,5 +333,50 @@ describe.skipIf(!hasDb)('processJob', () => {
       where: { testIdentityId: identity.id },
     })
     expect(executions).toBe(3)
+
+    const stitch = await prisma.identityStitch.findFirstOrThrow({
+      where: { testIdentityId: identity.id },
+    })
+    expect(stitch.level).toBe('L2')
+    expect(stitch.fromFilePath).toBe('e2e/login.spec.ts')
+    expect(stitch.toFilePath).toBe('e2e/auth/login.spec.ts')
+    expect(stitch.confidence).toBeNull()
+    expect(stitch.fromFingerprint).toBe(identity.aliases[0])
+  })
+
+  it('records an L3 rename stitch with a confidence score', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(prisma, batch(), ctx)
+
+    const renamed = batch({
+      idempotencyKey: 'run-000003',
+      executions: [
+        {
+          filePath: 'e2e/login.spec.ts',
+          suite: 'auth',
+          title: 'logs in successfully',
+          status: 'pass',
+          attempt: 1,
+          startedAt: new Date('2026-07-16T11:30:00Z'),
+          durationMs: 1500,
+        },
+      ],
+    })
+    const result = await processJob(prisma, renamed, ctx)
+
+    expect(result.movedIdentities).toBe(1)
+    expect(await prisma.testIdentity.count()).toBe(1)
+
+    const identity = await prisma.testIdentity.findFirstOrThrow()
+    expect(identity.title).toBe('logs in successfully')
+
+    const stitch = await prisma.identityStitch.findFirstOrThrow({
+      where: { testIdentityId: identity.id },
+    })
+    expect(stitch.level).toBe('L3')
+    expect(stitch.fromTitle).toBe('logs in')
+    expect(stitch.toTitle).toBe('logs in successfully')
+    expect(stitch.confidence).not.toBeNull()
+    expect(stitch.confidence!).toBeGreaterThan(0.5)
   })
 })
