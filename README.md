@@ -128,6 +128,14 @@ export default defineConfig({
 })
 ```
 
+Jest too — add it to `reporters` in your Jest config:
+
+```js
+export default {
+  reporters: ['default', '@flakemetry/jest-reporter'],
+}
+```
+
 Wire it into CI. Let the test step write the results file, then upload it — the upload
 step runs even when tests fail and never blocks the build:
 
