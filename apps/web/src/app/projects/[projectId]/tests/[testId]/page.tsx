@@ -109,6 +109,61 @@ export default async function TestDetailPage({
         <ReasonCodes codes={test.reasonCodes} />
       </div>
 
+      {test.aliases.length > 0 || test.stitches.length > 0 ? (
+        <div className="card" style={{ marginBottom: '1.25rem' }}>
+          <div className="rca-label" style={{ marginBottom: '0.6rem' }}>
+            Identity &amp; stitch history
+          </div>
+          <p className="muted" style={{ fontSize: '0.8rem', marginBottom: '0.6rem' }}>
+            This identity keeps its history across {test.aliases.length} prior fingerprint
+            {test.aliases.length === 1 ? '' : 's'}. Each stitch links a moved or renamed test so its
+            flaky score does not reset — a low-confidence rename is worth auditing.
+          </p>
+          {test.stitches.length === 0 ? (
+            <div className="muted">Merged by a file move; no rename stitches recorded.</div>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Kind</th>
+                  <th>Change</th>
+                  <th style={{ textAlign: 'right' }}>Confidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {test.stitches.map((stitch, index) => (
+                  <tr key={index}>
+                    <td className="muted">{formatWhen(stitch.createdAt)}</td>
+                    <td>
+                      <span className={stitch.level === 'L3' ? 'pill pill-candidate' : 'pill'}>
+                        {stitch.level === 'L3' ? 'renamed' : 'moved'}
+                      </span>
+                    </td>
+                    <td className="mono" style={{ fontSize: '0.74rem' }}>
+                      {stitch.level === 'L3' && stitch.fromTitle
+                        ? `${stitch.fromTitle} → ${stitch.toTitle}`
+                        : `${stitch.fromFilePath ?? '—'} → ${stitch.toFilePath}`}
+                    </td>
+                    <td
+                      style={{
+                        textAlign: 'right',
+                        color:
+                          stitch.confidence !== null && stitch.confidence < 0.7
+                            ? 'var(--flaky)'
+                            : undefined,
+                      }}
+                    >
+                      {stitch.confidence !== null ? `${Math.round(stitch.confidence * 100)}%` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ) : null}
+
       {selected ? (
         <div style={{ marginBottom: '1.25rem' }}>
           <RcaPanel report={rcaReport} errorMessage={selected.errorMessage} />

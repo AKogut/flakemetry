@@ -153,6 +153,7 @@ model Project {
   flakyTrends     FlakyTrends[]
   notificationChannels NotificationChannel[]
   healthEvents    TestHealthEvent[]
+  identityStitches IdentityStitch[]
 
   @@unique([orgId, slug])
   @@index([orgId])
@@ -279,6 +280,7 @@ model TestIdentity {
   flakyScore   FlakyScore?
   dailyStats   DailyTestStats[]
   healthEvents TestHealthEvent[]
+  stitches     IdentityStitch[]
 
   @@unique([projectId, fingerprint])
   @@index([orgId])
@@ -501,4 +503,27 @@ model TestHealthEvent {
   @@index([testIdentityId, createdAt])
   @@index([orgId])
   @@map("test_health_event")
+}
+
+model IdentityStitch {
+  id              String   @id @default(uuid()) @db.Uuid
+  orgId           String   @map("org_id") @db.Uuid
+  projectId       String   @map("project_id") @db.Uuid
+  testIdentityId  String   @map("test_identity_id") @db.Uuid
+  level           String
+  fromFingerprint String   @map("from_fingerprint")
+  fromFilePath    String?  @map("from_file_path")
+  fromTitle       String?  @map("from_title")
+  toFilePath      String   @map("to_file_path")
+  toTitle         String   @map("to_title")
+  confidence      Float?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  identity TestIdentity @relation(fields: [testIdentityId], references: [id], onDelete: Cascade)
+
+  @@index([testIdentityId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([orgId])
+  @@map("identity_stitch")
 }

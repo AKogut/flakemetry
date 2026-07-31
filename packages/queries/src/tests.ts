@@ -16,7 +16,22 @@ export const getTest = async (
       suite: true,
       title: true,
       quarantined: true,
+      aliases: true,
       flakyScore: { select: { score: true, reasonCodes: true } },
+      stitches: {
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: {
+          level: true,
+          fromFingerprint: true,
+          fromFilePath: true,
+          fromTitle: true,
+          toFilePath: true,
+          toTitle: true,
+          confidence: true,
+          createdAt: true,
+        },
+      },
     },
   })
   if (!identity) return null
@@ -48,6 +63,11 @@ export const getTest = async (
     quarantined: identity.quarantined,
     score: identity.flakyScore?.score ?? null,
     reasonCodes,
+    aliases: identity.aliases,
+    stitches: identity.stitches.map((stitch) => ({
+      ...stitch,
+      level: stitch.level === 'L2' ? ('L2' as const) : ('L3' as const),
+    })),
     history: executions
       .map((execution) => ({
         executionId: execution.id,
