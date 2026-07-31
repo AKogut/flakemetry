@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "flakemetry.fullname" . }}-web
+  labels:
+    {{- include "flakemetry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  {{- if not .Values.web.autoscaling.enabled }}
+  replicas: {{ .Values.web.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "flakemetry.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      labels:
+        {{- include "flakemetry.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: web
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "flakemetry.serviceAccountName" . }}
+      {{- with .Values.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: web
+          image: {{ include "flakemetry.image" (dict "root" $ "name" .Values.web.image.name "tag" .Values.web.image.tag) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.web.port }}
+          env:
+            - name: PORT
+              value: {{ .Values.web.port | quote }}
+            - name: HOSTNAME
+              value: '0.0.0.0'
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flakemetry.secretName" . }}
+                  key: database-url
+            - name: AUTH_URL
+              value: {{ .Values.auth.url | quote }}
+            - name: AUTH_TRUST_HOST
+              value: {{ .Values.auth.trustHost | quote }}
+            - name: AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flakemetry.secretName" . }}
+                  key: auth-secret
+            - name: AUTH_GITHUB_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flakemetry.secretName" . }}
+                  key: auth-github-id
+            - name: AUTH_GITHUB_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flakemetry.secretName" . }}
+                  key: auth-github-secret
+            - name: FLAKEMETRY_S3_BUCKET
+              value: {{ .Values.storage.bucket | quote }}
+            - name: FLAKEMETRY_S3_ENDPOINT
+              value: {{ .Values.storage.publicEndpoint | default .Values.storage.endpoint | quote }}
+            - name: FLAKEMETRY_S3_REGION
+              value: {{ .Values.storage.region | quote }}
+            - name: FLAKEMETRY_S3_FORCE_PATH_STYLE
+              value: {{ .Values.storage.forcePathStyle | quote }}
+            - name: FLAKEMETRY_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flakemetry.secretName" . }}
+                  key: s3-access-key-id
+            - name: FLAKEMETRY_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flakemetry.secretName" . }}
+                  key: s3-secret-access-key
+            {{- if .Values.ai.enabled }}
+            - name: FLAKEMETRY_AI_RCA
+              value: 'true'
+            {{- end }}
+            {{- with .Values.web.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}

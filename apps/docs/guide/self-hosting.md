@@ -53,6 +53,12 @@ hardening story.
 
 ## Production deployment
 
-The compose stack is aimed at local and small self-hosted use. Helm charts and Terraform
-modules for a horizontally scaled hosted environment are tracked on the
-[roadmap board](https://github.com/users/AKogut/projects/14).
+The compose stack is aimed at local and small self-hosted use. For a horizontally scaled
+hosted environment there is a **Helm chart** in
+[`deploy/helm/flakemetry`](https://github.com/AKogut/flakemetry/tree/main/deploy/helm/flakemetry):
+stateless `api`/`worker`/`web` with HorizontalPodAutoscalers, a pre-install migration hook,
+and ingress — running against a managed Postgres and object store. The
+[deploy guide](https://github.com/AKogut/flakemetry/blob/main/deploy/README.md) walks the
+path from zero to a running environment, and the
+[runbook](https://github.com/AKogut/flakemetry/blob/main/deploy/RUNBOOK.md) covers SLOs,
+scaling, and upgrades.

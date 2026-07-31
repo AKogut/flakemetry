@@ -1,0 +1,16 @@
+apiVersion: v2
+name: flakemetry
+description: OpenTelemetry-native test intelligence — ingestion API, processing worker, and dashboard
+type: application
+version: 0.1.0
+appVersion: '0.1.0'
+home: https://akogut.github.io/flakemetry/
+sources:
+  - https://github.com/AKogut/flakemetry
+maintainers:
+  - name: Andrii Kohut
+keywords:
+  - testing
+  - observability
+  - opentelemetry
+  - flaky-tests

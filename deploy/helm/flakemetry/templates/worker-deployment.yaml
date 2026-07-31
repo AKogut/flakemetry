@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "flakemetry.fullname" . }}-worker
+  labels:
+    {{- include "flakemetry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  {{- if not .Values.worker.autoscaling.enabled }}
+  replicas: {{ .Values.worker.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "flakemetry.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "flakemetry.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "flakemetry.serviceAccountName" . }}
+      {{- with .Values.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: worker
+          image: {{ include "flakemetry.image" (dict "root" $ "name" .Values.worker.image.name "tag" .Values.worker.image.tag) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: POLL_INTERVAL_MS
+              value: {{ .Values.worker.pollIntervalMs | quote }}
+            - name: FLAKEMETRY_ARTIFACT_RETENTION_DAYS
+              value: {{ .Values.worker.retention.artifactDays | quote }}
+            - name: FLAKEMETRY_EXECUTION_RETENTION_DAYS
+              value: {{ .Values.worker.retention.executionDays | quote }}
+            {{- include "flakemetry.commonEnv" . | nindent 12 }}
+            {{- if .Values.ai.enabled }}
+            - name: FLAKEMETRY_AI_RCA
+              value: 'true'
+            - name: FLAKEMETRY_AI_PROVIDER
+              value: {{ .Values.ai.provider | quote }}
+            - name: FLAKEMETRY_AI_MODEL
+              value: {{ .Values.ai.model | quote }}
+            - name: FLAKEMETRY_AI_ENDPOINT
+              value: {{ .Values.ai.endpoint | quote }}
+            - name: FLAKEMETRY_AI_DAILY_TOKEN_BUDGET
+              value: {{ .Values.ai.dailyTokenBudget | quote }}
+            - name: FLAKEMETRY_AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flakemetry.secretName" . }}
+                  key: ai-api-key
+            {{- end }}
+            {{- with .Values.worker.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
