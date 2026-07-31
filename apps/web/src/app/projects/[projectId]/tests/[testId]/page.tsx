@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation'
 import { RcaPanel } from '@/components/rca-panel'
 import { ReasonCodes, ScoreBadge } from '@/components/score'
 import { Sparkline } from '@/components/sparkline'
+import { splitTestIdentity } from '@/lib/actions'
 import { requireUser } from '@/lib/session'
 import { requireProjectAccess } from '@/lib/tenant'
 
@@ -34,12 +35,13 @@ export default async function TestDetailPage({
   searchParams,
 }: {
   params: Promise<{ projectId: string; testId: string }>
-  searchParams: Promise<{ execution?: string }>
+  searchParams: Promise<{ execution?: string; split?: string }>
 }) {
   const { projectId, testId } = await params
-  const { execution: selectedExecutionId } = await searchParams
+  const { execution: selectedExecutionId, split: splitError } = await searchParams
   const user = await requireUser()
-  await requireProjectAccess(user.id, projectId)
+  const access = await requireProjectAccess(user.id, projectId)
+  const canSplit = access.role === 'owner' || access.role === 'admin'
 
   const test = await getTest(prisma, projectId, testId, HISTORY_LIMIT)
   if (!test) notFound()
@@ -118,7 +120,13 @@ export default async function TestDetailPage({
             This identity keeps its history across {test.aliases.length} prior fingerprint
             {test.aliases.length === 1 ? '' : 's'}. Each stitch links a moved or renamed test so its
             flaky score does not reset — a low-confidence rename is worth auditing.
+            {canSplit ? ' Split an over-eager stitch to give it back its own identity.' : ''}
           </p>
+          {splitError ? (
+            <p style={{ color: 'var(--fail)', fontSize: '0.8rem', marginBottom: '0.6rem' }}>
+              Could not split: {splitError}
+            </p>
+          ) : null}
           {test.stitches.length === 0 ? (
             <div className="muted">Merged by a file move; no rename stitches recorded.</div>
           ) : (
@@ -129,6 +137,7 @@ export default async function TestDetailPage({
                   <th>Kind</th>
                   <th>Change</th>
                   <th style={{ textAlign: 'right' }}>Confidence</th>
+                  {canSplit ? <th style={{ textAlign: 'right' }}>Action</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -156,6 +165,28 @@ export default async function TestDetailPage({
                     >
                       {stitch.confidence !== null ? `${Math.round(stitch.confidence * 100)}%` : '—'}
                     </td>
+                    {canSplit ? (
+                      <td style={{ textAlign: 'right' }}>
+                        {index === 0 ? (
+                          <form action={splitTestIdentity}>
+                            <input type="hidden" name="projectId" value={projectId} />
+                            <input type="hidden" name="testId" value={testId} />
+                            <input
+                              type="hidden"
+                              name="fingerprint"
+                              value={stitch.fromFingerprint}
+                            />
+                            <button type="submit" className="btn btn-ghost">
+                              split
+                            </button>
+                          </form>
+                        ) : (
+                          <span className="muted" style={{ fontSize: '0.74rem' }}>
+                            split newer first
+                          </span>
+                        )}
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>

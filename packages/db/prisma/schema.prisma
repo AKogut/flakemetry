@@ -63,10 +63,11 @@ model User {
   image         String?
   createdAt     DateTime  @default(now()) @map("created_at")
 
-  accounts       Account[]
-  sessions       Session[]
-  memberships    Membership[]
-  policyChanges  PolicyChange[]
+  accounts         Account[]
+  sessions         Session[]
+  memberships      Membership[]
+  policyChanges    PolicyChange[]
+  identityChanges  IdentityChange[]
 
   @@map("user")
 }
@@ -154,6 +155,7 @@ model Project {
   notificationChannels NotificationChannel[]
   healthEvents    TestHealthEvent[]
   identityStitches IdentityStitch[]
+  identityChanges IdentityChange[]
 
   @@unique([orgId, slug])
   @@index([orgId])
@@ -514,10 +516,11 @@ model IdentityStitch {
   fromFingerprint String   @map("from_fingerprint")
   fromFilePath    String?  @map("from_file_path")
   fromTitle       String?  @map("from_title")
-  toFilePath      String   @map("to_file_path")
-  toTitle         String   @map("to_title")
+  toFilePath      String    @map("to_file_path")
+  toTitle         String    @map("to_title")
   confidence      Float?
-  createdAt       DateTime @default(now()) @map("created_at")
+  runStartedAt    DateTime? @map("run_started_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
   project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   identity TestIdentity @relation(fields: [testIdentityId], references: [id], onDelete: Cascade)
@@ -526,4 +529,24 @@ model IdentityStitch {
   @@index([projectId, createdAt])
   @@index([orgId])
   @@map("identity_stitch")
+}
+
+model IdentityChange {
+  id               String   @id @default(uuid()) @db.Uuid
+  orgId            String   @map("org_id") @db.Uuid
+  projectId        String   @map("project_id") @db.Uuid
+  userId           String?  @map("user_id") @db.Uuid
+  action           String
+  sourceIdentityId String   @map("source_identity_id") @db.Uuid
+  targetIdentityId String?  @map("target_identity_id") @db.Uuid
+  fingerprint      String
+  detail           String?
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([orgId])
+  @@map("identity_change")
 }

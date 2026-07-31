@@ -3,7 +3,7 @@
 import { projectPolicyInputSchema } from '@flakemetry/contracts'
 import { generateToken, getPrismaClient, hashToken } from '@flakemetry/db'
 import { isEmailAddress, isSafeWebhookUrl } from '@flakemetry/notify'
-import { updateProjectPolicy as persistProjectPolicy } from '@flakemetry/queries'
+import { splitIdentity, updateProjectPolicy as persistProjectPolicy } from '@flakemetry/queries'
 import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -155,6 +155,28 @@ export const deleteNotificationChannel = async (formData: FormData): Promise<voi
     where: { id: channelId, projectId, source: 'dashboard' },
   })
   revalidatePath(`/projects/${projectId}/settings/notifications`)
+}
+
+export const splitTestIdentity = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const testId = String(formData.get('testId') ?? '')
+  const fingerprint = String(formData.get('fingerprint') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.role)) throw new Error('only owners and admins can split a test identity')
+
+  const outcome = await splitIdentity(prisma, {
+    orgId: project.orgId,
+    projectId,
+    sourceIdentityId: testId,
+    fingerprint,
+    userId: user.id,
+  })
+
+  revalidatePath(`/projects/${projectId}/tests/${testId}`)
+  if (outcome.status === 'rejected')
+    redirect(`/projects/${projectId}/tests/${testId}?split=${encodeURIComponent(outcome.reason)}`)
+  redirect(`/projects/${projectId}/tests/${outcome.targetIdentityId}`)
 }
 
 export const updateProjectPolicy = async (formData: FormData): Promise<void> => {
