@@ -134,6 +134,52 @@ export const rcaGetInputSchema = z.object({
 
 export const rcaGetResultSchema = rcaReportSchema.nullable()
 
+export const healthEventKindSchema = z.enum([
+  'flaked',
+  'stabilized',
+  'quarantined',
+  'unquarantined',
+])
+
+export const testHealthInputSchema = z.object({
+  days: z.number().int().min(1).max(365).default(90),
+})
+
+export const mttrSummarySchema = z.object({
+  resolvedCount: z.number().int().nonnegative(),
+  openCount: z.number().int().nonnegative(),
+  meanMs: z.number().nonnegative().nullable(),
+  medianMs: z.number().nonnegative().nullable(),
+})
+
+export const healthWeeklyPointSchema = z.object({
+  weekStart: timestampSchema,
+  introduced: z.number().int().nonnegative(),
+  resolved: z.number().int().nonnegative(),
+})
+
+export const quarantineTrendPointSchema = z.object({
+  day: timestampSchema,
+  count: z.number().int().nonnegative(),
+})
+
+export const reliabilityPointSchema = z.object({
+  day: timestampSchema,
+  passRate: z.number().min(0).max(1),
+  total: z.number().int().nonnegative(),
+})
+
+export const testHealthResultSchema = z.object({
+  rangeDays: z.number().int().positive(),
+  mttr: mttrSummarySchema,
+  weekly: z.array(healthWeeklyPointSchema),
+  quarantine: z.object({
+    currentBacklog: z.number().int().nonnegative(),
+    trend: z.array(quarantineTrendPointSchema),
+  }),
+  reliabilityTrend: z.array(reliabilityPointSchema),
+})
+
 export type RunsListInput = z.infer<typeof runsListInputSchema>
 export type RunsListResult = z.infer<typeof runsListResultSchema>
 export type RunGetInput = z.infer<typeof runGetInputSchema>
@@ -142,6 +188,13 @@ export type FlakyBoardInput = z.infer<typeof flakyBoardInputSchema>
 export type FlakyBoardResult = z.infer<typeof flakyBoardResultSchema>
 export type RcaGetInput = z.infer<typeof rcaGetInputSchema>
 export type RcaGetResult = z.infer<typeof rcaGetResultSchema>
+export type HealthEventKind = z.infer<typeof healthEventKindSchema>
+export type TestHealthInput = z.infer<typeof testHealthInputSchema>
+export type MttrSummary = z.infer<typeof mttrSummarySchema>
+export type HealthWeeklyPoint = z.infer<typeof healthWeeklyPointSchema>
+export type QuarantineTrendPoint = z.infer<typeof quarantineTrendPointSchema>
+export type ReliabilityPoint = z.infer<typeof reliabilityPointSchema>
+export type TestHealthResult = z.infer<typeof testHealthResultSchema>
 export type RunCounts = z.infer<typeof runCountsSchema>
 export type RunListItem = z.infer<typeof runListItemSchema>
 export type ExecutionListItem = z.infer<typeof executionListItemSchema>
