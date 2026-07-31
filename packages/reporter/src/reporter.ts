@@ -1,12 +1,12 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, relative } from 'node:path'
+import { relative } from 'node:path'
 
-import type { ArtifactRef, IngestRunBatch } from '@flakemetry/contracts'
+import type { ArtifactRef } from '@flakemetry/contracts'
 import {
-  exportRunOverOtlp,
-  IngestClient,
+  buildIdempotencyKey,
+  deliverRun,
+  type FlakemetryDeliveryOptions,
+  resolveRunContext,
   type RunContext,
-  shouldDeliverRun,
   TestRunRecorder,
 } from '@flakemetry/sdk'
 import type {
@@ -21,25 +21,15 @@ import type {
 import { uploadArtifacts } from './artifacts'
 import { findCodeowners, uploadCodeowners } from './codeowners'
 import {
-  buildIdempotencyKey,
   deriveSuite,
   mapSteps,
   type PlaywrightStatus,
-  resolveRunContext,
   statusFromResult,
   type SuiteNode,
 } from './mapping'
 import { findNotificationRouting, uploadNotificationRouting } from './notifications'
 
-export interface FlakemetryReporterOptions {
-  endpoint?: string
-  token?: string
-  outputFile?: string
-  transport?: 'otlp' | 'json'
-  bufferDir?: string | null
-  sampleRate?: number
-  rng?: () => number
-}
+export type FlakemetryReporterOptions = FlakemetryDeliveryOptions
 
 const collectAncestors = (test: TestCase): SuiteNode[] => {
   const ancestors: SuiteNode[] = []
@@ -122,9 +112,7 @@ export default class FlakemetryReporter implements Reporter {
     await this.maybeUploadCodeowners()
     await this.maybeUploadNotificationRouting()
 
-    const batch = this.recorder.toIngestBatch(idempotencyKey)
-    this.writeOutput(batch)
-    await this.deliver(this.recorder, batch, idempotencyKey)
+    await deliverRun(this.recorder, idempotencyKey, this.options, this.env)
   }
 
   private async maybeUploadCodeowners(): Promise<void> {
@@ -183,67 +171,5 @@ export default class FlakemetryReporter implements Reporter {
         `flakemetry: artifact upload skipped (${error instanceof Error ? error.message : String(error)})\n`,
       )
     }
-  }
-
-  private writeOutput(batch: IngestRunBatch): void {
-    const outputFile = this.options.outputFile ?? this.env.FLAKEMETRY_OUTPUT_FILE
-    if (!outputFile) return
-    mkdirSync(dirname(outputFile), { recursive: true })
-    writeFileSync(outputFile, JSON.stringify(batch, null, 2))
-  }
-
-  private async deliver(
-    recorder: TestRunRecorder,
-    batch: IngestRunBatch,
-    idempotencyKey: string,
-  ): Promise<void> {
-    const endpoint = this.options.endpoint ?? this.env.FLAKEMETRY_ENDPOINT
-    const token = this.options.token ?? this.env.FLAKEMETRY_TOKEN
-    if (!endpoint || !token) return
-
-    const bufferDir = this.bufferDir()
-    const client = new IngestClient({ endpoint, token, bufferDir })
-
-    if (bufferDir) {
-      const { flushed } = await client.flushBuffered()
-      if (flushed > 0) process.stderr.write(`flakemetry: flushed ${flushed} buffered run(s)\n`)
-    }
-
-    if (!shouldDeliverRun(batch, { sampleRate: this.sampleRate(), rng: this.options.rng })) return
-
-    const transport =
-      this.options.transport ?? (this.env.FLAKEMETRY_TRANSPORT === 'json' ? 'json' : 'otlp')
-    if (transport === 'otlp') {
-      try {
-        await exportRunOverOtlp(recorder, idempotencyKey, {
-          endpoint,
-          token,
-          compression: this.env.FLAKEMETRY_COMPRESSION === 'gzip',
-        })
-        return
-      } catch (error) {
-        process.stderr.write(
-          `flakemetry: otlp export failed, falling back to json (${error instanceof Error ? error.message : String(error)})\n`,
-        )
-      }
-    }
-
-    const outcome = await client.send(batch)
-    if (!outcome.ok) {
-      process.stderr.write(
-        `flakemetry: upload skipped (${outcome.error ?? `status ${outcome.status}`}${outcome.buffered ? ', buffered' : ''})\n`,
-      )
-    }
-  }
-
-  private bufferDir(): string | null {
-    return this.options.bufferDir ?? this.env.FLAKEMETRY_BUFFER_DIR ?? null
-  }
-
-  private sampleRate(): number {
-    if (this.options.sampleRate != null) return this.options.sampleRate
-    const raw = this.env.FLAKEMETRY_SAMPLE_RATE
-    const parsed = raw ? Number(raw) : NaN
-    return Number.isFinite(parsed) ? parsed : 1
   }
 }

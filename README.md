@@ -116,6 +116,18 @@ export default defineConfig({
 })
 ```
 
+Vitest works the same way — the reporters share one OpenTelemetry model, so runs land with the same identity and flaky scoring:
+
+```ts
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  test: {
+    reporters: ['default', '@flakemetry/vitest-reporter'],
+  },
+})
+```
+
 Wire it into CI. Let the test step write the results file, then upload it — the upload
 step runs even when tests fail and never blocks the build:
 
