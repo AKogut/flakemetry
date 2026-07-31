@@ -37,7 +37,7 @@ export default class FlakemetryVitestReporter {
     recorder.finishRun(failed ? 'failed' : 'passed', new Date())
 
     const idempotencyKey = buildIdempotencyKey(context, this.env)
-    await deliverRun(recorder, idempotencyKey, this.options, this.env)
+    await deliverRun(recorder, idempotencyKey, this.options, this.env, this.rootDir)
   }
 }
 

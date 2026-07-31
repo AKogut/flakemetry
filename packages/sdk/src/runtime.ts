@@ -4,8 +4,11 @@ import { dirname } from 'node:path'
 
 import type { CiProvider, IngestRunBatch, RunTrigger, TestStatus } from '@flakemetry/contracts'
 
+import { uploadArtifacts } from './artifacts'
 import { IngestClient } from './client'
+import { findCodeowners, uploadCodeowners } from './codeowners'
 import { exportRunOverOtlp } from './exporter'
+import { findNotificationRouting, uploadNotificationRouting } from './notifications'
 import type { RunContext, TestRunRecorder } from './recorder'
 import { shouldDeliverRun } from './sampling'
 
@@ -94,11 +97,64 @@ const writeOutput = (
   writeFileSync(outputFile, JSON.stringify(batch, null, 2))
 }
 
+const syncReporterConfig = async (
+  recorder: TestRunRecorder,
+  idempotencyKey: string,
+  endpoint: string,
+  token: string,
+  rootDir: string,
+  env: Record<string, string | undefined>,
+): Promise<void> => {
+  try {
+    const { uploaded } = await uploadArtifacts({
+      endpoint,
+      token,
+      idempotencyKey,
+      rootDir,
+      executions: recorder.recorded,
+    })
+    if (uploaded > 0) process.stderr.write(`flakemetry: uploaded ${uploaded} artifact(s)\n`)
+  } catch (error) {
+    process.stderr.write(
+      `flakemetry: artifact upload skipped (${error instanceof Error ? error.message : String(error)})\n`,
+    )
+  }
+
+  try {
+    const content = findCodeowners(rootDir, env)
+    if (content) {
+      const ok = await uploadCodeowners({ endpoint, token, content })
+      if (ok) process.stderr.write('flakemetry: synced CODEOWNERS\n')
+    }
+  } catch (error) {
+    process.stderr.write(
+      `flakemetry: CODEOWNERS sync skipped (${error instanceof Error ? error.message : String(error)})\n`,
+    )
+  }
+
+  try {
+    const routing = findNotificationRouting(rootDir)
+    if (routing) {
+      const ok = await uploadNotificationRouting({ endpoint, token, routing })
+      if (ok) {
+        process.stderr.write(
+          `flakemetry: synced ${routing.channels.length} notification channel(s) from config\n`,
+        )
+      }
+    }
+  } catch (error) {
+    process.stderr.write(
+      `flakemetry: notification routing sync skipped (${error instanceof Error ? error.message : String(error)})\n`,
+    )
+  }
+}
+
 export const deliverRun = async (
   recorder: TestRunRecorder,
   idempotencyKey: string,
   options: FlakemetryDeliveryOptions,
   env: Record<string, string | undefined>,
+  rootDir: string = process.cwd(),
 ): Promise<void> => {
   const batch = recorder.toIngestBatch(idempotencyKey)
   writeOutput(batch, options, env)
@@ -106,6 +162,8 @@ export const deliverRun = async (
   const endpoint = options.endpoint ?? env.FLAKEMETRY_ENDPOINT
   const token = options.token ?? env.FLAKEMETRY_TOKEN
   if (!endpoint || !token) return
+
+  await syncReporterConfig(recorder, idempotencyKey, endpoint, token, rootDir, env)
 
   const bufferDir = options.bufferDir ?? env.FLAKEMETRY_BUFFER_DIR ?? null
   const client = new IngestClient({ endpoint, token, bufferDir })
