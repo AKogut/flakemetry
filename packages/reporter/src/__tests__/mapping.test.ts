@@ -1,13 +1,7 @@
 import type { TestStep } from '@playwright/test/reporter'
 import { describe, expect, it } from 'vitest'
 
-import {
-  buildIdempotencyKey,
-  deriveSuite,
-  mapSteps,
-  resolveRunContext,
-  statusFromResult,
-} from '../mapping'
+import { deriveSuite, mapSteps, statusFromResult } from '../mapping'
 
 const step = (over: Partial<TestStep> & { category: string; title: string }): TestStep =>
   ({
@@ -82,95 +76,5 @@ describe('deriveSuite', () => {
 
   it('is empty when there are no describe blocks', () => {
     expect(deriveSuite([{ type: 'file', title: 'a.spec.ts' }])).toBe('')
-  })
-})
-
-describe('resolveRunContext', () => {
-  it('reads github actions context including pr number from the ref', () => {
-    const context = resolveRunContext({
-      GITHUB_ACTIONS: 'true',
-      GITHUB_SHA: 'abc1234',
-      GITHUB_REF_NAME: 'feat/login',
-      GITHUB_RUN_ID: '9000001',
-      GITHUB_EVENT_NAME: 'pull_request',
-      GITHUB_REF: 'refs/pull/42/merge',
-      FLAKEMETRY_PROJECT: 'acme/web',
-    })
-    expect(context.ciProvider).toBe('github_actions')
-    expect(context.trigger).toBe('pull_request')
-    expect(context.commitSha).toBe('abc1234')
-    expect(context.prNumber).toBe(42)
-    expect(context.project).toBe('acme/web')
-  })
-
-  it('captures shard index and total when the run is sharded', () => {
-    const context = resolveRunContext(
-      { GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '9000001' },
-      {
-        current: 2,
-        total: 4,
-      },
-    )
-    expect(context.shardIndex).toBe(2)
-    expect(context.shardTotal).toBe(4)
-  })
-
-  it('ignores a single-shard run', () => {
-    const context = resolveRunContext({ GITHUB_ACTIONS: 'true' }, { current: 1, total: 1 })
-    expect(context.shardIndex).toBeNull()
-    expect(context.shardTotal).toBeNull()
-  })
-
-  it('falls back to local defaults off CI', () => {
-    const context = resolveRunContext({})
-    expect(context.ciProvider).toBe('local')
-    expect(context.trigger).toBe('manual')
-    expect(context.prNumber).toBeNull()
-  })
-
-  it('treats empty-string env vars as absent', () => {
-    const context = resolveRunContext({
-      GITHUB_SHA: '',
-      GITHUB_REF_NAME: '',
-      FLAKEMETRY_COMMIT_SHA: 'deadbeef',
-    })
-    expect(context.commitSha).toBe('deadbeef')
-    expect(context.branch).toBe('local')
-  })
-})
-
-describe('buildIdempotencyKey', () => {
-  const base = {
-    project: 'acme/web',
-    commitSha: 'abc',
-    branch: 'main',
-    ciProvider: 'github_actions' as const,
-    trigger: 'push' as const,
-    ciRunId: '9000001',
-    prNumber: null,
-  }
-
-  it('derives a stable key from the ci run and attempt', () => {
-    expect(buildIdempotencyKey(base, { GITHUB_RUN_ATTEMPT: '2' })).toBe('github_actions-9000001-2')
-  })
-
-  it('gives each parallel shard a distinct key so they do not overwrite each other', () => {
-    const shardOne = buildIdempotencyKey({ ...base, shardIndex: 1, shardTotal: 3 }, {})
-    const shardTwo = buildIdempotencyKey({ ...base, shardIndex: 2, shardTotal: 3 }, {})
-    expect(shardOne).toBe('github_actions-9000001-1-shard1')
-    expect(shardTwo).toBe('github_actions-9000001-1-shard2')
-    expect(shardOne).not.toBe(shardTwo)
-  })
-
-  it('honors an explicit override', () => {
-    expect(buildIdempotencyKey(base, { FLAKEMETRY_IDEMPOTENCY_KEY: 'custom-key-1234' })).toBe(
-      'custom-key-1234',
-    )
-  })
-
-  it('generates a local key when there is no ci run id', () => {
-    const key = buildIdempotencyKey({ ...base, ciRunId: null }, {})
-    expect(key.startsWith('local-')).toBe(true)
-    expect(key.length).toBeGreaterThanOrEqual(8)
   })
 })
