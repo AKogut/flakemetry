@@ -10,7 +10,8 @@ export default defineConfig({
   base: '/flakemetry/',
   cleanUrls: true,
   lastUpdated: true,
-  ignoreDeadLinks: true,
+  srcExclude: ['README.md'],
+  ignoreDeadLinks: [/^https?:\/\/localhost/],
   head: [
     ['meta', { name: 'theme-color', content: '#5319e7' }],
     ['meta', { property: 'og:title', content: 'Flakemetry Documentation' }],
