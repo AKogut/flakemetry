@@ -105,13 +105,14 @@ export const bucketWeekly = (
 export const summarizeMttr = (
   paired: PairedHealth,
   windowStart: Date,
+  openCount: number,
 ): TestHealthResult['mttr'] => {
   const durations = paired.resolutions
     .filter((pair) => pair.resolvedAt >= windowStart)
     .map((pair) => pair.resolvedAt.getTime() - pair.flakedAt.getTime())
   return {
     resolvedCount: durations.length,
-    openCount: paired.openCount,
+    openCount,
     meanMs: mean(durations),
     medianMs: median(durations),
   }
@@ -125,25 +126,27 @@ export const getTestHealthMetrics = async (
   const windowStart = since(days)
   const now = new Date()
 
-  const [rawEvents, currentBacklog, quarantineDaily, reliabilityDaily] = await Promise.all([
-    prisma.testHealthEvent.findMany({
-      where: { projectId },
-      select: { testIdentityId: true, kind: true, createdAt: true },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.testIdentity.count({ where: { projectId, quarantined: true } }),
-    prisma.flakyTrends.findMany({
-      where: { projectId, day: { gte: windowStart } },
-      select: { day: true, quarantinedCount: true },
-      orderBy: { day: 'asc' },
-    }),
-    prisma.suiteDaily.groupBy({
-      by: ['day'],
-      where: { projectId, day: { gte: windowStart } },
-      _sum: { total: true, passed: true },
-      orderBy: { day: 'asc' },
-    }),
-  ])
+  const [rawEvents, currentlyFlaky, currentBacklog, quarantineDaily, reliabilityDaily] =
+    await Promise.all([
+      prisma.testHealthEvent.findMany({
+        where: { projectId },
+        select: { testIdentityId: true, kind: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.flakyScore.count({ where: { projectId, quarantineCandidate: true } }),
+      prisma.testIdentity.count({ where: { projectId, quarantined: true } }),
+      prisma.flakyTrends.findMany({
+        where: { projectId, day: { gte: windowStart } },
+        select: { day: true, quarantinedCount: true },
+        orderBy: { day: 'asc' },
+      }),
+      prisma.suiteDaily.groupBy({
+        by: ['day'],
+        where: { projectId, day: { gte: windowStart } },
+        _sum: { total: true, passed: true },
+        orderBy: { day: 'asc' },
+      }),
+    ])
 
   const events: HealthEventPoint[] = rawEvents.map((event) => ({
     testIdentityId: event.testIdentityId,
@@ -161,7 +164,7 @@ export const getTestHealthMetrics = async (
 
   return {
     rangeDays: days,
-    mttr: summarizeMttr(paired, windowStart),
+    mttr: summarizeMttr(paired, windowStart, currentlyFlaky),
     weekly: bucketWeekly(events, windowStart, now),
     quarantine: {
       currentBacklog,

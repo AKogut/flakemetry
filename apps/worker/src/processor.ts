@@ -314,33 +314,21 @@ export const processJob = async (
 
 type QuarantineTransition = 'quarantined' | 'unquarantined' | null
 
+const QUARANTINE_REASON = 'auto: flaky score above threshold'
+
 const enforceQuarantine = async (
-  prisma: PrismaClient,
+  tx: Prisma.TransactionClient,
   identityId: string,
-  identity: { quarantined: boolean; title: string; suite: string },
+  identity: { quarantined: boolean },
   isCandidate: boolean,
   recent: readonly { status: string }[],
   cooldownRuns: number,
-  projectId: string,
-  events?: EventBus,
 ): Promise<QuarantineTransition> => {
-  const emit = (quarantined: boolean, reason: string | null): void =>
-    events?.emit('quarantine.changed', {
-      testIdentityId: identityId,
-      projectId,
-      title: identity.title,
-      suite: identity.suite,
-      quarantined,
-      reason,
-    })
-
   if (isCandidate && !identity.quarantined) {
-    const reason = 'auto: flaky score above threshold'
-    await prisma.testIdentity.update({
+    await tx.testIdentity.update({
       where: { id: identityId },
-      data: { quarantined: true, quarantineReason: reason },
+      data: { quarantined: true, quarantineReason: QUARANTINE_REASON },
     })
-    emit(true, reason)
     return 'quarantined'
   }
 
@@ -351,11 +339,10 @@ const enforceQuarantine = async (
       (window.length >= cooldownRuns &&
         window.every((execution) => execution.status === 'pass' || execution.status === 'skip'))
     if (stable) {
-      await prisma.testIdentity.update({
+      await tx.testIdentity.update({
         where: { id: identityId },
         data: { quarantined: false, quarantineReason: null },
       })
-      emit(false, null)
       return 'unquarantined'
     }
   }
@@ -468,14 +455,48 @@ const scoreIdentity = async (
     modelVersion: result.modelVersion,
   }
 
-  await prisma.flakyScore.upsert({
-    where: { testIdentityId: identityId },
-    create: { testIdentityId: identityId, ...data },
-    update: data,
-  })
-
   const becameFlaky = result.quarantineCandidate && !previousScore?.quarantineCandidate
   const stabilized = !result.quarantineCandidate && previousScore?.quarantineCandidate === true
+
+  const transition = await prisma.$transaction(async (tx) => {
+    await tx.flakyScore.upsert({
+      where: { testIdentityId: identityId },
+      create: { testIdentityId: identityId, ...data },
+      update: data,
+    })
+
+    const healthEvents: HealthEventKind[] = []
+    if (becameFlaky) healthEvents.push('flaked')
+    if (stabilized) healthEvents.push('stabilized')
+
+    let quarantineTransition: QuarantineTransition = null
+    if (ctx.quarantineEnabled && identity) {
+      quarantineTransition = await enforceQuarantine(
+        tx,
+        identityId,
+        identity,
+        result.quarantineCandidate,
+        executions,
+        ctx.quarantineCooldownRuns ?? 0,
+      )
+      if (quarantineTransition) healthEvents.push(quarantineTransition)
+    }
+
+    if (healthEvents.length > 0) {
+      await tx.testHealthEvent.createMany({
+        data: healthEvents.map((kind) => ({
+          orgId: ctx.orgId,
+          projectId: ctx.projectId,
+          testIdentityId: identityId,
+          kind,
+          score: result.score,
+          createdAt: ctx.now,
+        })),
+      })
+    }
+
+    return quarantineTransition
+  })
 
   if (identity && becameFlaky) {
     ctx.events?.emit('flaky.detected', {
@@ -488,34 +509,14 @@ const scoreIdentity = async (
     })
   }
 
-  const healthEvents: HealthEventKind[] = []
-  if (becameFlaky) healthEvents.push('flaked')
-  if (stabilized) healthEvents.push('stabilized')
-
-  if (ctx.quarantineEnabled && identity) {
-    const transition = await enforceQuarantine(
-      prisma,
-      identityId,
-      identity,
-      result.quarantineCandidate,
-      executions,
-      ctx.quarantineCooldownRuns ?? 0,
-      ctx.projectId,
-      ctx.events,
-    )
-    if (transition) healthEvents.push(transition)
-  }
-
-  if (healthEvents.length > 0) {
-    await prisma.testHealthEvent.createMany({
-      data: healthEvents.map((kind) => ({
-        orgId: ctx.orgId,
-        projectId: ctx.projectId,
-        testIdentityId: identityId,
-        kind,
-        score: result.score,
-        createdAt: ctx.now,
-      })),
+  if (identity && transition) {
+    ctx.events?.emit('quarantine.changed', {
+      testIdentityId: identityId,
+      projectId: ctx.projectId,
+      title: identity.title,
+      suite: identity.suite,
+      quarantined: transition === 'quarantined',
+      reason: transition === 'quarantined' ? QUARANTINE_REASON : null,
     })
   }
 

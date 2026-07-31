@@ -73,14 +73,14 @@ describe('summarizeMttr', () => {
       ],
       openCount: 1,
     }
-    const summary = summarizeMttr(paired, at('2026-06-15T00:00:00Z'))
+    const summary = summarizeMttr(paired, at('2026-06-15T00:00:00Z'), 2)
     expect(summary.resolvedCount).toBe(1)
-    expect(summary.openCount).toBe(1)
+    expect(summary.openCount).toBe(2)
     expect(summary.medianMs).toBe(4 * 24 * 60 * 60 * 1000)
   })
 
   it('reports nulls when nothing resolved in the window', () => {
-    const summary = summarizeMttr({ resolutions: [], openCount: 0 }, at('2026-07-01T00:00:00Z'))
+    const summary = summarizeMttr({ resolutions: [], openCount: 0 }, at('2026-07-01T00:00:00Z'), 0)
     expect(summary.resolvedCount).toBe(0)
     expect(summary.meanMs).toBeNull()
     expect(summary.medianMs).toBeNull()
