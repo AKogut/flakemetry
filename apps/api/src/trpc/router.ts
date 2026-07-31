@@ -4,8 +4,16 @@ import {
   runGetInputSchema,
   runsListInputSchema,
   testGetInputSchema,
+  testHealthInputSchema,
 } from '@flakemetry/contracts'
-import { flakyBoard, getRca, getRun, getTest, listRuns } from '@flakemetry/queries'
+import {
+  flakyBoard,
+  getRca,
+  getRun,
+  getTest,
+  getTestHealthMetrics,
+  listRuns,
+} from '@flakemetry/queries'
 import { TRPCError } from '@trpc/server'
 
 import { protectedProcedure, router } from './trpc'
@@ -48,6 +56,14 @@ export const appRouter = router({
     get: protectedProcedure
       .input(rcaGetInputSchema)
       .query(({ ctx, input }) => getRca(ctx.prisma, ctx.project.projectId, input.executionId)),
+  }),
+
+  health: router({
+    metrics: protectedProcedure
+      .input(testHealthInputSchema)
+      .query(({ ctx, input }) =>
+        getTestHealthMetrics(ctx.prisma, ctx.project.projectId, input.days),
+      ),
   }),
 })
 

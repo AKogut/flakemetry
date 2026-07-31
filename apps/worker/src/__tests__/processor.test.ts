@@ -135,6 +135,14 @@ describe.skipIf(!hasDb)('processJob', () => {
     expect(flaky[0]?.suite).toBe('auth')
     expect(quarantine).toHaveLength(1)
     expect(quarantine[0]?.quarantined).toBe(true)
+
+    const healthEvents = await prisma.testHealthEvent.findMany({
+      where: { projectId: ctx.projectId },
+      select: { kind: true, createdAt: true },
+    })
+    const kinds = healthEvents.map((event) => event.kind).sort()
+    expect(kinds).toEqual(['flaked', 'quarantined'])
+    expect(healthEvents.every((event) => event.createdAt.getTime() === NOW.getTime())).toBe(true)
   })
 
   it('correlates parallel shards so a co-failing test is not scored as isolated', async () => {

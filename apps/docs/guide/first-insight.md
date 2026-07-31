@@ -43,3 +43,11 @@ so only new signatures reach the model — root-cause without a per-failure LLM 
 Wire the [GitHub Action](/guide/github-action) in and every PR gets a sticky comment plus a
 quality gate that distinguishes _new_ failures this change introduced from tests that
 already flake on the base branch — blocking only what the change actually broke.
+
+## 6. Track the trend
+
+The **Test health** page answers the executive question: is flakiness improving or
+degrading? It reports **flaky MTTR** (how long a test stays flaky before it stabilizes),
+**flaky-introduced vs -resolved per week**, the current **quarantine backlog**, and the
+overall reliability trend — over a time range up to a quarter. A net-positive week (more
+introduced than resolved) is the early warning that flakiness is winning.

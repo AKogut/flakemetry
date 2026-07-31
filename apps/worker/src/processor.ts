@@ -1,5 +1,5 @@
 import type { LlmProvider } from '@flakemetry/ai'
-import type { IngestRunBatch } from '@flakemetry/contracts'
+import type { HealthEventKind, IngestRunBatch } from '@flakemetry/contracts'
 import {
   computeFingerprint,
   computeFlakyScore,
@@ -312,6 +312,8 @@ export const processJob = async (
   }
 }
 
+type QuarantineTransition = 'quarantined' | 'unquarantined' | null
+
 const enforceQuarantine = async (
   prisma: PrismaClient,
   identityId: string,
@@ -321,7 +323,7 @@ const enforceQuarantine = async (
   cooldownRuns: number,
   projectId: string,
   events?: EventBus,
-): Promise<void> => {
+): Promise<QuarantineTransition> => {
   const emit = (quarantined: boolean, reason: string | null): void =>
     events?.emit('quarantine.changed', {
       testIdentityId: identityId,
@@ -339,7 +341,7 @@ const enforceQuarantine = async (
       data: { quarantined: true, quarantineReason: reason },
     })
     emit(true, reason)
-    return
+    return 'quarantined'
   }
 
   if (!isCandidate && identity.quarantined) {
@@ -354,8 +356,11 @@ const enforceQuarantine = async (
         data: { quarantined: false, quarantineReason: null },
       })
       emit(false, null)
+      return 'unquarantined'
     }
   }
+
+  return null
 }
 
 const SCORING_WINDOW = 500
@@ -469,7 +474,10 @@ const scoreIdentity = async (
     update: data,
   })
 
-  if (identity && result.quarantineCandidate && !previousScore?.quarantineCandidate) {
+  const becameFlaky = result.quarantineCandidate && !previousScore?.quarantineCandidate
+  const stabilized = !result.quarantineCandidate && previousScore?.quarantineCandidate === true
+
+  if (identity && becameFlaky) {
     ctx.events?.emit('flaky.detected', {
       testIdentityId: identityId,
       projectId: ctx.projectId,
@@ -480,8 +488,12 @@ const scoreIdentity = async (
     })
   }
 
+  const healthEvents: HealthEventKind[] = []
+  if (becameFlaky) healthEvents.push('flaked')
+  if (stabilized) healthEvents.push('stabilized')
+
   if (ctx.quarantineEnabled && identity) {
-    await enforceQuarantine(
+    const transition = await enforceQuarantine(
       prisma,
       identityId,
       identity,
@@ -491,6 +503,20 @@ const scoreIdentity = async (
       ctx.projectId,
       ctx.events,
     )
+    if (transition) healthEvents.push(transition)
+  }
+
+  if (healthEvents.length > 0) {
+    await prisma.testHealthEvent.createMany({
+      data: healthEvents.map((kind) => ({
+        orgId: ctx.orgId,
+        projectId: ctx.projectId,
+        testIdentityId: identityId,
+        kind,
+        score: result.score,
+        createdAt: ctx.now,
+      })),
+    })
   }
 
   ctx.events?.emit('score.updated', {
