@@ -1,20 +1,22 @@
 import { Command } from 'commander'
 
 import { configCommand } from './commands/config'
+import { junitCommand } from './commands/junit'
 import { uploadCommand } from './commands/upload'
 import { resolveConfig, resolveToken } from './config-loader'
 import type { CommandContext } from './registry'
 import { CommandRegistry } from './registry'
 
+export * from './commands/junit'
 export * from './commands/upload'
 export * from './config-loader'
 export * from './registry'
-export { configCommand, uploadCommand }
+export { configCommand, junitCommand, uploadCommand }
 
 export const CLI_VERSION = '0.0.0'
 
 export const createDefaultRegistry = (): CommandRegistry =>
-  new CommandRegistry().add(configCommand).add(uploadCommand)
+  new CommandRegistry().add(configCommand).add(uploadCommand).add(junitCommand)
 
 export const buildProgram = (
   cwd: string,

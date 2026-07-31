@@ -136,6 +136,13 @@ export default {
 }
 ```
 
+No native reporter? Any runner that writes **JUnit XML** — pytest, Go, Ruby, JUnit, PHPUnit — maps onto the same conventions through the CLI, so a JUnit upload yields the same intelligence as the native reporters:
+
+```bash
+pytest --junitxml=junit.xml
+npx flakemetry junit junit.xml
+```
+
 Wire it into CI. Let the test step write the results file, then upload it — the upload
 step runs even when tests fail and never blocks the build:
 
