@@ -5,3 +5,4 @@ coverage
 .next
 pnpm-lock.yaml
 *.md
+deploy/helm/**/templates/

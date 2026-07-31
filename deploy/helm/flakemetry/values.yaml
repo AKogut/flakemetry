@@ -1,0 +1,158 @@
+nameOverride: ''
+fullnameOverride: ''
+
+image:
+  registry: ghcr.io
+  repository: akogut
+  # Applied to every component image unless overridden per component.
+  tag: latest
+  pullPolicy: IfNotPresent
+pullSecrets: []
+
+serviceAccount:
+  create: true
+  name: ''
+  annotations: {}
+
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop: ['ALL']
+
+# Managed dependencies. Flakemetry expects an external managed Postgres and an
+# S3-compatible object store — the chart never bundles a database. Provide the
+# connection details here (or via existingSecret) and the chart wires them into
+# every component.
+database:
+  # postgresql://user:password@host:5432/flakemetry?schema=public
+  url: ''
+storage:
+  bucket: flakemetry-artifacts
+  endpoint: ''
+  publicEndpoint: ''
+  region: us-east-1
+  accessKeyId: ''
+  secretAccessKey: ''
+  forcePathStyle: false
+
+auth:
+  # Generate with: openssl rand -base64 32
+  secret: ''
+  url: ''
+  trustHost: true
+  githubId: ''
+  githubSecret: ''
+
+ai:
+  enabled: false
+  provider: ''
+  model: ''
+  apiKey: ''
+  endpoint: ''
+  dailyTokenBudget: ''
+
+# Supply all sensitive values through a pre-existing Secret instead of the
+# values above. When set, the chart references this Secret and creates none.
+existingSecret: ''
+
+# Runs `prisma migrate deploy` as a pre-install/pre-upgrade hook before the
+# app pods roll. It never seeds — production data is never touched.
+migrate:
+  enabled: true
+  backoffLimit: 3
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+api:
+  replicaCount: 2
+  port: 4000
+  image:
+    name: flakemetry-api
+    tag: ''
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  extraEnv: []
+
+worker:
+  replicaCount: 2
+  image:
+    name: flakemetry-worker
+    tag: ''
+  pollIntervalMs: 1000
+  resources:
+    requests:
+      cpu: 250m
+      memory: 384Mi
+    limits:
+      memory: 768Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 75
+  retention:
+    artifactDays: 90
+    executionDays: 90
+  extraEnv: []
+
+web:
+  replicaCount: 2
+  port: 3000
+  image:
+    name: flakemetry-web
+    tag: ''
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: 250m
+      memory: 384Mi
+    limits:
+      memory: 768Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  extraEnv: []
+
+migrateImage:
+  name: flakemetry-migrate
+  tag: ''
+
+ingress:
+  enabled: false
+  className: ''
+  annotations: {}
+  web:
+    host: flakemetry.example.com
+    path: /
+    pathType: Prefix
+  api:
+    host: ingest.flakemetry.example.com
+    path: /
+    pathType: Prefix
+  tls: []

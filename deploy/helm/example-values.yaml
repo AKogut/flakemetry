@@ -1,0 +1,73 @@
+# Example production values for the Flakemetry Helm chart.
+#
+#   helm install flakemetry deploy/helm/flakemetry -n flakemetry --create-namespace \
+#     -f deploy/helm/example-values.yaml
+#
+# Secrets below are placeholders — inject the real values from your secret
+# manager (or point `existingSecret` at a pre-created Secret) rather than
+# committing them.
+
+image:
+  registry: ghcr.io
+  repository: akogut
+  tag: v0.1.0
+
+database:
+  url: postgresql://flakemetry:CHANGE_ME@db.internal:5432/flakemetry?schema=public
+
+storage:
+  bucket: flakemetry-artifacts
+  endpoint: https://s3.us-east-1.amazonaws.com
+  publicEndpoint: https://artifacts.flakemetry.example.com
+  region: us-east-1
+  accessKeyId: CHANGE_ME
+  secretAccessKey: CHANGE_ME
+  forcePathStyle: false
+
+auth:
+  secret: CHANGE_ME_openssl_rand_base64_32
+  url: https://flakemetry.example.com
+  githubId: CHANGE_ME
+  githubSecret: CHANGE_ME
+
+ai:
+  enabled: true
+  provider: claude
+  model: claude-sonnet-4-5
+  apiKey: CHANGE_ME
+  dailyTokenBudget: '2000000'
+
+api:
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+
+worker:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 12
+
+web:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  web:
+    host: flakemetry.example.com
+  api:
+    host: ingest.flakemetry.example.com
+  tls:
+    - secretName: flakemetry-web-tls
+      hosts:
+        - flakemetry.example.com
+    - secretName: flakemetry-api-tls
+      hosts:
+        - ingest.flakemetry.example.com

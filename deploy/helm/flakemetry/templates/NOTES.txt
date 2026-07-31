@@ -1,0 +1,24 @@
+Flakemetry {{ .Chart.AppVersion }} is installed as release "{{ .Release.Name }}".
+
+Components:
+  api     — ingestion API   ({{ if .Values.api.autoscaling.enabled }}HPA {{ .Values.api.autoscaling.minReplicas }}–{{ .Values.api.autoscaling.maxReplicas }}{{ else }}{{ .Values.api.replicaCount }} replicas{{ end }})
+  worker  — processing      ({{ if .Values.worker.autoscaling.enabled }}HPA {{ .Values.worker.autoscaling.minReplicas }}–{{ .Values.worker.autoscaling.maxReplicas }}{{ else }}{{ .Values.worker.replicaCount }} replicas{{ end }})
+  web     — dashboard        ({{ if .Values.web.autoscaling.enabled }}HPA {{ .Values.web.autoscaling.minReplicas }}–{{ .Values.web.autoscaling.maxReplicas }}{{ else }}{{ .Values.web.replicaCount }} replicas{{ end }})
+
+Database migrations ran as a pre-install/pre-upgrade hook (they never seed).
+
+{{- if .Values.ingress.enabled }}
+
+Dashboard:  https://{{ .Values.ingress.web.host }}{{ .Values.ingress.web.path }}
+Ingest API: https://{{ .Values.ingress.api.host }}{{ .Values.ingress.api.path }}
+{{- else }}
+
+No ingress is enabled. Reach the dashboard by port-forwarding:
+
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "flakemetry.fullname" . }}-web 3000:{{ .Values.web.service.port }}
+
+then open http://localhost:3000
+{{- end }}
+
+Point your reporters at the ingest API and create a project token in the dashboard.
+See the runbook: https://github.com/AKogut/flakemetry/blob/main/deploy/RUNBOOK.md

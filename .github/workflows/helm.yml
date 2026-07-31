@@ -1,0 +1,39 @@
+name: helm
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/helm/**'
+      - '.github/workflows/helm.yml'
+  pull_request:
+    paths:
+      - 'deploy/helm/**'
+      - '.github/workflows/helm.yml'
+
+jobs:
+  chart:
+    name: lint + template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.3
+
+      - name: helm lint
+        run: |
+          helm lint deploy/helm/flakemetry \
+            --set database.url='postgresql://u:p@db:5432/flakemetry?schema=public' \
+            --set auth.secret='ci-placeholder-secret-value-0001'
+
+      - name: helm template (renders all resources)
+        run: |
+          helm template ci deploy/helm/flakemetry \
+            --set database.url='postgresql://u:p@db:5432/flakemetry?schema=public' \
+            --set auth.secret='ci-placeholder-secret-value-0001' \
+            --set ai.enabled=true \
+            --set ingress.enabled=true \
+            > /tmp/rendered.yaml
+          test "$(grep -c '^kind:' /tmp/rendered.yaml)" -ge 10
