@@ -14,7 +14,7 @@ Test observability · explainable flaky-test detection · AI-assisted root-cause
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/AKogut/flakemetry/issues)
 [![Roadmap](https://img.shields.io/badge/roadmap-public-5319e7.svg)](https://github.com/users/AKogut/projects/14)
 
-[Wiki](https://github.com/AKogut/flakemetry/wiki) · [Architecture](https://github.com/AKogut/flakemetry/wiki/Architecture) · [Roadmap](https://github.com/AKogut/flakemetry/wiki/Roadmap) · [Discussions](https://github.com/AKogut/flakemetry/discussions)
+[Docs](https://akogut.github.io/flakemetry/) · [Wiki](https://github.com/AKogut/flakemetry/wiki) · [Architecture](https://github.com/AKogut/flakemetry/wiki/Architecture) · [Roadmap](https://github.com/AKogut/flakemetry/wiki/Roadmap) · [Discussions](https://github.com/AKogut/flakemetry/discussions)
 
 </div>
 
@@ -207,6 +207,7 @@ apps/
   web/            Next.js dashboard
   api/            Fastify ingestion + tRPC query
   worker/         processing (identity, scoring, clustering, RCA)
+  docs/           VitePress documentation site
 packages/
   contracts/      zod schemas + shared types (single source of truth)
   db/             Prisma schema + migrations
@@ -235,7 +236,9 @@ Tracked issue-by-issue on the [roadmap board](https://github.com/users/AKogut/pr
 
 ## Documentation
 
-Full documentation lives in the [**Wiki**](https://github.com/AKogut/flakemetry/wiki): product vision, architecture, data model, algorithms, scaling, and the OSS/monetization model.
+The [**documentation site**](https://akogut.github.io/flakemetry/) is the canonical guide — getting started, self-hosting, reporter and CLI setup, and the concepts behind test identity, flaky scoring, and AI RCA. It is built from [`apps/docs`](apps/docs) and deployed to GitHub Pages on every change.
+
+Deeper product and design context — vision, data model, scaling, and the OSS/monetization model — lives in the [**Wiki**](https://github.com/AKogut/flakemetry/wiki).
 
 ## Contributing
 
