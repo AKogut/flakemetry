@@ -2,13 +2,12 @@ import type { LlmProvider } from '@flakemetry/ai'
 import type { HealthEventKind, IngestRunBatch } from '@flakemetry/contracts'
 import {
   computeFingerprint,
-  computeFlakyScore,
-  type ExecutionPoint,
   type ExistingIdentity,
   hashParams,
   resolveIdentity,
 } from '@flakemetry/core'
 import type { Prisma, PrismaClient } from '@flakemetry/db'
+import { computeIdentityScore } from '@flakemetry/queries'
 
 import type { EventBus } from './events'
 import { type FailureRecord, processFailures } from './rca'
@@ -175,6 +174,7 @@ export const processJob = async (
             toFilePath: execution.filePath,
             toTitle: execution.title,
             confidence: resolution.kind === 'renamed' ? resolution.confidence : null,
+            runStartedAt: startedAt,
           },
         })
         if (entry) {
@@ -363,113 +363,20 @@ const enforceQuarantine = async (
   return null
 }
 
-const SCORING_WINDOW = 500
-
 const scoreIdentity = async (
   prisma: PrismaClient,
   identityId: string,
   ctx: ProcessContext,
 ): Promise<void> => {
-  const recent = await prisma.testExecution.findMany({
-    where: { projectId: ctx.projectId, testIdentityId: identityId },
-    select: {
-      status: true,
-      attempt: true,
-      startedAt: true,
-      runId: true,
-      run: { select: { commitSha: true, ciRunId: true } },
-    },
-    orderBy: { startedAt: 'desc' },
-    take: SCORING_WINDOW,
-  })
-  const executions = recent.reverse()
-
-  const [identity, previousScore] = await Promise.all([
-    prisma.testIdentity.findUnique({
-      where: { id: identityId },
-      select: { title: true, suite: true, filePath: true, quarantined: true },
-    }),
-    prisma.flakyScore.findUnique({
-      where: { testIdentityId: identityId },
-      select: { quarantineCandidate: true },
-    }),
-  ])
-
-  const runIds = [...new Set(executions.map((execution) => execution.runId))]
-  const ciRunIds = [
-    ...new Set(
-      executions
-        .map((execution) => execution.run.ciRunId)
-        .filter((ciRunId): ciRunId is string => Boolean(ciRunId)),
-    ),
-  ]
-
-  const groupRuns = await prisma.run.findMany({
-    where: {
-      projectId: ctx.projectId,
-      OR: [{ id: { in: runIds } }, ...(ciRunIds.length > 0 ? [{ ciRunId: { in: ciRunIds } }] : [])],
-    },
-    select: { id: true, ciRunId: true },
-  })
-  const keyByRunId = new Map(groupRuns.map((run) => [run.id, run.ciRunId ?? run.id]))
-
-  const failingTestsByKey = new Map<string, Set<string>>()
-  if (groupRuns.length > 0) {
-    const grouped = await prisma.testExecution.groupBy({
-      by: ['runId', 'testIdentityId'],
-      where: {
-        projectId: ctx.projectId,
-        runId: { in: groupRuns.map((run) => run.id) },
-        status: 'fail',
-      },
-      _count: { _all: true },
+  const { result, data, executions, identity, previousQuarantineCandidate } =
+    await computeIdentityScore(prisma, ctx.orgId, ctx.projectId, identityId, {
+      now: ctx.now,
+      threshold: ctx.threshold,
+      minSamples: ctx.minSamples,
     })
-    for (const row of grouped) {
-      const key = keyByRunId.get(row.runId) ?? row.runId
-      const set = failingTestsByKey.get(key) ?? new Set<string>()
-      set.add(row.testIdentityId)
-      failingTestsByKey.set(key, set)
-    }
-  }
 
-  const history: ExecutionPoint[] = executions.map((execution) => ({
-    status: execution.status,
-    attempt: execution.attempt,
-    startedAt: execution.startedAt,
-    commitSha: execution.run.commitSha,
-    runFailureCount:
-      failingTestsByKey.get(keyByRunId.get(execution.runId) ?? execution.runId)?.size ?? 0,
-  }))
-
-  const result = computeFlakyScore(history, {
-    now: ctx.now,
-    threshold: ctx.threshold,
-    minSamples: ctx.minSamples,
-    windowSize: SCORING_WINDOW,
-  })
-
-  const lastFlakedAt = executions
-    .filter((execution) => execution.status === 'fail' || execution.status === 'flaky')
-    .map((execution) => execution.startedAt)
-    .sort((a, b) => b.getTime() - a.getTime())[0]
-
-  const data = {
-    orgId: ctx.orgId,
-    projectId: ctx.projectId,
-    score: result.score,
-    flipRate: result.flipRate,
-    passOnRerunRate: result.passOnRerunRate,
-    sameShaVariance: result.sameShaVariance,
-    entropy: result.entropy,
-    failIsolation: result.failIsolation,
-    reasonCodes: result.reasonCodes as unknown as Prisma.InputJsonValue,
-    quarantineCandidate: result.quarantineCandidate,
-    lastFlakedAt: lastFlakedAt ?? null,
-    modelVersion: result.modelVersion,
-  }
-
-  const becameFlaky = result.quarantineCandidate && !previousScore?.quarantineCandidate
-  const stabilized = !result.quarantineCandidate && previousScore?.quarantineCandidate === true
+  const becameFlaky = result.quarantineCandidate && !previousQuarantineCandidate
+  const stabilized = !result.quarantineCandidate && previousQuarantineCandidate
 
   const transition = await prisma.$transaction(async (tx) => {
     await tx.flakyScore.upsert({

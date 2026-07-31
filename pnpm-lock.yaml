@@ -160,6 +160,9 @@ importers:
       '@flakemetry/notify':
         specifier: workspace:*
         version: link:../../packages/notify
+      '@flakemetry/queries':
+        specifier: workspace:*
+        version: link:../../packages/queries
       '@flakemetry/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -182,9 +185,6 @@ importers:
       '@flakemetry/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
-      '@flakemetry/queries':
-        specifier: workspace:*
-        version: link:../../packages/queries
       '@flakemetry/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
