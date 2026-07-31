@@ -18,8 +18,6 @@ import type {
   TestResult,
 } from '@playwright/test/reporter'
 
-import { uploadArtifacts } from './artifacts'
-import { findCodeowners, uploadCodeowners } from './codeowners'
 import {
   deriveSuite,
   mapSteps,
@@ -27,7 +25,6 @@ import {
   statusFromResult,
   type SuiteNode,
 } from './mapping'
-import { findNotificationRouting, uploadNotificationRouting } from './notifications'
 
 export type FlakemetryReporterOptions = FlakemetryDeliveryOptions
 
@@ -107,69 +104,6 @@ export default class FlakemetryReporter implements Reporter {
     if (!this.recorder || !this.context) return
     this.recorder.finishRun(result.status === 'passed' ? 'passed' : 'failed', new Date())
     const idempotencyKey = buildIdempotencyKey(this.context, this.env)
-
-    await this.maybeUploadArtifacts(idempotencyKey)
-    await this.maybeUploadCodeowners()
-    await this.maybeUploadNotificationRouting()
-
-    await deliverRun(this.recorder, idempotencyKey, this.options, this.env)
-  }
-
-  private async maybeUploadCodeowners(): Promise<void> {
-    const endpoint = this.options.endpoint ?? this.env.FLAKEMETRY_ENDPOINT
-    const token = this.options.token ?? this.env.FLAKEMETRY_TOKEN
-    if (!endpoint || !token) return
-
-    try {
-      const content = findCodeowners(this.rootDir, this.env)
-      if (!content) return
-      const ok = await uploadCodeowners({ endpoint, token, content })
-      if (ok) process.stderr.write('flakemetry: synced CODEOWNERS\n')
-    } catch (error) {
-      process.stderr.write(
-        `flakemetry: CODEOWNERS sync skipped (${error instanceof Error ? error.message : String(error)})\n`,
-      )
-    }
-  }
-
-  private async maybeUploadNotificationRouting(): Promise<void> {
-    const endpoint = this.options.endpoint ?? this.env.FLAKEMETRY_ENDPOINT
-    const token = this.options.token ?? this.env.FLAKEMETRY_TOKEN
-    if (!endpoint || !token) return
-
-    try {
-      const routing = findNotificationRouting(this.rootDir)
-      if (!routing) return
-      const ok = await uploadNotificationRouting({ endpoint, token, routing })
-      if (ok)
-        process.stderr.write(
-          `flakemetry: synced ${routing.channels.length} notification channel(s) from config\n`,
-        )
-    } catch (error) {
-      process.stderr.write(
-        `flakemetry: notification routing sync skipped (${error instanceof Error ? error.message : String(error)})\n`,
-      )
-    }
-  }
-
-  private async maybeUploadArtifacts(idempotencyKey: string): Promise<void> {
-    const endpoint = this.options.endpoint ?? this.env.FLAKEMETRY_ENDPOINT
-    const token = this.options.token ?? this.env.FLAKEMETRY_TOKEN
-    if (!endpoint || !token || !this.recorder) return
-
-    try {
-      const { uploaded } = await uploadArtifacts({
-        endpoint,
-        token,
-        idempotencyKey,
-        rootDir: this.rootDir,
-        executions: this.recorder.recorded,
-      })
-      if (uploaded > 0) process.stderr.write(`flakemetry: uploaded ${uploaded} artifact(s)\n`)
-    } catch (error) {
-      process.stderr.write(
-        `flakemetry: artifact upload skipped (${error instanceof Error ? error.message : String(error)})\n`,
-      )
-    }
+    await deliverRun(this.recorder, idempotencyKey, this.options, this.env, this.rootDir)
   }
 }

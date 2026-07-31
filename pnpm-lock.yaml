@@ -436,9 +436,6 @@ importers:
       '@flakemetry/sdk':
         specifier: workspace:*
         version: link:../sdk
-      yaml:
-        specifier: ^2.7.0
-        version: 2.9.0
     devDependencies:
       '@flakemetry/eslint-config':
         specifier: workspace:*
@@ -488,6 +485,9 @@ importers:
       '@opentelemetry/semantic-conventions':
         specifier: ^1.28.0
         version: 1.43.0
+      yaml:
+        specifier: ^2.7.0
+        version: 2.9.0
     devDependencies:
       '@flakemetry/eslint-config':
         specifier: workspace:*
