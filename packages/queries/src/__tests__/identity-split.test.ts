@@ -1,7 +1,7 @@
 import { PrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { splitIdentity } from '../identity'
+import { mergeIdentities, splitIdentity } from '../identity'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
 const prisma = new PrismaClient()
@@ -162,6 +162,134 @@ describe.skipIf(!hasDb)('splitIdentity', () => {
       projectId: s.projectId,
       sourceIdentityId: s.identityId,
       fingerprint: 'sha256:unknown',
+    })
+    expect(outcome.status).toBe('rejected')
+  })
+})
+
+describe.skipIf(!hasDb)('mergeIdentities', () => {
+  beforeEach(async () => {
+    await prisma.identityChange.deleteMany()
+    await prisma.identityStitch.deleteMany()
+    await prisma.testHealthEvent.deleteMany()
+    await prisma.dailyTestStats.deleteMany()
+    await prisma.flakyScore.deleteMany()
+    await prisma.testExecution.deleteMany()
+    await prisma.testIdentity.deleteMany()
+    await prisma.run.deleteMany()
+    await prisma.project.deleteMany()
+    await prisma.org.deleteMany()
+  })
+
+  afterAll(async () => {
+    await prisma.$disconnect()
+  })
+
+  const seedPair = async () => {
+    const org = await prisma.org.create({ data: { name: 'Acme', slug: `acme-${Date.now()}` } })
+    const project = await prisma.project.create({
+      data: { orgId: org.id, name: 'Web', slug: 'web' },
+    })
+    const tenant = { orgId: org.id, projectId: project.id }
+
+    const makeIdentity = (fingerprint: string, title: string, seen: Date) =>
+      prisma.testIdentity.create({
+        data: {
+          ...tenant,
+          fingerprint,
+          filePath: 'e2e/login.spec.ts',
+          suite: 'auth',
+          title,
+          firstSeenAt: seen,
+          lastSeenAt: seen,
+        },
+      })
+
+    const target = await makeIdentity('sha256:new', 'logs in successfully', AFTER)
+    const source = await makeIdentity('sha256:old', 'logs in', BEFORE)
+
+    const run = await prisma.run.create({
+      data: {
+        ...tenant,
+        idempotencyKey: 'run-merge',
+        commitSha: 'abc1234',
+        branch: 'main',
+        ciProvider: 'github_actions',
+        trigger: 'push',
+        status: 'passed',
+        startedAt: BEFORE,
+      },
+    })
+    await prisma.testExecution.create({
+      data: {
+        ...tenant,
+        runId: run.id,
+        ordinal: 0,
+        testIdentityId: source.id,
+        status: 'pass',
+        attempt: 1,
+        durationMs: 1000,
+        startedAt: BEFORE,
+      },
+    })
+
+    return { orgId: org.id, projectId: project.id, targetId: target.id, sourceId: source.id }
+  }
+
+  it('folds the source history into the target and consumes the source identity', async () => {
+    const s = await seedPair()
+
+    const outcome = await mergeIdentities(prisma, {
+      orgId: s.orgId,
+      projectId: s.projectId,
+      targetIdentityId: s.targetId,
+      sourceIdentityId: s.sourceId,
+    })
+
+    expect(outcome.status).toBe('merged')
+    if (outcome.status !== 'merged') return
+    expect(outcome.movedExecutions).toBe(1)
+
+    expect(await prisma.testIdentity.findUnique({ where: { id: s.sourceId } })).toBeNull()
+
+    const target = await prisma.testIdentity.findUniqueOrThrow({ where: { id: s.targetId } })
+    expect(target.aliases).toContain('sha256:old')
+    expect(target.firstSeenAt.getTime()).toBe(BEFORE.getTime())
+
+    expect(await prisma.testExecution.count({ where: { testIdentityId: s.targetId } })).toBe(1)
+
+    const stitch = await prisma.identityStitch.findFirstOrThrow()
+    expect(stitch.level).toBe('manual')
+    expect(stitch.testIdentityId).toBe(s.targetId)
+
+    const audit = await prisma.identityChange.findFirstOrThrow()
+    expect(audit.action).toBe('merge')
+
+    expect(await prisma.flakyScore.count({ where: { testIdentityId: s.targetId } })).toBe(1)
+  })
+
+  it('rejects merging a test into itself', async () => {
+    const s = await seedPair()
+    const outcome = await mergeIdentities(prisma, {
+      orgId: s.orgId,
+      projectId: s.projectId,
+      targetIdentityId: s.targetId,
+      sourceIdentityId: s.targetId,
+    })
+    expect(outcome.status).toBe('rejected')
+  })
+
+  it('refuses to merge different parameterized cases', async () => {
+    const s = await seedPair()
+    await prisma.testIdentity.update({
+      where: { id: s.sourceId },
+      data: { paramsHash: 'abc123' },
+    })
+    const outcome = await mergeIdentities(prisma, {
+      orgId: s.orgId,
+      projectId: s.projectId,
+      targetIdentityId: s.targetId,
+      sourceIdentityId: s.sourceId,
     })
     expect(outcome.status).toBe('rejected')
   })

@@ -1,12 +1,12 @@
 import { matchCodeowners, parseCodeowners } from '@flakemetry/core'
 import { getPrismaClient } from '@flakemetry/db'
-import { getClusterImpact, getRca, getTest } from '@flakemetry/queries'
+import { findMergeCandidates, getClusterImpact, getRca, getTest } from '@flakemetry/queries'
 import { notFound } from 'next/navigation'
 
 import { RcaPanel } from '@/components/rca-panel'
 import { ReasonCodes, ScoreBadge } from '@/components/score'
 import { Sparkline } from '@/components/sparkline'
-import { splitTestIdentity } from '@/lib/actions'
+import { mergeTestIdentity, splitTestIdentity } from '@/lib/actions'
 import { requireUser } from '@/lib/session'
 import { requireProjectAccess } from '@/lib/tenant'
 
@@ -53,6 +53,8 @@ export default async function TestDetailPage({
   const owners = project?.codeowners
     ? matchCodeowners(parseCodeowners(project.codeowners), test.filePath)
     : []
+
+  const mergeCandidates = canSplit ? await findMergeCandidates(prisma, projectId, testId) : []
 
   const timeline = [...test.history].reverse()
   const failures = timeline.filter((point) => point.status === 'fail')
@@ -111,7 +113,7 @@ export default async function TestDetailPage({
         <ReasonCodes codes={test.reasonCodes} />
       </div>
 
-      {test.aliases.length > 0 || test.stitches.length > 0 ? (
+      {test.aliases.length > 0 || test.stitches.length > 0 || canSplit ? (
         <div className="card" style={{ marginBottom: '1.25rem' }}>
           <div className="rca-label" style={{ marginBottom: '0.6rem' }}>
             Identity &amp; stitch history
@@ -124,11 +126,11 @@ export default async function TestDetailPage({
           </p>
           {splitError ? (
             <p style={{ color: 'var(--fail)', fontSize: '0.8rem', marginBottom: '0.6rem' }}>
-              Could not split: {splitError}
+              Could not apply: {splitError}
             </p>
           ) : null}
           {test.stitches.length === 0 ? (
-            <div className="muted">Merged by a file move; no rename stitches recorded.</div>
+            <div className="muted">No stitches recorded for this test.</div>
           ) : (
             <table>
               <thead>
@@ -146,11 +148,15 @@ export default async function TestDetailPage({
                     <td className="muted">{formatWhen(stitch.createdAt)}</td>
                     <td>
                       <span className={stitch.level === 'L3' ? 'pill pill-candidate' : 'pill'}>
-                        {stitch.level === 'L3' ? 'renamed' : 'moved'}
+                        {stitch.level === 'L3'
+                          ? 'renamed'
+                          : stitch.level === 'manual'
+                            ? 'merged'
+                            : 'moved'}
                       </span>
                     </td>
                     <td className="mono" style={{ fontSize: '0.74rem' }}>
-                      {stitch.level === 'L3' && stitch.fromTitle
+                      {stitch.level !== 'L2' && stitch.fromTitle
                         ? `${stitch.fromTitle} → ${stitch.toTitle}`
                         : `${stitch.fromFilePath ?? '—'} → ${stitch.toFilePath}`}
                     </td>
@@ -192,6 +198,40 @@ export default async function TestDetailPage({
               </tbody>
             </table>
           )}
+
+          {canSplit && mergeCandidates.length > 0 ? (
+            <div
+              style={{
+                marginTop: '1rem',
+                borderTop: '1px solid var(--border)',
+                paddingTop: '1rem',
+              }}
+            >
+              <div className="rca-label" style={{ marginBottom: '0.4rem' }}>
+                Merge a missed rename
+              </div>
+              <p className="muted" style={{ fontSize: '0.8rem', marginBottom: '0.6rem' }}>
+                If the engine missed a rename and split one test in two, fold the other test&apos;s
+                history into this one. The other identity is consumed; this page keeps both
+                histories.
+              </p>
+              <form action={mergeTestIdentity} className="row-between" style={{ gap: '0.6rem' }}>
+                <input type="hidden" name="projectId" value={projectId} />
+                <input type="hidden" name="testId" value={testId} />
+                <select name="sourceId" required style={{ flex: 1 }}>
+                  <option value="">Choose the test to fold in…</option>
+                  {mergeCandidates.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.title} — {candidate.filePath}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" className="btn btn-ghost">
+                  merge
+                </button>
+              </form>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

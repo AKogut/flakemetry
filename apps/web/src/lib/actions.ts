@@ -3,7 +3,11 @@
 import { projectPolicyInputSchema } from '@flakemetry/contracts'
 import { generateToken, getPrismaClient, hashToken } from '@flakemetry/db'
 import { isEmailAddress, isSafeWebhookUrl } from '@flakemetry/notify'
-import { splitIdentity, updateProjectPolicy as persistProjectPolicy } from '@flakemetry/queries'
+import {
+  mergeIdentities,
+  splitIdentity,
+  updateProjectPolicy as persistProjectPolicy,
+} from '@flakemetry/queries'
 import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -177,6 +181,28 @@ export const splitTestIdentity = async (formData: FormData): Promise<void> => {
   if (outcome.status === 'rejected')
     redirect(`/projects/${projectId}/tests/${testId}?split=${encodeURIComponent(outcome.reason)}`)
   redirect(`/projects/${projectId}/tests/${outcome.targetIdentityId}`)
+}
+
+export const mergeTestIdentity = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const testId = String(formData.get('testId') ?? '')
+  const sourceId = String(formData.get('sourceId') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.role)) throw new Error('only owners and admins can merge test identities')
+
+  const outcome = await mergeIdentities(prisma, {
+    orgId: project.orgId,
+    projectId,
+    targetIdentityId: testId,
+    sourceIdentityId: sourceId,
+    userId: user.id,
+  })
+
+  revalidatePath(`/projects/${projectId}/tests/${testId}`)
+  if (outcome.status === 'rejected')
+    redirect(`/projects/${projectId}/tests/${testId}?split=${encodeURIComponent(outcome.reason)}`)
+  redirect(`/projects/${projectId}/tests/${testId}`)
 }
 
 export const updateProjectPolicy = async (formData: FormData): Promise<void> => {
