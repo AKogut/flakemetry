@@ -1,4 +1,4 @@
-import { PrismaClient } from '@flakemetry/db'
+import { type Prisma, PrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { getTestHealthMetrics } from '../health'
@@ -19,6 +19,7 @@ describe.skipIf(!hasDb)('getTestHealthMetrics', () => {
     await prisma.testHealthEvent.deleteMany()
     await prisma.flakyTrends.deleteMany()
     await prisma.suiteDaily.deleteMany()
+    await prisma.flakyScore.deleteMany()
     await prisma.testIdentity.deleteMany()
     await prisma.project.deleteMany()
     await prisma.org.deleteMany()
@@ -61,6 +62,23 @@ describe.skipIf(!hasDb)('getTestHealthMetrics', () => {
         { ...tenant, testIdentityId: resolved.id, kind: 'stabilized', createdAt: ago(3) },
         { ...tenant, testIdentityId: open.id, kind: 'flaked', createdAt: ago(2) },
       ],
+    })
+
+    await prisma.flakyScore.create({
+      data: {
+        ...tenant,
+        testIdentityId: open.id,
+        score: 0.8,
+        flipRate: 0.4,
+        passOnRerunRate: 0.6,
+        sameShaVariance: 0.3,
+        entropy: 0.5,
+        failIsolation: 1,
+        modelVersion: 'test',
+        quarantineCandidate: true,
+        lastFlakedAt: ago(2),
+        reasonCodes: [] as Prisma.InputJsonValue,
+      },
     })
 
     await prisma.suiteDaily.create({
