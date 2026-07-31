@@ -66,7 +66,12 @@ export const getTest = async (
     aliases: identity.aliases,
     stitches: identity.stitches.map((stitch) => ({
       ...stitch,
-      level: stitch.level === 'L2' ? ('L2' as const) : ('L3' as const),
+      level:
+        stitch.level === 'L2'
+          ? ('L2' as const)
+          : stitch.level === 'manual'
+            ? ('manual' as const)
+            : ('L3' as const),
     })),
     history: executions
       .map((execution) => ({

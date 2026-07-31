@@ -102,6 +102,7 @@ export const splitIdentity = async (
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
+      level: true,
       fromFingerprint: true,
       fromFilePath: true,
       fromTitle: true,
@@ -118,6 +119,11 @@ export const splitIdentity = async (
     return {
       status: 'rejected',
       reason: 'only the most recent stitch can be split; split newer stitches first',
+    }
+  if (stitch.level === 'manual')
+    return {
+      status: 'rejected',
+      reason: 'a manual merge interleaves both histories and cannot be split apart automatically',
     }
 
   const existingTarget = await prisma.testIdentity.findFirst({
@@ -196,6 +202,150 @@ export const splitIdentity = async (
   }
 
   return { status: 'split', ...result }
+}
+
+export interface MergeIdentitiesParams {
+  orgId: string
+  projectId: string
+  targetIdentityId: string
+  sourceIdentityId: string
+  userId?: string | null
+  scoring?: ScoringOptions
+}
+
+export type MergeIdentitiesOutcome =
+  { status: 'merged'; movedExecutions: number } | { status: 'rejected'; reason: string }
+
+export interface MergeCandidate {
+  id: string
+  title: string
+  filePath: string
+  lastSeenAt: Date
+}
+
+export const findMergeCandidates = async (
+  prisma: PrismaClient,
+  projectId: string,
+  identityId: string,
+  limit = 25,
+): Promise<MergeCandidate[]> => {
+  const identity = await prisma.testIdentity.findFirst({
+    where: { id: identityId, projectId },
+    select: { suite: true, paramsHash: true },
+  })
+  if (!identity) return []
+
+  return prisma.testIdentity.findMany({
+    where: {
+      projectId,
+      suite: identity.suite,
+      paramsHash: identity.paramsHash,
+      id: { not: identityId },
+    },
+    orderBy: { lastSeenAt: 'desc' },
+    take: limit,
+    select: { id: true, title: true, filePath: true, lastSeenAt: true },
+  })
+}
+
+export const mergeIdentities = async (
+  prisma: PrismaClient,
+  params: MergeIdentitiesParams,
+): Promise<MergeIdentitiesOutcome> => {
+  const { orgId, projectId, targetIdentityId, sourceIdentityId } = params
+
+  if (targetIdentityId === sourceIdentityId)
+    return { status: 'rejected', reason: 'cannot merge a test into itself' }
+
+  const select = {
+    id: true,
+    fingerprint: true,
+    filePath: true,
+    suite: true,
+    title: true,
+    paramsHash: true,
+    aliases: true,
+    firstSeenAt: true,
+    lastSeenAt: true,
+  }
+  const [target, source] = await Promise.all([
+    prisma.testIdentity.findFirst({ where: { id: targetIdentityId, projectId }, select }),
+    prisma.testIdentity.findFirst({ where: { id: sourceIdentityId, projectId }, select }),
+  ])
+  if (!target || !source) return { status: 'rejected', reason: 'test identity not found' }
+  if (target.paramsHash !== source.paramsHash)
+    return {
+      status: 'rejected',
+      reason: 'these are different parameterized cases; merging them would collide their histories',
+    }
+
+  const movedExecutions = await prisma.$transaction(async (tx) => {
+    const moved = await tx.testExecution.updateMany({
+      where: { projectId, testIdentityId: sourceIdentityId },
+      data: { testIdentityId: targetIdentityId },
+    })
+    await tx.testHealthEvent.updateMany({
+      where: { projectId, testIdentityId: sourceIdentityId },
+      data: { testIdentityId: targetIdentityId },
+    })
+    await tx.identityStitch.updateMany({
+      where: { testIdentityId: sourceIdentityId },
+      data: { testIdentityId: targetIdentityId },
+    })
+
+    await tx.identityStitch.create({
+      data: {
+        orgId,
+        projectId,
+        testIdentityId: targetIdentityId,
+        level: 'manual',
+        fromFingerprint: source.fingerprint,
+        fromFilePath: source.filePath,
+        fromTitle: source.title,
+        toFilePath: target.filePath,
+        toTitle: target.title,
+      },
+    })
+
+    await tx.testIdentity.update({
+      where: { id: targetIdentityId },
+      data: {
+        aliases: [...new Set([...target.aliases, ...source.aliases, source.fingerprint])],
+        firstSeenAt:
+          source.firstSeenAt < target.firstSeenAt ? source.firstSeenAt : target.firstSeenAt,
+        lastSeenAt: source.lastSeenAt > target.lastSeenAt ? source.lastSeenAt : target.lastSeenAt,
+      },
+    })
+
+    await tx.testIdentity.delete({ where: { id: sourceIdentityId } })
+
+    await rebuildDailyStats(tx, orgId, projectId, targetIdentityId)
+
+    await tx.identityChange.create({
+      data: {
+        orgId,
+        projectId,
+        userId: params.userId ?? null,
+        action: 'merge',
+        sourceIdentityId,
+        targetIdentityId,
+        fingerprint: source.fingerprint,
+        detail: `${source.title} → ${target.title}`,
+      },
+    })
+
+    return moved.count
+  })
+
+  const scoring = params.scoring ?? { now: new Date() }
+  const scored = await computeIdentityScore(prisma, orgId, projectId, targetIdentityId, scoring)
+  await prisma.flakyScore.upsert({
+    where: { testIdentityId: targetIdentityId },
+    create: { testIdentityId: targetIdentityId, ...scored.data },
+    update: scored.data,
+  })
+
+  return { status: 'merged', movedExecutions }
 }
 
 export interface IdentityChangeEntry {

@@ -66,7 +66,7 @@ export const testHistoryPointSchema = z.object({
 })
 
 export const identityStitchSchema = z.object({
-  level: z.enum(['L2', 'L3']),
+  level: z.enum(['L2', 'L3', 'manual']),
   fromFingerprint: z.string(),
   fromFilePath: z.string().nullable(),
   fromTitle: z.string().nullable(),
