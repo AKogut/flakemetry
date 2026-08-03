@@ -26,14 +26,14 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "nodemailer": "^6.9.16"
+    "nodemailer": "^9.0.1"
   },
   "devDependencies": {
     "@flakemetry/eslint-config": "workspace:*",
     "@flakemetry/tsconfig": "workspace:*",
     "@flakemetry/tsup-config": "workspace:*",
     "@types/node": "^22.10.5",
-    "@types/nodemailer": "^6.4.17",
+    "@types/nodemailer": "^8.0.1",
     "vitest": "^3.2.4"
   },
   "private": true

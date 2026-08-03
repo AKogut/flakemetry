@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "zod": "^3.24.1",
-    "fast-xml-parser": "^4.5.1"
+    "fast-xml-parser": "^5.7.0"
   },
   "devDependencies": {
     "@flakemetry/eslint-config": "workspace:*",

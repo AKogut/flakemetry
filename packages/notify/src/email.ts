@@ -48,13 +48,16 @@ export const parseSmtpConfig = (env: Record<string, string | undefined>): SmtpCo
   }
 }
 
-export const createSmtpSender = (config: SmtpConfig): EmailSender => {
-  const transport: Transporter = createTransport({
+export const createSmtpSender = (
+  config: SmtpConfig,
+  // Injectable so the wrapper can be exercised without opening an SMTP connection.
+  transport: Transporter = createTransport({
     host: config.host,
     port: config.port,
     secure: config.secure,
     ...(config.user && config.pass ? { auth: { user: config.user, pass: config.pass } } : {}),
-  })
+  }),
+): EmailSender => {
   return async (to, message) => {
     await transport.sendMail({
       from: config.from,
