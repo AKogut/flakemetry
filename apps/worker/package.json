@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "clean": "rm -rf dist .turbo",
     "start": "node dist/index.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "restitch": "tsx src/restitch.ts"
   },
   "devDependencies": {
     "@flakemetry/api": "workspace:*",
@@ -21,7 +22,8 @@
     "@types/node": "^22.10.5",
     "tsup": "^8.3.5",
     "vitest": "^3.2.4",
-    "@flakemetry/queries": "workspace:*"
+    "@flakemetry/queries": "workspace:*",
+    "tsx": "^4.19.2"
   },
   "dependencies": {
     "@flakemetry/ai": "workspace:*",

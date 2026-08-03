@@ -210,6 +210,7 @@ export interface MergeIdentitiesParams {
   targetIdentityId: string
   sourceIdentityId: string
   userId?: string | null
+  auditAction?: string
   scoring?: ScoringOptions
 }
 
@@ -346,7 +347,7 @@ export const mergeIdentities = async (
         orgId,
         projectId,
         userId: params.userId ?? null,
-        action: 'merge',
+        action: params.auditAction ?? 'merge',
         sourceIdentityId,
         targetIdentityId,
         fingerprint: source.fingerprint,
