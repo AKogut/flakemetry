@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { type ExistingIdentity, resolveIdentity } from '../identity'
+import { collectPresentTitleKeys, type ExistingIdentity, resolveIdentity } from '../identity'
 
 const existing: ExistingIdentity = {
   id: 'id-1',
@@ -164,5 +164,87 @@ describe('resolveIdentity L3 rename', () => {
       [inFile],
     )
     expect(result.kind).toBe('new')
+  })
+})
+
+describe('resolveIdentity neighbor context', () => {
+  const bucket = {
+    suite: 'auth',
+    paramsHash: null,
+    filePath: 'e2e/auth.spec.ts',
+    aliases: [] as string[],
+  }
+  const candidate = {
+    fingerprint: 'sha256:new',
+    suite: 'auth',
+    title: 'logs in',
+    paramsHash: null,
+    filePath: 'e2e/auth.spec.ts',
+  }
+
+  it('refuses to rename onto a test that is still running in the same batch', () => {
+    const alive: ExistingIdentity = {
+      ...bucket,
+      id: 'id-alive',
+      fingerprint: 'a',
+      title: 'logs in ok',
+    }
+    const present = collectPresentTitleKeys([
+      { ...bucket, title: 'logs in ok' },
+      { ...bucket, title: 'logs in' },
+    ])
+
+    expect(resolveIdentity(candidate, [alive]).kind).toBe('renamed')
+    expect(resolveIdentity(candidate, [alive], { presentTitleKeys: present }).kind).toBe('new')
+  })
+
+  it('uses the batch to disambiguate: the test that disappeared is the renamed one', () => {
+    const gone: ExistingIdentity = {
+      ...bucket,
+      id: 'id-gone',
+      fingerprint: 'a',
+      title: 'logs in ok',
+    }
+    const alive: ExistingIdentity = {
+      ...bucket,
+      id: 'id-alive',
+      fingerprint: 'b',
+      title: 'logs in now',
+    }
+    const present = collectPresentTitleKeys([
+      { ...bucket, title: 'logs in now' },
+      { ...bucket, title: 'logs in' },
+    ])
+
+    expect(resolveIdentity(candidate, [gone, alive]).kind).toBe('new')
+
+    const resolved = resolveIdentity(candidate, [gone, alive], { presentTitleKeys: present })
+    expect(resolved.kind).toBe('renamed')
+    if (resolved.kind === 'renamed') expect(resolved.identityId).toBe('id-gone')
+  })
+
+  it('picks a clearly better candidate but still refuses a close call', () => {
+    const near: ExistingIdentity = {
+      ...bucket,
+      id: 'id-near',
+      fingerprint: 'a',
+      title: 'logs in with a valid password',
+    }
+    const far: ExistingIdentity = { ...bucket, id: 'id-far', fingerprint: 'b', title: 'logs in ok' }
+
+    const clear = resolveIdentity({ ...candidate, title: 'logs in with a valid password today' }, [
+      near,
+      far,
+    ])
+    expect(clear.kind).toBe('renamed')
+    if (clear.kind === 'renamed') expect(clear.identityId).toBe('id-near')
+
+    const tie: ExistingIdentity = {
+      ...bucket,
+      id: 'id-tie',
+      fingerprint: 'c',
+      title: 'logs in now',
+    }
+    expect(resolveIdentity(candidate, [far, tie]).kind).toBe('new')
   })
 })

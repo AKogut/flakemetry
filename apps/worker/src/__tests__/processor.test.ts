@@ -344,6 +344,42 @@ describe.skipIf(!hasDb)('processJob', () => {
     expect(stitch.fromFingerprint).toBe(identity.aliases[0])
   })
 
+  it('does not rename onto a test that is still running in the same batch', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(prisma, batch(), ctx)
+
+    const both = batch({
+      idempotencyKey: 'run-000004',
+      executions: [
+        {
+          filePath: 'e2e/login.spec.ts',
+          suite: 'auth',
+          title: 'logs in',
+          status: 'pass',
+          attempt: 1,
+          startedAt: new Date('2026-07-16T12:00:00Z'),
+          durationMs: 1000,
+        },
+        {
+          filePath: 'e2e/login.spec.ts',
+          suite: 'auth',
+          title: 'logs in successfully',
+          status: 'pass',
+          attempt: 1,
+          startedAt: new Date('2026-07-16T12:00:01Z'),
+          durationMs: 1100,
+        },
+      ],
+    })
+    const result = await processJob(prisma, both, ctx)
+
+    // The original test is still in the run, so the new title is a genuinely new
+    // test rather than a rename of it.
+    expect(result.movedIdentities).toBe(0)
+    expect(result.newIdentities).toBe(1)
+    expect(await prisma.testIdentity.count()).toBe(2)
+  })
+
   it('records an L3 rename stitch with a confidence score', async () => {
     const ctx = { ...(await seedProject()), now: NOW }
     await processJob(prisma, batch(), ctx)
