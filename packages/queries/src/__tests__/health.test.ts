@@ -5,6 +5,7 @@ import {
   type HealthEventPoint,
   median,
   pairFlakeResolutions,
+  quarantineTrendFromEvents,
   summarizeMttr,
   weekStartUtc,
 } from '../health'
@@ -103,5 +104,38 @@ describe('bucketWeekly', () => {
     expect(firstWithData?.resolved).toBe(0)
     const total = weekly.reduce((sum, week) => sum + week.introduced + week.resolved, 0)
     expect(total).toBe(3)
+  })
+})
+
+describe('quarantineTrendFromEvents', () => {
+  it('tracks how many tests are held in quarantine as events land', () => {
+    const windowStart = at('2026-07-01T00:00:00Z')
+    const trend = quarantineTrendFromEvents(
+      [
+        event('a', 'quarantined', '2026-07-02T00:00:00Z'),
+        event('b', 'quarantined', '2026-07-03T00:00:00Z'),
+        event('a', 'unquarantined', '2026-07-05T00:00:00Z'),
+        event('c', 'flaked', '2026-07-06T00:00:00Z'),
+      ],
+      windowStart,
+    )
+
+    expect(trend.map((point) => point.count)).toEqual([1, 2, 1])
+    expect(trend[0]?.day.toISOString()).toBe('2026-07-02T00:00:00.000Z')
+  })
+
+  it('carries pre-window state forward instead of restarting the count', () => {
+    const trend = quarantineTrendFromEvents(
+      [
+        event('a', 'quarantined', '2026-06-01T00:00:00Z'),
+        event('b', 'quarantined', '2026-07-02T00:00:00Z'),
+      ],
+      at('2026-07-01T00:00:00Z'),
+    )
+
+    // 'a' was already quarantined before the window opened, so the first in-window
+    // point counts both tests rather than only the new one.
+    expect(trend).toHaveLength(1)
+    expect(trend[0]?.count).toBe(2)
   })
 })

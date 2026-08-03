@@ -62,7 +62,7 @@ export const appRouter = router({
     metrics: protectedProcedure
       .input(testHealthInputSchema)
       .query(({ ctx, input }) =>
-        getTestHealthMetrics(ctx.prisma, ctx.project.projectId, input.days),
+        getTestHealthMetrics(ctx.prisma, ctx.project.projectId, input.days, input.owner),
       ),
   }),
 })

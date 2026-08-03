@@ -1,5 +1,5 @@
 import { getPrismaClient } from '@flakemetry/db'
-import { getTestHealthMetrics } from '@flakemetry/queries'
+import { getTeamHealthLeaderboard, getTestHealthMetrics } from '@flakemetry/queries'
 
 import { MiniTrend } from '@/components/mini-trend'
 import { requireUser } from '@/lib/session'
@@ -27,16 +27,19 @@ export default async function TestHealthPage({
   searchParams,
 }: {
   params: Promise<{ projectId: string }>
-  searchParams: Promise<{ days?: string }>
+  searchParams: Promise<{ days?: string; owner?: string }>
 }) {
   const { projectId } = await params
-  const { days: daysParam } = await searchParams
+  const { days: daysParam, owner: ownerParam } = await searchParams
   const user = await requireUser()
   await requireProjectAccess(user.id, projectId)
 
   const days = WINDOWS.includes(Number(daysParam)) ? Number(daysParam) : 90
 
-  const metrics = await getTestHealthMetrics(prisma, projectId, days)
+  const teams = await getTeamHealthLeaderboard(prisma, projectId, days)
+  const owner = ownerParam && teams.some((team) => team.owner === ownerParam) ? ownerParam : null
+  const metrics = await getTestHealthMetrics(prisma, projectId, days, owner)
+  const scopeQuery = owner ? `&owner=${encodeURIComponent(owner)}` : ''
 
   const totalIntroduced = metrics.weekly.reduce((sum, week) => sum + week.introduced, 0)
   const totalResolved = metrics.weekly.reduce((sum, week) => sum + week.resolved, 0)
@@ -56,14 +59,21 @@ export default async function TestHealthPage({
           </h1>
           <p className="page-subtitle" style={{ marginBottom: 0 }}>
             Is flakiness improving or degrading? Flaky MTTR and introduced-vs-resolved over the last{' '}
-            {days} days.
+            {days} days
+            {owner ? (
+              <>
+                {' '}
+                for <span className="mono">{owner}</span>
+              </>
+            ) : null}
+            .
           </p>
         </div>
         <div className="filters">
           {WINDOWS.map((window) => (
             <a
               key={window}
-              href={`?days=${window}`}
+              href={`?days=${window}${scopeQuery}`}
               className="filter-tab"
               data-active={window === days}
             >
@@ -72,6 +82,24 @@ export default async function TestHealthPage({
           ))}
         </div>
       </div>
+
+      {teams.length > 0 ? (
+        <div className="filters" style={{ marginBottom: '1rem' }}>
+          <a href={`?days=${days}`} className="filter-tab" data-active={owner === null}>
+            All teams
+          </a>
+          {teams.map((team) => (
+            <a
+              key={team.owner}
+              href={`?days=${days}&owner=${encodeURIComponent(team.owner)}`}
+              className="filter-tab"
+              data-active={team.owner === owner}
+            >
+              {team.owner}
+            </a>
+          ))}
+        </div>
+      ) : null}
 
       {!hasHistory ? (
         <div className="card">
@@ -166,6 +194,59 @@ export default async function TestHealthPage({
               />
             </div>
           </div>
+
+          {owner === null && teams.length > 0 ? (
+            <div className="card">
+              <div className="rca-label" style={{ marginBottom: '0.6rem' }}>
+                Flaky backlog by team
+              </div>
+              <p className="muted" style={{ fontSize: '0.8rem', marginBottom: '0.6rem' }}>
+                Owners come from CODEOWNERS. A positive net means that team introduced more flaky
+                tests than it fixed in this window.
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Team</th>
+                    <th style={{ textAlign: 'right' }}>Currently flaky</th>
+                    <th style={{ textAlign: 'right' }}>Quarantined</th>
+                    <th style={{ textAlign: 'right' }}>Introduced</th>
+                    <th style={{ textAlign: 'right' }}>Resolved</th>
+                    <th style={{ textAlign: 'right' }}>Net</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teams.map((team) => (
+                    <tr key={team.owner}>
+                      <td className="mono">
+                        <a href={`?days=${days}&owner=${encodeURIComponent(team.owner)}`}>
+                          {team.owner}
+                        </a>
+                      </td>
+                      <td style={{ textAlign: 'right', color: 'var(--flaky)' }}>
+                        {team.currentlyFlaky}
+                      </td>
+                      <td style={{ textAlign: 'right' }} className="muted">
+                        {team.quarantined}
+                      </td>
+                      <td style={{ textAlign: 'right' }}>{team.introduced}</td>
+                      <td style={{ textAlign: 'right', color: 'var(--pass)' }}>{team.resolved}</td>
+                      <td
+                        style={{
+                          textAlign: 'right',
+                          fontWeight: 600,
+                          color: team.net > 0 ? 'var(--fail)' : undefined,
+                        }}
+                      >
+                        {team.net > 0 ? '+' : ''}
+                        {team.net}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
 
           {metrics.weekly.length > 0 ? (
             <div className="card">
