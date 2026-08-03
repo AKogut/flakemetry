@@ -1,7 +1,7 @@
 import { type Prisma, PrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { getTestHealthMetrics } from '../health'
+import { getTeamHealthLeaderboard, getTestHealthMetrics } from '../health'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
 const prisma = new PrismaClient()
@@ -115,5 +115,89 @@ describe.skipIf(!hasDb)('getTestHealthMetrics', () => {
 
     expect(metrics.reliabilityTrend).toHaveLength(1)
     expect(metrics.reliabilityTrend[0]?.passRate).toBeCloseTo(0.8)
+  })
+})
+
+describe.skipIf(!hasDb)('team-scoped health metrics', () => {
+  beforeEach(async () => {
+    await prisma.testHealthEvent.deleteMany()
+    await prisma.flakyTrends.deleteMany()
+    await prisma.suiteDaily.deleteMany()
+    await prisma.flakyScore.deleteMany()
+    await prisma.testIdentity.deleteMany()
+    await prisma.project.deleteMany()
+    await prisma.org.deleteMany()
+  })
+
+  afterAll(async () => {
+    await prisma.$disconnect()
+  })
+
+  const seedTeams = async () => {
+    const org = await prisma.org.create({ data: { name: 'Acme', slug: `acme-${Date.now()}` } })
+    const project = await prisma.project.create({
+      data: {
+        orgId: org.id,
+        name: 'Web',
+        slug: 'web',
+        codeowners: 'e2e/checkout/* @acme/payments\ne2e/auth/* @acme/identity\n',
+      },
+    })
+    const tenant = { orgId: org.id, projectId: project.id }
+
+    const make = (fingerprint: string, filePath: string, quarantined = false) =>
+      prisma.testIdentity.create({
+        data: { ...tenant, fingerprint, filePath, suite: 's', title: fingerprint, quarantined },
+      })
+
+    const payments = await make('pay', 'e2e/checkout/pay.spec.ts', true)
+    const identity = await make('login', 'e2e/auth/login.spec.ts')
+
+    await prisma.testHealthEvent.createMany({
+      data: [
+        { ...tenant, testIdentityId: payments.id, kind: 'flaked', createdAt: ago(5) },
+        { ...tenant, testIdentityId: payments.id, kind: 'stabilized', createdAt: ago(3) },
+        { ...tenant, testIdentityId: payments.id, kind: 'flaked', createdAt: ago(2) },
+        { ...tenant, testIdentityId: identity.id, kind: 'flaked', createdAt: ago(4) },
+      ],
+    })
+
+    return { projectId: project.id, paymentsId: payments.id }
+  }
+
+  it('scopes MTTR, backlog and weekly counts to the owning team', async () => {
+    const s = await seedTeams()
+
+    const all = await getTestHealthMetrics(prisma, s.projectId, 90)
+    const payments = await getTestHealthMetrics(prisma, s.projectId, 90, '@acme/payments')
+
+    expect(all.weekly.reduce((sum, week) => sum + week.introduced, 0)).toBe(3)
+    expect(payments.weekly.reduce((sum, week) => sum + week.introduced, 0)).toBe(2)
+    expect(payments.mttr.resolvedCount).toBe(1)
+    expect(payments.quarantine.currentBacklog).toBe(1)
+
+    const identity = await getTestHealthMetrics(prisma, s.projectId, 90, '@acme/identity')
+    expect(identity.mttr.resolvedCount).toBe(0)
+    expect(identity.quarantine.currentBacklog).toBe(0)
+  })
+
+  it('returns empty metrics for an owner that owns nothing', async () => {
+    const s = await seedTeams()
+    const none = await getTestHealthMetrics(prisma, s.projectId, 90, '@acme/nobody')
+    expect(none.mttr.resolvedCount).toBe(0)
+    expect(none.quarantine.currentBacklog).toBe(0)
+    expect(none.reliabilityTrend).toEqual([])
+  })
+
+  it('ranks teams by net flaky backlog', async () => {
+    const s = await seedTeams()
+    const teams = await getTeamHealthLeaderboard(prisma, s.projectId, 90)
+
+    const payments = teams.find((team) => team.owner === '@acme/payments')
+    expect(payments?.introduced).toBe(2)
+    expect(payments?.resolved).toBe(1)
+    expect(payments?.net).toBe(1)
+    expect(payments?.quarantined).toBe(1)
+    expect(teams[0]?.owner).toBe('@acme/payments')
   })
 })

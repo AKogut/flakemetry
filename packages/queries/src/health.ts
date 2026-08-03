@@ -1,4 +1,5 @@
 import type { HealthEventKind, TestHealthResult } from '@flakemetry/contracts'
+import { matchCodeowners, parseCodeowners } from '@flakemetry/core'
 import type { PrismaClient } from '@flakemetry/db'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -118,34 +119,106 @@ export const summarizeMttr = (
   }
 }
 
+export const quarantineTrendFromEvents = (
+  events: readonly HealthEventPoint[],
+  windowStart: Date,
+): TestHealthResult['quarantine']['trend'] => {
+  const byTest = new Map<string, boolean>()
+  const byDay = new Map<number, number>()
+
+  for (const event of [...events].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())) {
+    if (event.kind === 'quarantined') byTest.set(event.testIdentityId, true)
+    else if (event.kind === 'unquarantined') byTest.set(event.testIdentityId, false)
+    else continue
+    if (event.createdAt < windowStart) continue
+    let held = 0
+    for (const quarantined of byTest.values()) if (quarantined) held += 1
+    byDay.set(dayStartUtc(event.createdAt).getTime(), held)
+  }
+
+  return [...byDay.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([day, count]) => ({ day: new Date(day), count }))
+}
+
+const ownedIdentityIds = async (
+  prisma: PrismaClient,
+  projectId: string,
+  owner: string,
+): Promise<string[]> => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { codeowners: true },
+  })
+  const rules = project?.codeowners ? parseCodeowners(project.codeowners) : []
+  if (rules.length === 0) return []
+
+  const identities = await prisma.testIdentity.findMany({
+    where: { projectId },
+    select: { id: true, filePath: true },
+  })
+  return identities
+    .filter((identity) => matchCodeowners(rules, identity.filePath).includes(owner))
+    .map((identity) => identity.id)
+}
+
 export const getTestHealthMetrics = async (
   prisma: PrismaClient,
   projectId: string,
   days = 90,
+  owner?: string | null,
 ): Promise<TestHealthResult> => {
   const windowStart = since(days)
   const now = new Date()
 
+  const scoped = owner ? await ownedIdentityIds(prisma, projectId, owner) : null
+  if (scoped && scoped.length === 0)
+    return {
+      rangeDays: days,
+      mttr: { resolvedCount: 0, openCount: 0, meanMs: null, medianMs: null },
+      weekly: bucketWeekly([], windowStart, now),
+      quarantine: { currentBacklog: 0, trend: [] },
+      reliabilityTrend: [],
+    }
+  const identityFilter = scoped ? { in: scoped } : undefined
+
   const [rawEvents, currentlyFlaky, currentBacklog, quarantineDaily, reliabilityDaily] =
     await Promise.all([
       prisma.testHealthEvent.findMany({
-        where: { projectId },
+        where: { projectId, ...(identityFilter ? { testIdentityId: identityFilter } : {}) },
         select: { testIdentityId: true, kind: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
-      prisma.flakyScore.count({ where: { projectId, quarantineCandidate: true } }),
-      prisma.testIdentity.count({ where: { projectId, quarantined: true } }),
-      prisma.flakyTrends.findMany({
-        where: { projectId, day: { gte: windowStart } },
-        select: { day: true, quarantinedCount: true },
-        orderBy: { day: 'asc' },
+      prisma.flakyScore.count({
+        where: {
+          projectId,
+          quarantineCandidate: true,
+          ...(identityFilter ? { testIdentityId: identityFilter } : {}),
+        },
       }),
-      prisma.suiteDaily.groupBy({
-        by: ['day'],
-        where: { projectId, day: { gte: windowStart } },
-        _sum: { total: true, passed: true },
-        orderBy: { day: 'asc' },
+      prisma.testIdentity.count({
+        where: { projectId, quarantined: true, ...(identityFilter ? { id: identityFilter } : {}) },
       }),
+      scoped
+        ? []
+        : prisma.flakyTrends.findMany({
+            where: { projectId, day: { gte: windowStart } },
+            select: { day: true, quarantinedCount: true },
+            orderBy: { day: 'asc' },
+          }),
+      scoped
+        ? prisma.dailyTestStats.groupBy({
+            by: ['day'],
+            where: { projectId, day: { gte: windowStart }, testIdentityId: identityFilter },
+            _sum: { total: true, passed: true },
+            orderBy: { day: 'asc' },
+          })
+        : prisma.suiteDaily.groupBy({
+            by: ['day'],
+            where: { projectId, day: { gte: windowStart } },
+            _sum: { total: true, passed: true },
+            orderBy: { day: 'asc' },
+          }),
     ])
 
   const events: HealthEventPoint[] = rawEvents.map((event) => ({
@@ -168,8 +241,94 @@ export const getTestHealthMetrics = async (
     weekly: bucketWeekly(events, windowStart, now),
     quarantine: {
       currentBacklog,
-      trend: quarantineDaily.map((row) => ({ day: row.day, count: row.quarantinedCount })),
+      trend: scoped
+        ? quarantineTrendFromEvents(events, windowStart)
+        : quarantineDaily.map((row) => ({ day: row.day, count: row.quarantinedCount })),
     },
     reliabilityTrend,
   }
+}
+
+export interface TeamHealthRow {
+  owner: string
+  currentlyFlaky: number
+  quarantined: number
+  introduced: number
+  resolved: number
+  net: number
+}
+
+export const getTeamHealthLeaderboard = async (
+  prisma: PrismaClient,
+  projectId: string,
+  days = 90,
+): Promise<TeamHealthRow[]> => {
+  const windowStart = since(days)
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { codeowners: true },
+  })
+  const rules = project?.codeowners ? parseCodeowners(project.codeowners) : []
+  if (rules.length === 0) return []
+
+  const [identities, flakyScores, events] = await Promise.all([
+    prisma.testIdentity.findMany({
+      where: { projectId },
+      select: { id: true, filePath: true, quarantined: true },
+    }),
+    prisma.flakyScore.findMany({
+      where: { projectId, quarantineCandidate: true },
+      select: { testIdentityId: true },
+    }),
+    prisma.testHealthEvent.findMany({
+      where: { projectId, createdAt: { gte: windowStart } },
+      select: { testIdentityId: true, kind: true },
+    }),
+  ])
+
+  const flaggedFlaky = new Set(flakyScores.map((score) => score.testIdentityId))
+  const ownersByIdentity = new Map(
+    identities.map((identity) => [identity.id, matchCodeowners(rules, identity.filePath)]),
+  )
+
+  const rows = new Map<string, TeamHealthRow>()
+  const rowFor = (owner: string): TeamHealthRow => {
+    const existing = rows.get(owner)
+    if (existing) return existing
+    const created: TeamHealthRow = {
+      owner,
+      currentlyFlaky: 0,
+      quarantined: 0,
+      introduced: 0,
+      resolved: 0,
+      net: 0,
+    }
+    rows.set(owner, created)
+    return created
+  }
+
+  for (const identity of identities) {
+    for (const owner of ownersByIdentity.get(identity.id) ?? []) {
+      const row = rowFor(owner)
+      if (flaggedFlaky.has(identity.id)) row.currentlyFlaky += 1
+      if (identity.quarantined) row.quarantined += 1
+    }
+  }
+
+  for (const event of events) {
+    if (event.kind !== 'flaked' && event.kind !== 'stabilized') continue
+    for (const owner of ownersByIdentity.get(event.testIdentityId) ?? []) {
+      const row = rowFor(owner)
+      if (event.kind === 'flaked') row.introduced += 1
+      else row.resolved += 1
+    }
+  }
+
+  for (const row of rows.values()) row.net = row.introduced - row.resolved
+
+  return [...rows.values()].sort(
+    (a, b) =>
+      b.net - a.net || b.currentlyFlaky - a.currentlyFlaky || a.owner.localeCompare(b.owner),
+  )
 }

@@ -156,6 +156,7 @@ export const healthEventKindSchema = z.enum([
 
 export const testHealthInputSchema = z.object({
   days: z.number().int().min(1).max(365).default(90),
+  owner: z.string().min(1).optional(),
 })
 
 export const mttrSummarySchema = z.object({
