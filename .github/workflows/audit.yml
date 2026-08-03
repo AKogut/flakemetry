@@ -1,0 +1,39 @@
+name: audit
+
+on:
+  schedule:
+    # Weekly, so an advisory published against a pinned transitive dependency is
+    # noticed even when nothing in the repository changes.
+    - cron: '0 6 * * 1'
+  pull_request:
+    paths:
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+      - '**/package.json'
+      - '.github/workflows/audit.yml'
+  workflow_dispatch:
+
+jobs:
+  advisories:
+    name: no high-severity advisories in production dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Dependabot handles what it can raise a pull request for. This catches the
+      # rest: advisories reachable through a transitive pin that only a resolution
+      # override can clear, which is how the last round had to be fixed.
+      - run: pnpm audit --prod --audit-level high
+
+      - name: Report everything else without failing
+        if: always()
+        run: pnpm audit --audit-level low || true
