@@ -64,6 +64,26 @@ describe('createDispatcher', () => {
     expect(send).toHaveBeenCalledWith(slackChannel.webhookUrl, expect.anything())
   })
 
+  it('does not reject when loading channels fails', async () => {
+    const send: NotificationSender = vi.fn(async () => ({ ok: true, status: 200 }))
+    const errors: unknown[] = []
+    const dispatcher = createDispatcher({
+      channels: [slackChannel],
+      channelsFor: async () => {
+        throw new Error('database unavailable')
+      },
+      send,
+      onError: (error) => errors.push(error),
+    })
+
+    // Callers fire this without awaiting, so a rejection would surface as an
+    // unhandled rejection and take the worker down.
+    await expect(dispatcher.dispatch(flakyEvent)).resolves.toBeUndefined()
+    expect(errors).toHaveLength(1)
+    expect(String(errors[0])).toContain('database unavailable')
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('also dispatches to per-event dynamic channels', async () => {
     const send: NotificationSender = vi.fn(async () => ({ ok: true, status: 200 }))
     const dynamic: Channel = {
