@@ -1,6 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { PrismaClient } from '@flakemetry/db'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { pairRestitchCandidates, type RestitchIdentity } from '../restitch'
+import {
+  applyHistoricalRestitch,
+  pairRestitchCandidates,
+  planHistoricalRestitch,
+  type RestitchIdentity,
+} from '../restitch'
+
+const hasDb = Boolean(process.env.DATABASE_URL)
+const prisma = new PrismaClient()
 
 const at = (iso: string): Date => new Date(iso)
 
@@ -95,5 +104,111 @@ describe('pairRestitchCandidates', () => {
     )
     expect(loose).toHaveLength(1)
     expect(strict).toEqual([])
+  })
+})
+
+describe.skipIf(!hasDb)('applyHistoricalRestitch', () => {
+  beforeEach(async () => {
+    await prisma.identityMerge.deleteMany()
+    await prisma.identityChange.deleteMany()
+    await prisma.identityStitch.deleteMany()
+    await prisma.testHealthEvent.deleteMany()
+    await prisma.dailyTestStats.deleteMany()
+    await prisma.flakyScore.deleteMany()
+    await prisma.testExecution.deleteMany()
+    await prisma.testIdentity.deleteMany()
+    await prisma.run.deleteMany()
+    await prisma.project.deleteMany()
+    await prisma.org.deleteMany()
+  })
+
+  afterAll(async () => {
+    await prisma.$disconnect()
+  })
+
+  const seed = async () => {
+    const org = await prisma.org.create({ data: { name: 'Acme', slug: `acme-${Date.now()}` } })
+    const project = await prisma.project.create({
+      data: { orgId: org.id, name: 'Web', slug: 'web' },
+    })
+    const tenant = { orgId: org.id, projectId: project.id }
+
+    const make = (fingerprint: string, title: string, first: Date, last: Date) =>
+      prisma.testIdentity.create({
+        data: {
+          ...tenant,
+          fingerprint,
+          filePath: 'e2e/login.spec.ts',
+          suite: 'auth',
+          title,
+          firstSeenAt: first,
+          lastSeenAt: last,
+        },
+      })
+
+    const old = await make(
+      'sha256:old',
+      'logs in',
+      at('2026-01-01T00:00:00Z'),
+      at('2026-06-01T00:00:00Z'),
+    )
+    const fresh = await make(
+      'sha256:new',
+      'logs in successfully',
+      at('2026-06-02T00:00:00Z'),
+      at('2026-07-01T00:00:00Z'),
+    )
+    // An unrelated test that must be left alone.
+    const other = await make(
+      'sha256:other',
+      'renders the dashboard',
+      at('2026-01-01T00:00:00Z'),
+      at('2026-07-01T00:00:00Z'),
+    )
+
+    return {
+      orgId: org.id,
+      projectId: project.id,
+      oldId: old.id,
+      freshId: fresh.id,
+      otherId: other.id,
+    }
+  }
+
+  it('re-links a plan and records each one as an undoable, audited merge', async () => {
+    const s = await seed()
+
+    const plan = await planHistoricalRestitch(prisma, s.projectId)
+    expect(plan).toHaveLength(1)
+    expect(plan[0]?.sourceIdentityId).toBe(s.oldId)
+    expect(plan[0]?.targetIdentityId).toBe(s.freshId)
+
+    const report = await applyHistoricalRestitch(prisma, s.orgId, s.projectId, plan)
+    expect(report).toMatchObject({ planned: 1, restitched: 1 })
+    expect(report.skipped).toEqual([])
+
+    // The older identity is folded in; the unrelated test is untouched.
+    expect(await prisma.testIdentity.findUnique({ where: { id: s.oldId } })).toBeNull()
+    expect(await prisma.testIdentity.findUnique({ where: { id: s.otherId } })).not.toBeNull()
+
+    const survivor = await prisma.testIdentity.findUniqueOrThrow({ where: { id: s.freshId } })
+    expect(survivor.aliases).toContain('sha256:old')
+
+    // Audited as a re-stitch rather than a hand-made merge, and undoable.
+    const audit = await prisma.identityChange.findFirstOrThrow()
+    expect(audit.action).toBe('restitch')
+    expect(await prisma.identityMerge.count({ where: { undoneAt: null } })).toBe(1)
+  })
+
+  it('re-running finds nothing left to do', async () => {
+    const s = await seed()
+    await applyHistoricalRestitch(
+      prisma,
+      s.orgId,
+      s.projectId,
+      await planHistoricalRestitch(prisma, s.projectId),
+    )
+
+    expect(await planHistoricalRestitch(prisma, s.projectId)).toEqual([])
   })
 })
