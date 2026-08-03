@@ -1,6 +1,7 @@
+import { createTransport } from 'nodemailer'
 import { describe, expect, it } from 'vitest'
 
-import { formatEmail, isEmailAddress, parseSmtpConfig } from '../email'
+import { createSmtpSender, formatEmail, isEmailAddress, parseSmtpConfig } from '../email'
 import type { NotificationEvent } from '../message'
 
 const event: NotificationEvent = {
@@ -67,5 +68,21 @@ describe('parseSmtpConfig', () => {
     })
     expect(config?.port).toBe(587)
     expect(config?.secure).toBe(false)
+  })
+})
+
+describe('createSmtpSender', () => {
+  it('sends through the transport and reports success', async () => {
+    // jsonTransport keeps this off the network while still exercising nodemailer's
+    // real sendMail path, so a breaking change in the client surfaces here.
+    const transport = createTransport({ jsonTransport: true })
+    const sender = createSmtpSender(
+      { host: 'smtp.test', port: 587, secure: false, from: 'flakemetry@test' },
+      transport,
+    )
+
+    const result = await sender('owner@test', { subject: 'Flaky test', text: 'body' })
+
+    expect(result).toEqual({ ok: true, status: 200 })
   })
 })
