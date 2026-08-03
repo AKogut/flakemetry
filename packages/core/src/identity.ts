@@ -26,6 +26,12 @@ export type IdentityResolution =
 
 export const RENAME_CONFIDENCE_THRESHOLD = 0.5
 
+export const RENAME_AMBIGUITY_MARGIN = 0.2
+
+export interface ResolveContext {
+  presentTitleKeys?: ReadonlySet<string>
+}
+
 const movedKey = (node: { suite: string; title: string; paramsHash: string | null }): string =>
   createHash('sha256')
     .update([node.suite.trim(), node.title.trim(), node.paramsHash ?? ''].join(' '))
@@ -49,6 +55,22 @@ export const titleSimilarity = (a: string, b: string): number => {
   return union === 0 ? 0 : intersection / union
 }
 
+export const bucketTitleKey = (node: {
+  filePath?: string
+  suite: string
+  paramsHash: string | null
+  title: string
+}): string => [node.filePath ?? '', node.suite, node.paramsHash ?? '', node.title].join('\u0000')
+
+export const collectPresentTitleKeys = (
+  executions: readonly {
+    filePath?: string
+    suite: string
+    paramsHash: string | null
+    title: string
+  }[],
+): Set<string> => new Set(executions.map(bucketTitleKey))
+
 const sameBucket = (candidate: IdentityCandidate, entry: ExistingIdentity): boolean =>
   candidate.filePath != null &&
   entry.filePath != null &&
@@ -60,6 +82,7 @@ const sameBucket = (candidate: IdentityCandidate, entry: ExistingIdentity): bool
 export const resolveIdentity = (
   candidate: IdentityCandidate,
   existing: readonly ExistingIdentity[],
+  context: ResolveContext = {},
 ): IdentityResolution => {
   const exact = existing.find(
     (entry) =>
@@ -73,18 +96,26 @@ export const resolveIdentity = (
     return { kind: 'moved', identityId: moved.id, level: 'L2', addAlias: candidate.fingerprint }
   }
 
+  const present = context.presentTitleKeys
   const renameMatches = existing
     .filter((entry) => sameBucket(candidate, entry))
+    .filter((entry) => !present?.has(bucketTitleKey(entry)))
     .map((entry) => ({ entry, confidence: titleSimilarity(entry.title, candidate.title) }))
     .filter((match) => match.confidence >= RENAME_CONFIDENCE_THRESHOLD)
-  if (renameMatches.length === 1) {
-    const match = renameMatches[0]!
+    .sort((a, b) => b.confidence - a.confidence)
+
+  const best = renameMatches[0]
+  const runnerUp = renameMatches[1]
+  const unambiguous =
+    best !== undefined &&
+    (runnerUp === undefined || best.confidence - runnerUp.confidence >= RENAME_AMBIGUITY_MARGIN)
+  if (best && unambiguous) {
     return {
       kind: 'renamed',
-      identityId: match.entry.id,
+      identityId: best.entry.id,
       level: 'L3',
       addAlias: candidate.fingerprint,
-      confidence: match.confidence,
+      confidence: best.confidence,
     }
   }
 

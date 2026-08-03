@@ -1,6 +1,7 @@
 import type { LlmProvider } from '@flakemetry/ai'
 import type { HealthEventKind, IngestRunBatch } from '@flakemetry/contracts'
 import {
+  collectPresentTitleKeys,
   computeFingerprint,
   type ExistingIdentity,
   hashParams,
@@ -130,6 +131,15 @@ export const processJob = async (
           })
     const existing: ExistingIdentity[] = identities.map((identity) => ({ ...identity }))
 
+    const presentTitleKeys = collectPresentTitleKeys(
+      prepared.map(({ execution, paramsHash }) => ({
+        filePath: execution.filePath,
+        suite: execution.suite,
+        paramsHash,
+        title: execution.title,
+      })),
+    )
+
     const createdIds: string[] = []
     for (const { execution, paramsHash, fingerprint } of prepared) {
       const resolution = resolveIdentity(
@@ -141,6 +151,7 @@ export const processJob = async (
           filePath: execution.filePath,
         },
         existing,
+        { presentTitleKeys },
       )
 
       let identityId: string
