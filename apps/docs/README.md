@@ -6,7 +6,7 @@ and deployed to GitHub Pages by [`.github/workflows/docs.yml`](../../.github/wor
 ## Local development
 
 ```bash
-pnpm --filter @flakemetry/docs dev       # hot-reloading dev server
+pnpm --filter @flakemetry/docs dev       # regenerates the API reference, then serves
 pnpm --filter @flakemetry/docs build     # static build to .vitepress/dist
 pnpm --filter @flakemetry/docs preview    # serve the built site
 ```
@@ -15,8 +15,14 @@ pnpm --filter @flakemetry/docs preview    # serve the built site
 
 - `guide/` — getting started, self-hosting, reporters, JUnit, GitHub Action, CLI.
 - `concepts/` — test identity, flaky scoring, AI RCA, OTel conventions, architecture.
-- `reference/` — configuration and threat model.
+- `reference/` — configuration, threat model, and the generated API reference.
 - `.vitepress/config.ts` — navigation, sidebar, and site metadata.
+
+`reference/api.md` is **generated** by `scripts/generate-api-reference.ts` from the zod
+contracts and the declared API surface in `packages/contracts/src/rest.ts`; it is written on
+every build and is not committed. An `api-surface` test in `apps/api` asserts that the declared
+surface matches the routes the Fastify app actually registers and the procedures the tRPC
+router actually exposes, so the reference cannot drift from the code.
 
 The reference pages under `concepts/architecture`, `concepts/otel-conventions`,
 `reference/configuration`, and `reference/threat-model` include the canonical documents in
