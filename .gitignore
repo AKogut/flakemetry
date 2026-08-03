@@ -28,3 +28,9 @@ packages/**/src/**/*.d.ts.map
 
 # Generated at build time from the zod contracts
 apps/docs/reference/api.md
+
+# Python virtualenvs and build output
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/

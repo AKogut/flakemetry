@@ -140,6 +140,13 @@ export default {
 }
 ```
 
+Python? Install the pytest plugin — it registers itself, and with `pytest-rerunfailures` a test that passes on rerun is reported as flaky:
+
+```bash
+pip install pytest-flakemetry
+pytest --reruns 2
+```
+
 No native reporter? Any runner that writes **JUnit XML** — pytest, Go, Ruby, JUnit, PHPUnit — maps onto the same conventions through the CLI, so a JUnit upload yields the same intelligence as the native reporters:
 
 ```bash
@@ -220,6 +227,7 @@ packages/
   sdk/            OTel instrumentation + ingest client
   ai/             LLMProvider abstraction + RCA
   cli/            @flakemetry/cli
+  pytest-flakemetry/  pytest plugin (Python)
 ```
 
 Built with pnpm workspaces + Turborepo. Rationale in [ADR-0001](https://github.com/AKogut/flakemetry/wiki/Architecture).

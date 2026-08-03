@@ -1,6 +1,6 @@
 # Reporters
 
-Flakemetry ships native reporters for **Playwright**, **Vitest**, and **Jest**. They share
+Flakemetry ships native reporters for **Playwright**, **Vitest**, **Jest**, and **pytest**. They share
 one OpenTelemetry model, so runs from any of them land with the same test identity and
 flaky scoring. No native reporter for your runner?
 [Upload JUnit XML instead](/guide/junit).
@@ -44,6 +44,23 @@ export default {
   reporters: ['default', '@flakemetry/jest-reporter'],
 }
 ```
+
+## pytest
+
+```bash
+pip install pytest-flakemetry
+```
+
+The plugin registers itself — there is nothing to add to `conftest.py`. Retries are recognised
+when [`pytest-rerunfailures`](https://pypi.org/project/pytest-rerunfailures/) is installed, so a
+test that passes on rerun is reported as flaky:
+
+```bash
+pytest --reruns 2
+```
+
+Parameterized cases keep their values as structured params, so the server buckets the variants
+under one base test instead of treating each id as a separate test.
 
 ## What a reporter sends
 

@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pytest-flakemetry"
+version = "0.1.0"
+description = "Report pytest runs to Flakemetry — OpenTelemetry-native test intelligence"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Andrii Kohut" }]
+requires-python = ">=3.9"
+dependencies = ["pytest>=7.0"]
+keywords = ["pytest", "flaky", "testing", "observability", "opentelemetry"]
+classifiers = [
+  "Framework :: Pytest",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Testing",
+]
+
+[project.urls]
+Homepage = "https://akogut.github.io/flakemetry/"
+Source = "https://github.com/AKogut/flakemetry"
+
+[project.entry-points.pytest11]
+flakemetry = "pytest_flakemetry.plugin"
+
+[project.optional-dependencies]
+dev = ["pytest-rerunfailures>=12.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pytest_flakemetry"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
