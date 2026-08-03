@@ -456,3 +456,81 @@ describe.skipIf(!hasDb)('unmergeIdentity', () => {
     expect(outcome.status).toBe('rejected')
   })
 })
+
+describe.skipIf(!hasDb)('unmergeIdentity with nested merges', () => {
+  beforeEach(async () => {
+    await prisma.identityMerge.deleteMany()
+    await prisma.identityChange.deleteMany()
+    await prisma.identityStitch.deleteMany()
+    await prisma.testHealthEvent.deleteMany()
+    await prisma.dailyTestStats.deleteMany()
+    await prisma.flakyScore.deleteMany()
+    await prisma.testExecution.deleteMany()
+    await prisma.testIdentity.deleteMany()
+    await prisma.run.deleteMany()
+    await prisma.project.deleteMany()
+    await prisma.org.deleteMany()
+  })
+
+  afterAll(async () => {
+    await prisma.$disconnect()
+  })
+
+  it('gives back a merge the source had itself absorbed instead of destroying it', async () => {
+    const org = await prisma.org.create({ data: { name: 'Acme', slug: `acme-${Date.now()}` } })
+    const project = await prisma.project.create({
+      data: { orgId: org.id, name: 'Web', slug: 'web' },
+    })
+    const tenant = { orgId: org.id, projectId: project.id }
+
+    const make = (fingerprint: string, title: string) =>
+      prisma.testIdentity.create({
+        data: {
+          ...tenant,
+          fingerprint,
+          filePath: 'e2e/login.spec.ts',
+          suite: 'auth',
+          title,
+          firstSeenAt: BEFORE,
+          lastSeenAt: BEFORE,
+        },
+      })
+
+    const a = await make('sha256:a', 'logs in v3')
+    const b = await make('sha256:b', 'logs in v2')
+    const c = await make('sha256:c', 'logs in v1')
+
+    // c is folded into b, then b into a.
+    const first = await mergeIdentities(prisma, {
+      orgId: org.id,
+      projectId: project.id,
+      targetIdentityId: b.id,
+      sourceIdentityId: c.id,
+    })
+    expect(first.status).toBe('merged')
+
+    const second = await mergeIdentities(prisma, {
+      orgId: org.id,
+      projectId: project.id,
+      targetIdentityId: a.id,
+      sourceIdentityId: b.id,
+    })
+    expect(second.status).toBe('merged')
+    expect(await prisma.identityStitch.count({ where: { level: 'manual' } })).toBe(2)
+
+    const undone = await unmergeIdentity(prisma, {
+      orgId: org.id,
+      projectId: project.id,
+      targetIdentityId: a.id,
+    })
+    expect(undone.status).toBe('unmerged')
+    if (undone.status !== 'unmerged') return
+
+    // Only the a←b merge is undone. The record that b had absorbed c survives,
+    // and travels back to the restored b rather than being deleted with it.
+    const remaining = await prisma.identityStitch.findMany({ where: { level: 'manual' } })
+    expect(remaining).toHaveLength(1)
+    expect(remaining[0]?.fromFingerprint).toBe('sha256:c')
+    expect(remaining[0]?.testIdentityId).toBe(undone.restoredIdentityId)
+  })
+})
