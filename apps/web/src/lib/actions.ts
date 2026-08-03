@@ -6,6 +6,7 @@ import { isEmailAddress, isSafeWebhookUrl } from '@flakemetry/notify'
 import {
   mergeIdentities,
   splitIdentity,
+  unmergeIdentity,
   updateProjectPolicy as persistProjectPolicy,
 } from '@flakemetry/queries'
 import { revalidatePath } from 'next/cache'
@@ -196,6 +197,26 @@ export const mergeTestIdentity = async (formData: FormData): Promise<void> => {
     projectId,
     targetIdentityId: testId,
     sourceIdentityId: sourceId,
+    userId: user.id,
+  })
+
+  revalidatePath(`/projects/${projectId}/tests/${testId}`)
+  if (outcome.status === 'rejected')
+    redirect(`/projects/${projectId}/tests/${testId}?split=${encodeURIComponent(outcome.reason)}`)
+  redirect(`/projects/${projectId}/tests/${testId}`)
+}
+
+export const unmergeTestIdentity = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const testId = String(formData.get('testId') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.role)) throw new Error('only owners and admins can undo a merge')
+
+  const outcome = await unmergeIdentity(prisma, {
+    orgId: project.orgId,
+    projectId,
+    targetIdentityId: testId,
     userId: user.id,
   })
 

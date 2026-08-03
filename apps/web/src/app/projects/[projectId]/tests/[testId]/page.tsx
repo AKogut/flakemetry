@@ -12,7 +12,7 @@ import { notFound } from 'next/navigation'
 import { RcaPanel } from '@/components/rca-panel'
 import { ReasonCodes, ScoreBadge } from '@/components/score'
 import { Sparkline } from '@/components/sparkline'
-import { mergeTestIdentity, splitTestIdentity } from '@/lib/actions'
+import { mergeTestIdentity, splitTestIdentity, unmergeTestIdentity } from '@/lib/actions'
 import { requireUser } from '@/lib/session'
 import { requireProjectAccess } from '@/lib/tenant'
 
@@ -249,7 +249,21 @@ export default async function TestDetailPage({
                     </td>
                     {canSplit ? (
                       <td style={{ textAlign: 'right' }}>
-                        {index === 0 ? (
+                        {stitch.level === 'manual' ? (
+                          index === 0 ? (
+                            <form action={unmergeTestIdentity}>
+                              <input type="hidden" name="projectId" value={projectId} />
+                              <input type="hidden" name="testId" value={testId} />
+                              <button type="submit" className="btn btn-ghost">
+                                undo merge
+                              </button>
+                            </form>
+                          ) : (
+                            <span className="muted" style={{ fontSize: '0.74rem' }}>
+                              undo newer first
+                            </span>
+                          )
+                        ) : index === 0 ? (
                           <form action={splitTestIdentity}>
                             <input type="hidden" name="projectId" value={projectId} />
                             <input type="hidden" name="testId" value={testId} />
