@@ -48,6 +48,25 @@ Each `<testcase>` becomes a test execution:
 Pass `--fail-on-error` if you want the upload step itself to exit non-zero when delivery
 fails; by default it never breaks your build.
 
+## Uploading without the CLI
+
+If your CI cannot run Node at all, post the report straight to the API — the server parses it
+into exactly the same run batch the CLI would have sent:
+
+```bash
+curl -X POST "$FLAKEMETRY_ENDPOINT/v1/ingest/junit" \
+  -H "Authorization: Bearer $FLAKEMETRY_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg xml "$(cat junit.xml)" '{
+        idempotencyKey: "build-\($ENV.CI_RUN_ID)",
+        resource: { ciProvider: "other", commitSha: $ENV.COMMIT_SHA, branch: $ENV.BRANCH, trigger: "push" },
+        xml: $xml
+      }')"
+```
+
+The `idempotencyKey` makes the upload safe to retry: replaying the same key is deduplicated
+rather than counted twice. See the [API reference](/reference/api) for the full request schema.
+
 ::: tip Prefer a native plugin?
 A native `pytest-flakemetry` plugin and a server-side JUnit endpoint are on the
 [roadmap](https://github.com/users/AKogut/projects/14). Until then the CLI path above gives
