@@ -8,23 +8,57 @@ export interface RestitchArgs {
   limit?: number
 }
 
-export const parseRestitchArgs = (argv: readonly string[]): RestitchArgs | null => {
+export type RestitchArgsResult = { ok: true; args: RestitchArgs } | { ok: false; reason: string }
+
+const numberFlag = (
+  raw: string | undefined,
+  name: string,
+  check: (value: number) => boolean,
+  expected: string,
+): { ok: true; value: number | undefined } | { ok: false; reason: string } => {
+  if (raw === undefined) return { ok: true, value: undefined }
+  const value = Number(raw)
+  if (!Number.isFinite(value) || !check(value))
+    return { ok: false, reason: `--${name} must be ${expected}, got "${raw}"` }
+  return { ok: true, value }
+}
+
+export const parseRestitchArgs = (argv: readonly string[]): RestitchArgsResult => {
   const flag = (name: string): string | undefined => {
     const index = argv.indexOf(`--${name}`)
-    return index >= 0 ? argv[index + 1] : undefined
+    if (index < 0) return undefined
+    const value = argv[index + 1]
+    // A following flag means the value was left off, which must not be read as one.
+    return value === undefined || value.startsWith('--') ? undefined : value
   }
 
   const projectId = flag('project')
-  if (!projectId) return null
+  if (!projectId) return { ok: false, reason: '--project <projectId> is required' }
 
-  const minConfidence = flag('min-confidence')
-  const limit = flag('limit')
+  const minConfidence = numberFlag(
+    flag('min-confidence'),
+    'min-confidence',
+    (value) => value > 0 && value <= 1,
+    'a number above 0 and at most 1',
+  )
+  if (!minConfidence.ok) return minConfidence
+
+  const limit = numberFlag(
+    flag('limit'),
+    'limit',
+    (value) => Number.isInteger(value) && value >= 1,
+    'a whole number of at least 1',
+  )
+  if (!limit.ok) return limit
 
   return {
-    projectId,
-    apply: argv.includes('--apply'),
-    minConfidence: minConfidence ? Number(minConfidence) : undefined,
-    limit: limit ? Number.parseInt(limit, 10) : undefined,
+    ok: true,
+    args: {
+      projectId,
+      apply: argv.includes('--apply'),
+      minConfidence: minConfidence.value,
+      limit: limit.value,
+    },
   }
 }
 
@@ -74,15 +108,16 @@ export const runRestitch = async (
 }
 
 export const main = async (argv: readonly string[]): Promise<number> => {
-  const args = parseRestitchArgs(argv)
-  if (!args) {
+  const parsed = parseRestitchArgs(argv)
+  if (!parsed.ok) {
+    console.error(`restitch: ${parsed.reason}\n`)
     console.log(USAGE)
     return 1
   }
 
   const prisma = new PrismaClient()
   try {
-    return await runRestitch(prisma, args)
+    return await runRestitch(prisma, parsed.args)
   } finally {
     await prisma.$disconnect()
   }

@@ -1,7 +1,7 @@
 import { PrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { mergeIdentities, splitIdentity, unmergeIdentity } from '../identity'
+import { findMergeCandidates, mergeIdentities, splitIdentity, unmergeIdentity } from '../identity'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
 const prisma = new PrismaClient()
@@ -532,5 +532,63 @@ describe.skipIf(!hasDb)('unmergeIdentity with nested merges', () => {
     expect(remaining).toHaveLength(1)
     expect(remaining[0]?.fromFingerprint).toBe('sha256:c')
     expect(remaining[0]?.testIdentityId).toBe(undone.restoredIdentityId)
+  })
+})
+
+describe.skipIf(!hasDb)('findMergeCandidates', () => {
+  beforeEach(async () => {
+    await prisma.testIdentity.deleteMany()
+    await prisma.project.deleteMany()
+    await prisma.org.deleteMany()
+  })
+
+  afterAll(async () => {
+    await prisma.$disconnect()
+  })
+
+  it('offers same-suite siblings only, and never a different parameterized case', async () => {
+    const org = await prisma.org.create({ data: { name: 'Acme', slug: `acme-${Date.now()}` } })
+    const project = await prisma.project.create({
+      data: { orgId: org.id, name: 'Web', slug: 'web' },
+    })
+    const tenant = { orgId: org.id, projectId: project.id }
+
+    const make = (fingerprint: string, suite: string, title: string, paramsHash: string | null) =>
+      prisma.testIdentity.create({
+        data: {
+          ...tenant,
+          fingerprint,
+          filePath: 'e2e/login.spec.ts',
+          suite,
+          title,
+          paramsHash,
+          firstSeenAt: BEFORE,
+          lastSeenAt: AFTER,
+        },
+      })
+
+    const subject = await make('sha256:subject', 'auth', 'logs in', null)
+    const sibling = await make('sha256:sibling', 'auth', 'logs in ok', null)
+    await make('sha256:other-suite', 'shop', 'pays', null)
+    await make('sha256:parameterized', 'auth', 'logs in', 'params-abc')
+
+    const candidates = await findMergeCandidates(prisma, project.id, subject.id)
+    const ids = candidates.map((candidate) => candidate.id)
+
+    // Only the sibling qualifies: a different suite is a different test, and a
+    // parameterized case must keep its own history rather than be merged away.
+    expect(ids).toEqual([sibling.id])
+    expect(ids).not.toContain(subject.id)
+  })
+
+  it('returns nothing for a test that does not exist', async () => {
+    const org = await prisma.org.create({ data: { name: 'Acme', slug: `acme-${Date.now()}` } })
+    const project = await prisma.project.create({
+      data: { orgId: org.id, name: 'Web', slug: 'web' },
+    })
+
+    expect(
+      await findMergeCandidates(prisma, project.id, '00000000-0000-0000-0000-000000000000'),
+    ).toEqual([])
   })
 })
