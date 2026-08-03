@@ -151,13 +151,15 @@ describe.skipIf(!hasDb)('team-scoped health metrics', () => {
       })
 
     const payments = await make('pay', 'e2e/checkout/pay.spec.ts', true)
+    const second = await make('refund', 'e2e/checkout/refund.spec.ts')
     const identity = await make('login', 'e2e/auth/login.spec.ts')
 
     await prisma.testHealthEvent.createMany({
       data: [
-        { ...tenant, testIdentityId: payments.id, kind: 'flaked', createdAt: ago(5) },
+        { ...tenant, testIdentityId: payments.id, kind: 'flaked', createdAt: ago(6) },
         { ...tenant, testIdentityId: payments.id, kind: 'stabilized', createdAt: ago(3) },
         { ...tenant, testIdentityId: payments.id, kind: 'flaked', createdAt: ago(2) },
+        { ...tenant, testIdentityId: second.id, kind: 'flaked', createdAt: ago(5) },
         { ...tenant, testIdentityId: identity.id, kind: 'flaked', createdAt: ago(4) },
       ],
     })
@@ -171,8 +173,8 @@ describe.skipIf(!hasDb)('team-scoped health metrics', () => {
     const all = await getTestHealthMetrics(prisma, s.projectId, 90)
     const payments = await getTestHealthMetrics(prisma, s.projectId, 90, '@acme/payments')
 
-    expect(all.weekly.reduce((sum, week) => sum + week.introduced, 0)).toBe(3)
-    expect(payments.weekly.reduce((sum, week) => sum + week.introduced, 0)).toBe(2)
+    expect(all.weekly.reduce((sum, week) => sum + week.introduced, 0)).toBe(4)
+    expect(payments.weekly.reduce((sum, week) => sum + week.introduced, 0)).toBe(3)
     expect(payments.mttr.resolvedCount).toBe(1)
     expect(payments.quarantine.currentBacklog).toBe(1)
 
@@ -194,10 +196,12 @@ describe.skipIf(!hasDb)('team-scoped health metrics', () => {
     const teams = await getTeamHealthLeaderboard(prisma, s.projectId, 90)
 
     const payments = teams.find((team) => team.owner === '@acme/payments')
-    expect(payments?.introduced).toBe(2)
+    expect(payments?.introduced).toBe(3)
     expect(payments?.resolved).toBe(1)
-    expect(payments?.net).toBe(1)
+    expect(payments?.net).toBe(2)
     expect(payments?.quarantined).toBe(1)
+    // payments is going backwards fastest (net +2 against identity's +1), so it leads.
     expect(teams[0]?.owner).toBe('@acme/payments')
+    expect(teams.find((team) => team.owner === '@acme/identity')?.net).toBe(1)
   })
 })
