@@ -477,21 +477,27 @@ export const unmergeIdentity = async (
       },
       data: { testIdentityId: restored.id, mergedFromIdentityId: null },
     })
-    await tx.identityStitch.updateMany({
-      where: {
-        testIdentityId: targetIdentityId,
-        mergedFromIdentityId: merge.sourceIdentityId,
-        level: { not: 'manual' },
-      },
-      data: { testIdentityId: restored.id, mergedFromIdentityId: null },
-    })
-
-    await tx.identityStitch.deleteMany({
+    // The stitch this merge wrote is the newest manual one carrying the marker,
+    // because the merge created it after moving the source's own stitches across.
+    // Only that one is undone; anything else the source brought with it — including
+    // a manual merge it had absorbed earlier — travels back with it.
+    const ownStitch = await tx.identityStitch.findFirst({
       where: {
         testIdentityId: targetIdentityId,
         level: 'manual',
         mergedFromIdentityId: merge.sourceIdentityId,
       },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    })
+    if (ownStitch) await tx.identityStitch.delete({ where: { id: ownStitch.id } })
+
+    await tx.identityStitch.updateMany({
+      where: {
+        testIdentityId: targetIdentityId,
+        mergedFromIdentityId: merge.sourceIdentityId,
+      },
+      data: { testIdentityId: restored.id, mergedFromIdentityId: null },
     })
 
     const givenBack = new Set([...merge.sourceAliases, merge.sourceFingerprint])
