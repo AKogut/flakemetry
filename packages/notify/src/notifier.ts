@@ -68,32 +68,43 @@ export const createDispatcher = (options: DispatcherOptions): Dispatcher => {
 
   return {
     async dispatch(event) {
-      prune(now())
-      const dynamic = options.channelsFor ? await options.channelsFor(event) : []
-      const targets = [...options.channels, ...dynamic].filter((channel) =>
-        channel.types.includes(event.type),
-      )
-      for (const channel of targets) {
-        const key = `${channel.id}:${event.dedupeKey}`
-        const previous = lastSentAt.get(key)
-        if (previous != null && now() - previous < window) continue
-        lastSentAt.set(key, now())
-        try {
-          const result =
-            channel.kind === 'email'
-              ? await sendEmail(channel.webhookUrl, formatEmail(event))
-              : await send(channel.webhookUrl, format(channel, event))
-          if (!result.ok) {
-            lastSentAt.delete(key)
-            onError(
-              new Error(`notify: ${channel.kind} channel ${channel.id} returned ${result.status}`),
-            )
-          }
-        } catch (error) {
-          lastSentAt.delete(key)
-          onError(error)
-        }
+      // Callers fire this without awaiting, so a rejection here would surface as an
+      // unhandled rejection and take the process down. Loading channels can fail —
+      // it reads the database — so nothing in here is allowed to escape.
+      try {
+        await dispatchOrThrow(event)
+      } catch (error) {
+        onError(error)
       }
     },
+  }
+
+  async function dispatchOrThrow(event: NotificationEvent): Promise<void> {
+    prune(now())
+    const dynamic = options.channelsFor ? await options.channelsFor(event) : []
+    const targets = [...options.channels, ...dynamic].filter((channel) =>
+      channel.types.includes(event.type),
+    )
+    for (const channel of targets) {
+      const key = `${channel.id}:${event.dedupeKey}`
+      const previous = lastSentAt.get(key)
+      if (previous != null && now() - previous < window) continue
+      lastSentAt.set(key, now())
+      try {
+        const result =
+          channel.kind === 'email'
+            ? await sendEmail(channel.webhookUrl, formatEmail(event))
+            : await send(channel.webhookUrl, format(channel, event))
+        if (!result.ok) {
+          lastSentAt.delete(key)
+          onError(
+            new Error(`notify: ${channel.kind} channel ${channel.id} returned ${result.status}`),
+          )
+        }
+      } catch (error) {
+        lastSentAt.delete(key)
+        onError(error)
+      }
+    }
   }
 }
