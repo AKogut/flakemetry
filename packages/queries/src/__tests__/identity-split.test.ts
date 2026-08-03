@@ -1,7 +1,7 @@
 import { PrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { mergeIdentities, splitIdentity } from '../identity'
+import { mergeIdentities, splitIdentity, unmergeIdentity } from '../identity'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
 const prisma = new PrismaClient()
@@ -290,6 +290,168 @@ describe.skipIf(!hasDb)('mergeIdentities', () => {
       projectId: s.projectId,
       targetIdentityId: s.targetId,
       sourceIdentityId: s.sourceId,
+    })
+    expect(outcome.status).toBe('rejected')
+  })
+})
+
+describe.skipIf(!hasDb)('unmergeIdentity', () => {
+  beforeEach(async () => {
+    await prisma.identityMerge.deleteMany()
+    await prisma.identityChange.deleteMany()
+    await prisma.identityStitch.deleteMany()
+    await prisma.testHealthEvent.deleteMany()
+    await prisma.dailyTestStats.deleteMany()
+    await prisma.flakyScore.deleteMany()
+    await prisma.testExecution.deleteMany()
+    await prisma.testIdentity.deleteMany()
+    await prisma.run.deleteMany()
+    await prisma.project.deleteMany()
+    await prisma.org.deleteMany()
+  })
+
+  afterAll(async () => {
+    await prisma.$disconnect()
+  })
+
+  const seedMerged = async () => {
+    const org = await prisma.org.create({ data: { name: 'Acme', slug: `acme-${Date.now()}` } })
+    const project = await prisma.project.create({
+      data: { orgId: org.id, name: 'Web', slug: 'web' },
+    })
+    const tenant = { orgId: org.id, projectId: project.id }
+
+    const makeIdentity = (fingerprint: string, title: string, seen: Date) =>
+      prisma.testIdentity.create({
+        data: {
+          ...tenant,
+          fingerprint,
+          filePath: 'e2e/login.spec.ts',
+          suite: 'auth',
+          title,
+          firstSeenAt: seen,
+          lastSeenAt: seen,
+        },
+      })
+
+    const target = await makeIdentity('sha256:new', 'logs in successfully', AFTER)
+    const source = await makeIdentity('sha256:old', 'logs in', BEFORE)
+
+    const run = await prisma.run.create({
+      data: {
+        ...tenant,
+        idempotencyKey: 'run-unmerge',
+        commitSha: 'abc1234',
+        branch: 'main',
+        ciProvider: 'github_actions',
+        trigger: 'push',
+        status: 'passed',
+        startedAt: BEFORE,
+      },
+    })
+
+    const execute = (identityId: string, ordinal: number, startedAt: Date) =>
+      prisma.testExecution.create({
+        data: {
+          ...tenant,
+          runId: run.id,
+          ordinal,
+          testIdentityId: identityId,
+          status: 'pass',
+          attempt: 1,
+          durationMs: 1000,
+          startedAt,
+        },
+      })
+
+    await execute(source.id, 0, BEFORE)
+    await execute(target.id, 1, AFTER)
+
+    await mergeIdentities(prisma, {
+      orgId: org.id,
+      projectId: project.id,
+      targetIdentityId: target.id,
+      sourceIdentityId: source.id,
+    })
+
+    return { orgId: org.id, projectId: project.id, targetId: target.id, sourceId: source.id }
+  }
+
+  it('restores the consumed identity with exactly the executions it contributed', async () => {
+    const s = await seedMerged()
+    expect(await prisma.testExecution.count({ where: { testIdentityId: s.targetId } })).toBe(2)
+
+    const outcome = await unmergeIdentity(prisma, {
+      orgId: s.orgId,
+      projectId: s.projectId,
+      targetIdentityId: s.targetId,
+    })
+
+    expect(outcome.status).toBe('unmerged')
+    if (outcome.status !== 'unmerged') return
+    expect(outcome.restoredExecutions).toBe(1)
+
+    const restored = await prisma.testIdentity.findUniqueOrThrow({
+      where: { id: outcome.restoredIdentityId },
+    })
+    expect(restored.fingerprint).toBe('sha256:old')
+    expect(restored.title).toBe('logs in')
+    expect(restored.suite).toBe('auth')
+
+    // Each identity gets its own execution back, and nothing is left marked.
+    expect(await prisma.testExecution.count({ where: { testIdentityId: restored.id } })).toBe(1)
+    expect(await prisma.testExecution.count({ where: { testIdentityId: s.targetId } })).toBe(1)
+    expect(
+      await prisma.testExecution.count({ where: { mergedFromIdentityId: { not: null } } }),
+    ).toBe(0)
+
+    // The alias handed over by the merge is given back, and the merge stitch is gone.
+    const target = await prisma.testIdentity.findUniqueOrThrow({ where: { id: s.targetId } })
+    expect(target.aliases).not.toContain('sha256:old')
+    expect(await prisma.identityStitch.count({ where: { level: 'manual' } })).toBe(0)
+
+    // Both sides are rescored and the undo is audited.
+    expect(await prisma.flakyScore.count({ where: { testIdentityId: restored.id } })).toBe(1)
+    const audit = await prisma.identityChange.findFirstOrThrow({ where: { action: 'unmerge' } })
+    expect(audit.fingerprint).toBe('sha256:old')
+  })
+
+  it('refuses a second undo once the merge is already undone', async () => {
+    const s = await seedMerged()
+    const first = await unmergeIdentity(prisma, {
+      orgId: s.orgId,
+      projectId: s.projectId,
+      targetIdentityId: s.targetId,
+    })
+    expect(first.status).toBe('unmerged')
+
+    const second = await unmergeIdentity(prisma, {
+      orgId: s.orgId,
+      projectId: s.projectId,
+      targetIdentityId: s.targetId,
+    })
+    expect(second.status).toBe('rejected')
+  })
+
+  it('refuses to undo when the merged-in fingerprint exists again', async () => {
+    const s = await seedMerged()
+    await prisma.testIdentity.create({
+      data: {
+        orgId: s.orgId,
+        projectId: s.projectId,
+        fingerprint: 'sha256:old',
+        filePath: 'e2e/login.spec.ts',
+        suite: 'auth',
+        title: 'logs in',
+        firstSeenAt: BEFORE,
+        lastSeenAt: BEFORE,
+      },
+    })
+
+    const outcome = await unmergeIdentity(prisma, {
+      orgId: s.orgId,
+      projectId: s.projectId,
+      targetIdentityId: s.targetId,
     })
     expect(outcome.status).toBe('rejected')
   })

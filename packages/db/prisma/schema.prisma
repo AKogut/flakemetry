@@ -155,6 +155,7 @@ model Project {
   notificationChannels NotificationChannel[]
   healthEvents    TestHealthEvent[]
   identityStitches IdentityStitch[]
+  identityMerges  IdentityMerge[]
   identityChanges IdentityChange[]
 
   @@unique([orgId, slug])
@@ -333,6 +334,7 @@ model TestExecution {
   projectId        String     @map("project_id") @db.Uuid
   runId            String     @map("run_id") @db.Uuid
   testIdentityId   String     @map("test_identity_id") @db.Uuid
+  mergedFromIdentityId String? @map("merged_from_identity_id") @db.Uuid
   ordinal          Int?
   attempt          Int        @default(1)
   retryOf          String?    @map("retry_of") @db.Uuid
@@ -359,6 +361,7 @@ model TestExecution {
   @@index([testIdentityId, startedAt(sort: Desc)])
   @@index([projectId, startedAt(sort: Desc)])
   @@index([errorSignatureId])
+  @@index([mergedFromIdentityId])
   @@map("test_execution")
 }
 
@@ -498,6 +501,7 @@ model TestHealthEvent {
   testIdentityId String   @map("test_identity_id") @db.Uuid
   kind           String
   score          Float?
+  mergedFromIdentityId String? @map("merged_from_identity_id") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at")
 
   project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -522,6 +526,7 @@ model IdentityStitch {
   toTitle         String    @map("to_title")
   confidence      Float?
   runStartedAt    DateTime? @map("run_started_at")
+  mergedFromIdentityId String? @map("merged_from_identity_id") @db.Uuid
   createdAt       DateTime  @default(now()) @map("created_at")
 
   project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -551,4 +556,29 @@ model IdentityChange {
   @@index([projectId, createdAt(sort: Desc)])
   @@index([orgId])
   @@map("identity_change")
+}
+
+model IdentityMerge {
+  id                String    @id @default(uuid()) @db.Uuid
+  orgId             String    @map("org_id") @db.Uuid
+  projectId         String    @map("project_id") @db.Uuid
+  targetIdentityId  String    @map("target_identity_id") @db.Uuid
+  sourceIdentityId  String    @map("source_identity_id") @db.Uuid
+  sourceFingerprint String    @map("source_fingerprint")
+  sourceFilePath    String    @map("source_file_path")
+  sourceSuite       String    @map("source_suite")
+  sourceTitle       String    @map("source_title")
+  sourceParamsHash  String?   @map("source_params_hash")
+  sourceParams      Json?     @map("source_params")
+  sourceAliases     String[]  @map("source_aliases")
+  sourceFirstSeenAt DateTime  @map("source_first_seen_at")
+  sourceLastSeenAt  DateTime  @map("source_last_seen_at")
+  undoneAt          DateTime? @map("undone_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([targetIdentityId, createdAt(sort: Desc)])
+  @@index([orgId])
+  @@map("identity_merge")
 }

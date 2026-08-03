@@ -264,6 +264,7 @@ export const mergeIdentities = async (
     suite: true,
     title: true,
     paramsHash: true,
+    params: true,
     aliases: true,
     firstSeenAt: true,
     lastSeenAt: true,
@@ -282,15 +283,15 @@ export const mergeIdentities = async (
   const movedExecutions = await prisma.$transaction(async (tx) => {
     const moved = await tx.testExecution.updateMany({
       where: { projectId, testIdentityId: sourceIdentityId },
-      data: { testIdentityId: targetIdentityId },
+      data: { testIdentityId: targetIdentityId, mergedFromIdentityId: sourceIdentityId },
     })
     await tx.testHealthEvent.updateMany({
       where: { projectId, testIdentityId: sourceIdentityId },
-      data: { testIdentityId: targetIdentityId },
+      data: { testIdentityId: targetIdentityId, mergedFromIdentityId: sourceIdentityId },
     })
     await tx.identityStitch.updateMany({
       where: { testIdentityId: sourceIdentityId },
-      data: { testIdentityId: targetIdentityId },
+      data: { testIdentityId: targetIdentityId, mergedFromIdentityId: sourceIdentityId },
     })
 
     await tx.identityStitch.create({
@@ -304,6 +305,25 @@ export const mergeIdentities = async (
         fromTitle: source.title,
         toFilePath: target.filePath,
         toTitle: target.title,
+        mergedFromIdentityId: sourceIdentityId,
+      },
+    })
+
+    await tx.identityMerge.create({
+      data: {
+        orgId,
+        projectId,
+        targetIdentityId,
+        sourceIdentityId,
+        sourceFingerprint: source.fingerprint,
+        sourceFilePath: source.filePath,
+        sourceSuite: source.suite,
+        sourceTitle: source.title,
+        sourceParamsHash: source.paramsHash,
+        sourceParams: (source.params ?? null) as Prisma.InputJsonValue,
+        sourceAliases: source.aliases,
+        sourceFirstSeenAt: source.firstSeenAt,
+        sourceLastSeenAt: source.lastSeenAt,
       },
     })
 
@@ -380,4 +400,138 @@ export const listIdentityChanges = async (
     createdAt: row.createdAt,
     actor: row.user?.name ?? row.user?.email ?? null,
   }))
+}
+
+export interface UnmergeIdentityParams {
+  orgId: string
+  projectId: string
+  targetIdentityId: string
+  userId?: string | null
+  scoring?: ScoringOptions
+}
+
+export type UnmergeIdentityOutcome =
+  | { status: 'unmerged'; restoredIdentityId: string; restoredExecutions: number }
+  | { status: 'rejected'; reason: string }
+
+export const unmergeIdentity = async (
+  prisma: PrismaClient,
+  params: UnmergeIdentityParams,
+): Promise<UnmergeIdentityOutcome> => {
+  const { orgId, projectId, targetIdentityId } = params
+
+  const target = await prisma.testIdentity.findFirst({
+    where: { id: targetIdentityId, projectId },
+    select: { id: true, aliases: true },
+  })
+  if (!target) return { status: 'rejected', reason: 'test identity not found' }
+
+  const merge = await prisma.identityMerge.findFirst({
+    where: { projectId, targetIdentityId, undoneAt: null },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (!merge) return { status: 'rejected', reason: 'this test has no merge left to undo' }
+
+  const collision = await prisma.testIdentity.findFirst({
+    where: { projectId, fingerprint: merge.sourceFingerprint },
+    select: { id: true },
+  })
+  if (collision)
+    return {
+      status: 'rejected',
+      reason: 'a test with the merged-in fingerprint exists again; undoing would collide with it',
+    }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const restored = await tx.testIdentity.create({
+      data: {
+        orgId,
+        projectId,
+        fingerprint: merge.sourceFingerprint,
+        filePath: merge.sourceFilePath,
+        suite: merge.sourceSuite,
+        title: merge.sourceTitle,
+        paramsHash: merge.sourceParamsHash,
+        params: (merge.sourceParams ?? null) as Prisma.InputJsonValue,
+        aliases: merge.sourceAliases,
+        firstSeenAt: merge.sourceFirstSeenAt,
+        lastSeenAt: merge.sourceLastSeenAt,
+      },
+      select: { id: true },
+    })
+
+    const movedBack = await tx.testExecution.updateMany({
+      where: {
+        projectId,
+        testIdentityId: targetIdentityId,
+        mergedFromIdentityId: merge.sourceIdentityId,
+      },
+      data: { testIdentityId: restored.id, mergedFromIdentityId: null },
+    })
+    await tx.testHealthEvent.updateMany({
+      where: {
+        projectId,
+        testIdentityId: targetIdentityId,
+        mergedFromIdentityId: merge.sourceIdentityId,
+      },
+      data: { testIdentityId: restored.id, mergedFromIdentityId: null },
+    })
+    await tx.identityStitch.updateMany({
+      where: {
+        testIdentityId: targetIdentityId,
+        mergedFromIdentityId: merge.sourceIdentityId,
+        level: { not: 'manual' },
+      },
+      data: { testIdentityId: restored.id, mergedFromIdentityId: null },
+    })
+
+    await tx.identityStitch.deleteMany({
+      where: {
+        testIdentityId: targetIdentityId,
+        level: 'manual',
+        mergedFromIdentityId: merge.sourceIdentityId,
+      },
+    })
+
+    const givenBack = new Set([...merge.sourceAliases, merge.sourceFingerprint])
+    await tx.testIdentity.update({
+      where: { id: targetIdentityId },
+      data: { aliases: target.aliases.filter((alias) => !givenBack.has(alias)) },
+    })
+
+    await rebuildDailyStats(tx, orgId, projectId, targetIdentityId)
+    await rebuildDailyStats(tx, orgId, projectId, restored.id)
+
+    await tx.identityMerge.update({
+      where: { id: merge.id },
+      data: { undoneAt: new Date() },
+    })
+
+    await tx.identityChange.create({
+      data: {
+        orgId,
+        projectId,
+        userId: params.userId ?? null,
+        action: 'unmerge',
+        sourceIdentityId: targetIdentityId,
+        targetIdentityId: restored.id,
+        fingerprint: merge.sourceFingerprint,
+        detail: `${merge.sourceTitle} restored`,
+      },
+    })
+
+    return { restoredIdentityId: restored.id, restoredExecutions: movedBack.count }
+  })
+
+  const scoring = params.scoring ?? { now: new Date() }
+  for (const identityId of [targetIdentityId, result.restoredIdentityId]) {
+    const scored = await computeIdentityScore(prisma, orgId, projectId, identityId, scoring)
+    await prisma.flakyScore.upsert({
+      where: { testIdentityId: identityId },
+      create: { testIdentityId: identityId, ...scored.data },
+      update: scored.data,
+    })
+  }
+
+  return { status: 'unmerged', ...result }
 }
