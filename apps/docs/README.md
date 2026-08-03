@@ -6,7 +6,7 @@ and deployed to GitHub Pages by [`.github/workflows/docs.yml`](../../.github/wor
 ## Local development
 
 ```bash
-pnpm --filter @flakemetry/docs dev       # hot-reloading dev server
+pnpm --filter @flakemetry/docs dev       # regenerates the API reference, then serves
 pnpm --filter @flakemetry/docs build     # static build to .vitepress/dist
 pnpm --filter @flakemetry/docs preview    # serve the built site
 ```

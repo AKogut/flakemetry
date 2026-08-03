@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm docs && vitepress dev",
-    "build": "pnpm docs && vitepress build",
+    "dev": "pnpm run generate:api && vitepress dev",
+    "build": "pnpm run generate:api && vitepress build",
     "preview": "vitepress preview",
-    "docs": "tsx scripts/generate-api-reference.ts"
+    "generate:api": "tsx scripts/generate-api-reference.ts"
   },
   "devDependencies": {
     "vitepress": "^1.6.3",
