@@ -67,8 +67,8 @@ curl -X POST "$FLAKEMETRY_ENDPOINT/v1/ingest/junit" \
 The `idempotencyKey` makes the upload safe to retry: replaying the same key is deduplicated
 rather than counted twice. See the [API reference](/reference/api) for the full request schema.
 
-::: tip Prefer a native plugin?
-A native `pytest-flakemetry` plugin and a server-side JUnit endpoint are on the
-[roadmap](https://github.com/users/AKogut/projects/14). Until then the CLI path above gives
-Python and every other runner full parity with the native reporters.
+::: tip Python? Prefer the native plugin
+`pytest-flakemetry` records more than the JUnit round-trip can carry: parameter values travel as
+structured params instead of being baked into the test name, and retries are recognised, so a test
+that passes on rerun is reported as **flaky**. See [Reporters](/guide/reporters#pytest).
 :::

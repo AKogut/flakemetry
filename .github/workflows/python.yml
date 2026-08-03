@@ -1,0 +1,89 @@
+name: python
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/pytest-flakemetry/**'
+      - 'packages/contracts/**'
+      - '.github/workflows/python.yml'
+  pull_request:
+    paths:
+      - 'packages/pytest-flakemetry/**'
+      - 'packages/contracts/**'
+      - '.github/workflows/python.yml'
+
+defaults:
+  run:
+    working-directory: packages/pytest-flakemetry
+
+jobs:
+  test:
+    name: pytest (python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.9', '3.12']
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install the plugin and its test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - run: pytest -q
+
+  contract:
+    name: batch satisfies the ingestion contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          cd "$GITHUB_WORKSPACE" && pnpm install --frozen-lockfile
+
+      - name: Build the contracts package
+        working-directory: .
+        run: pnpm turbo run build --filter @flakemetry/contracts
+
+      - name: Run a sample suite through the plugin
+        run: |
+          mkdir -p /tmp/sample
+          cat > /tmp/sample/test_sample.py <<'PY'
+          import pytest
+
+          def test_passes():
+              assert True
+
+          @pytest.mark.parametrize("browser", ["chrome", "firefox"])
+          def test_login(browser):
+              assert browser
+
+          def test_fails():
+              assert 1 == 2
+          PY
+          cd /tmp/sample && pytest -q --flakemetry-output /tmp/sample/batch.json || true
+
+      - name: Validate the emitted batch against the TypeScript contract
+        working-directory: .
+        run: pnpm --filter @flakemetry/pytest-plugin validate:batch /tmp/sample/batch.json

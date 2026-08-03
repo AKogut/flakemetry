@@ -1,0 +1,12 @@
+{
+  "name": "@flakemetry/pytest-plugin",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Tooling for the pytest-flakemetry Python package",
+  "scripts": {
+    "validate:batch": "node scripts/validate-batch.mjs"
+  },
+  "devDependencies": {
+    "@flakemetry/contracts": "workspace:*"
+  }
+}
