@@ -6,9 +6,12 @@ import {
   codeownersUploadSchema,
   ingestRunBatchSchema,
   isAllowedArtifactContentType,
+  junitIngestSchema,
+  junitToIngestBatch,
   notificationRoutingSchema,
   otlpToIngestBatch,
   otlpTraceRequestSchema,
+  parseJunitXml,
 } from '@flakemetry/contracts'
 import { IngestionQueue, type PrismaClient } from '@flakemetry/db'
 import {
@@ -173,6 +176,68 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     }
 
     const batch = parsed.data
+    const { jobId, deduplicated } = await queue.enqueue({
+      orgId: project.orgId,
+      projectId: project.projectId,
+      idempotencyKey: batch.idempotencyKey,
+      payload: JSON.parse(JSON.stringify(batch)),
+    })
+
+    apiMetrics.runsAccepted.add(1)
+    apiMetrics.executionsAccepted.add(batch.executions.length)
+
+    return reply.code(202).send({
+      receiptId: jobId,
+      acceptedExecutions: batch.executions.length,
+      deduplicated,
+    })
+  })
+
+  app.post('/v1/ingest/junit', async (request, reply) => {
+    const project = await authenticateProject(prisma, request)
+    if (!project) {
+      return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
+    }
+
+    const admission = await admit(project.projectId)
+    if (!admission.ok) {
+      setRetryAfter(reply, admission.retryAfterMs)
+      return reply.code(admission.status).send({ error: admission.reason })
+    }
+
+    const parsed = junitIngestSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: 'invalid_payload',
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      })
+    }
+
+    let junit
+    try {
+      junit = parseJunitXml(parsed.data.xml)
+    } catch (error) {
+      return reply.code(400).send({
+        error: 'invalid_junit_xml',
+        message: error instanceof Error ? error.message : 'could not parse the report',
+      })
+    }
+
+    if (junit.executions.length === 0) {
+      return reply.code(400).send({
+        error: 'empty_report',
+        message: 'the report contains no test cases',
+      })
+    }
+
+    const batch = junitToIngestBatch(junit, {
+      idempotencyKey: parsed.data.idempotencyKey,
+      resource: parsed.data.resource,
+    })
+
     const { jobId, deduplicated } = await queue.enqueue({
       orgId: project.orgId,
       projectId: project.projectId,

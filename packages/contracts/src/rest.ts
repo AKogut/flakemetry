@@ -4,6 +4,7 @@ import {
   artifactPresignRequestSchema,
   codeownersUploadSchema,
   ingestRunBatchSchema,
+  junitIngestSchema,
 } from './ingestion'
 import { otlpTraceRequestSchema } from './otel'
 import {
@@ -41,6 +42,15 @@ export const REST_ENDPOINTS: readonly RestEndpoint[] = [
       'Ingest one test run. Validated and enqueued, then acknowledged immediately — this never blocks CI.',
     auth: 'ingest-token',
     request: { name: 'IngestRunBatch', schema: ingestRunBatchSchema },
+    response: '`202` with `{ receiptId, acceptedExecutions }`',
+  },
+  {
+    method: 'POST',
+    path: '/v1/ingest/junit',
+    summary:
+      'Ingest a JUnit XML report directly, for CI that cannot run the CLI. Parsed server-side into the same run batch the CLI would have sent.',
+    auth: 'ingest-token',
+    request: { name: 'JunitIngestRequest', schema: junitIngestSchema },
     response: '`202` with `{ receiptId, acceptedExecutions }`',
   },
   {

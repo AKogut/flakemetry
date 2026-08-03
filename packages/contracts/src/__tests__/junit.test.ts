@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseJunitXml } from '../junit'
+import { ingestRunBatchSchema } from '../ingestion'
+import { junitToIngestBatch, parseJunitXml } from '../junit'
 
 const PYTEST = `<?xml version="1.0" encoding="utf-8"?>
 <testsuites>
@@ -51,5 +52,43 @@ describe('parseJunitXml', () => {
 
   it('returns an empty run for a report with no testcases', () => {
     expect(parseJunitXml('<testsuites></testsuites>').executions).toEqual([])
+  })
+})
+
+describe('junitToIngestBatch', () => {
+  const resource = {
+    ciProvider: 'github_actions' as const,
+    commitSha: 'abc1234',
+    branch: 'main',
+    trigger: 'push' as const,
+  }
+
+  it('produces a batch the ingestion contract accepts', () => {
+    const batch = junitToIngestBatch(parseJunitXml(PYTEST), {
+      idempotencyKey: 'junit-run-0001',
+      resource,
+    })
+
+    expect(ingestRunBatchSchema.safeParse(batch).success).toBe(true)
+    expect(batch.executions).toHaveLength(4)
+    expect(batch.executions.every((execution) => execution.attempt === 1)).toBe(true)
+    expect(batch.run.startedAt.toISOString()).toBe(new Date('2026-07-16T10:00:00').toISOString())
+  })
+
+  it('fails the run when any case failed, and passes it otherwise', () => {
+    const failing = junitToIngestBatch(parseJunitXml(PYTEST), {
+      idempotencyKey: 'junit-run-0001',
+      resource,
+    })
+    expect(failing.run.status).toBe('failed')
+
+    const passing = junitToIngestBatch(
+      parseJunitXml(
+        '<testsuite name="s" tests="1"><testcase classname="a.B" name="ok" time="1" /></testsuite>',
+      ),
+      { idempotencyKey: 'junit-run-0002', resource, startedAt: new Date('2026-07-16T10:00:00Z') },
+    )
+    expect(passing.run.status).toBe('passed')
+    expect(passing.executions[0]?.durationMs).toBe(1000)
   })
 })

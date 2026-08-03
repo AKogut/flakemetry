@@ -107,6 +107,12 @@ export const ingestRunBatchSchema = z.object({
   executions: z.array(ingestExecutionSchema).max(5000),
 })
 
+export const junitIngestSchema = z.object({
+  idempotencyKey: z.string().min(8),
+  resource: ingestResourceSchema,
+  xml: z.string().min(1),
+})
+
 export const ingestAckSchema = z.object({
   receiptId: z.string().min(1),
   acceptedExecutions: z.number().int().nonnegative(),
@@ -143,6 +149,7 @@ export const codeownersUploadSchema = z.object({
   content: z.string().max(MAX_CODEOWNERS_BYTES),
 })
 
+export type JunitIngestRequest = z.infer<typeof junitIngestSchema>
 export type IngestResource = z.infer<typeof ingestResourceSchema>
 export type IngestError = z.infer<typeof ingestErrorSchema>
 export type ArtifactRef = z.infer<typeof artifactRefSchema>

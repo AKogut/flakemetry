@@ -1,6 +1,8 @@
 import { XMLParser } from 'fast-xml-parser'
 
 import type { TestStatus } from './common'
+import type { IngestResource, IngestRunBatch } from './ingestion'
+import { CONVENTIONS_VERSION } from './otel'
 
 export interface JunitExecution {
   filePath: string
@@ -106,4 +108,37 @@ export const parseJunitXml = (xml: string): JunitRun => {
   }
 
   return { startedAt, executions }
+}
+
+export interface JunitBatchParams {
+  idempotencyKey: string
+  resource: IngestResource
+  startedAt?: Date
+  finishedAt?: Date
+}
+
+export const junitToIngestBatch = (run: JunitRun, params: JunitBatchParams): IngestRunBatch => {
+  const startedAt = params.startedAt ?? (run.startedAt ? new Date(run.startedAt) : new Date())
+  const failed = run.executions.some((execution) => execution.status === 'fail')
+
+  return {
+    contractVersion: CONVENTIONS_VERSION,
+    idempotencyKey: params.idempotencyKey,
+    resource: params.resource,
+    run: {
+      status: failed ? 'failed' : 'passed',
+      startedAt,
+      finishedAt: params.finishedAt ?? startedAt,
+    },
+    executions: run.executions.map((execution) => ({
+      filePath: execution.filePath,
+      suite: execution.suite,
+      title: execution.title,
+      status: execution.status,
+      attempt: 1,
+      startedAt,
+      durationMs: execution.durationMs,
+      error: execution.error ?? null,
+    })),
+  }
 }
