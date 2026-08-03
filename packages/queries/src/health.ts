@@ -185,7 +185,11 @@ export const getTestHealthMetrics = async (
   const [rawEvents, currentlyFlaky, currentBacklog, quarantineDaily, reliabilityDaily] =
     await Promise.all([
       prisma.testHealthEvent.findMany({
-        where: { projectId, ...(identityFilter ? { testIdentityId: identityFilter } : {}) },
+        where: {
+          projectId,
+          createdAt: { gte: windowStart },
+          ...(identityFilter ? { testIdentityId: identityFilter } : {}),
+        },
         select: { testIdentityId: true, kind: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
@@ -227,7 +231,50 @@ export const getTestHealthMetrics = async (
     createdAt: event.createdAt,
   }))
 
-  const paired = pairFlakeResolutions(events)
+  // A flake resolved inside the window may have started long before it, so pairing
+  // needs those tests' full history — but only theirs, rather than the whole log.
+  const resolvedInWindow = [
+    ...new Set(
+      events.filter((event) => event.kind === 'stabilized').map((event) => event.testIdentityId),
+    ),
+  ]
+  const pairingEvents: HealthEventPoint[] =
+    resolvedInWindow.length === 0
+      ? events
+      : (
+          await prisma.testHealthEvent.findMany({
+            where: { projectId, testIdentityId: { in: resolvedInWindow } },
+            select: { testIdentityId: true, kind: true, createdAt: true },
+            orderBy: { createdAt: 'asc' },
+          })
+        ).map((event) => ({
+          testIdentityId: event.testIdentityId,
+          kind: event.kind as HealthEventKind,
+          createdAt: event.createdAt,
+        }))
+
+  const paired = pairFlakeResolutions(pairingEvents)
+
+  // The quarantine line has to know who was already held when the window opened,
+  // so it reads the transitions themselves — far rarer than flake events — rather
+  // than being rebuilt from the windowed slice, which would restart the count at zero.
+  const quarantineEvents: HealthEventPoint[] = scoped
+    ? (
+        await prisma.testHealthEvent.findMany({
+          where: {
+            projectId,
+            kind: { in: ['quarantined', 'unquarantined'] },
+            ...(identityFilter ? { testIdentityId: identityFilter } : {}),
+          },
+          select: { testIdentityId: true, kind: true, createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        })
+      ).map((event) => ({
+        testIdentityId: event.testIdentityId,
+        kind: event.kind as HealthEventKind,
+        createdAt: event.createdAt,
+      }))
+    : []
 
   const reliabilityTrend = reliabilityDaily.map((row) => {
     const total = row._sum.total ?? 0
@@ -242,7 +289,7 @@ export const getTestHealthMetrics = async (
     quarantine: {
       currentBacklog,
       trend: scoped
-        ? quarantineTrendFromEvents(events, windowStart)
+        ? quarantineTrendFromEvents(quarantineEvents, windowStart)
         : quarantineDaily.map((row) => ({ day: row.day, count: row.quarantinedCount })),
     },
     reliabilityTrend,

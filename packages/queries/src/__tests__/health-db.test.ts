@@ -164,7 +164,7 @@ describe.skipIf(!hasDb)('team-scoped health metrics', () => {
       ],
     })
 
-    return { projectId: project.id, paymentsId: payments.id }
+    return { orgId: org.id, projectId: project.id, paymentsId: payments.id, secondId: second.id }
   }
 
   it('scopes MTTR, backlog and weekly counts to the owning team', async () => {
@@ -181,6 +181,81 @@ describe.skipIf(!hasDb)('team-scoped health metrics', () => {
     const identity = await getTestHealthMetrics(prisma, s.projectId, 90, '@acme/identity')
     expect(identity.mttr.resolvedCount).toBe(0)
     expect(identity.quarantine.currentBacklog).toBe(0)
+  })
+
+  it('still measures a flake that started before the window but resolved inside it', async () => {
+    const s = await seedTeams()
+
+    const stale = await prisma.testIdentity.create({
+      data: {
+        orgId: s.orgId,
+        projectId: s.projectId,
+        fingerprint: 'long-runner',
+        filePath: 'e2e/checkout/slow.spec.ts',
+        suite: 's',
+        title: 'slow',
+      },
+    })
+    await prisma.testHealthEvent.createMany({
+      data: [
+        // Opened well outside a 90-day window, closed just inside it.
+        {
+          orgId: s.orgId,
+          projectId: s.projectId,
+          testIdentityId: stale.id,
+          kind: 'flaked',
+          createdAt: ago(200),
+        },
+        {
+          orgId: s.orgId,
+          projectId: s.projectId,
+          testIdentityId: stale.id,
+          kind: 'stabilized',
+          createdAt: ago(1),
+        },
+      ],
+    })
+
+    const metrics = await getTestHealthMetrics(prisma, s.projectId, 90)
+    const durations = 199 * DAY_MS
+
+    expect(metrics.mttr.resolvedCount).toBeGreaterThanOrEqual(1)
+    expect(metrics.mttr.meanMs).not.toBeNull()
+    // The long-running flake dominates the mean, which it could not do if pairing
+    // only ever saw events from inside the window.
+    expect(metrics.mttr.meanMs!).toBeGreaterThan(durations * 0.4)
+  })
+
+  it('carries a pre-window quarantine into the scoped trend', async () => {
+    const s = await seedTeams()
+
+    await prisma.testHealthEvent.createMany({
+      data: [
+        // Held since long before the window opened, and never released.
+        {
+          orgId: s.orgId,
+          projectId: s.projectId,
+          testIdentityId: s.paymentsId,
+          kind: 'quarantined',
+          createdAt: ago(200),
+        },
+        // A second test from the same team is held inside the window.
+        {
+          orgId: s.orgId,
+          projectId: s.projectId,
+          testIdentityId: s.secondId,
+          kind: 'quarantined',
+          createdAt: ago(2),
+        },
+      ],
+    })
+
+    const scoped = await getTestHealthMetrics(prisma, s.projectId, 90, '@acme/payments')
+
+    // Two tests are in quarantine at that point, not one — which is only true if
+    // the hold that began before the window is carried forward.
+    expect(scoped.quarantine.trend).toHaveLength(1)
+    expect(scoped.quarantine.trend[0]?.count).toBe(2)
   })
 
   it('returns empty metrics for an owner that owns nothing', async () => {
