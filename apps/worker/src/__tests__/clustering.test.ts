@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import { errorTokens } from '@flakemetry/core'
 import { PrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
@@ -9,9 +11,12 @@ const prisma = new PrismaClient()
 const NOW = new Date('2026-07-27T12:00:00Z')
 
 const seed = async () => {
-  const org = await prisma.org.create({ data: { name: 'Acme', slug: `acme-${Date.now()}` } })
+  // Two tenants inside one test land in the same millisecond, so a clock-derived slug
+  // collides on the unique index.
+  const suffix = randomUUID()
+  const org = await prisma.org.create({ data: { name: 'Acme', slug: `acme-${suffix}` } })
   const project = await prisma.project.create({
-    data: { orgId: org.id, name: 'Web', slug: `web-${Date.now()}` },
+    data: { orgId: org.id, name: 'Web', slug: `web-${suffix}` },
   })
   return { orgId: org.id, projectId: project.id }
 }
@@ -53,17 +58,14 @@ describe.skipIf(!hasDb)('cluster candidate lookup', () => {
     const tenant = await seed()
     const target = 'Element #login is not visible in the viewport'
 
-    // The real cluster mate is the oldest row. Selecting candidates by recency — which
-    // is what the previous "most recent 1000 signatures" window did — would rank the
-    // newer, unrelated rows above it and never see it at all once a project grew.
+    // The real cluster mate is the oldest row, and the decoy is the newest. The decoy
+    // has to *overlap* — a row sharing no tokens is dropped by the index filter before
+    // ordering matters, so a non-overlapping decoy would prove nothing about ranking.
     const mate = await signature(tenant, 'old', 'Element #logout is not visible in the viewport', {
       seenAt: new Date('2026-01-01T00:00:00Z'),
     })
-    await signature(tenant, 'new1', 'Request failed with status code 500', {
+    await signature(tenant, 'decoy', 'Element missing', {
       seenAt: new Date('2026-07-01T00:00:00Z'),
-    })
-    await signature(tenant, 'new2', 'Database connection pool exhausted', {
-      seenAt: new Date('2026-07-02T00:00:00Z'),
     })
 
     const candidates = await findClusterCandidates(
