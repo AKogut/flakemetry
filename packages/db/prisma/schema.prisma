@@ -397,8 +397,6 @@ model ErrorCluster {
   orgId           String   @map("org_id") @db.Uuid
   projectId       String   @map("project_id") @db.Uuid
   label           String
-  signatureCount  Int      @default(0) @map("signature_count")
-  occurrenceCount Int      @default(0) @map("occurrence_count")
   knownIssueRef   String?  @map("known_issue_ref")
   firstSeenAt     DateTime @default(now()) @map("first_seen_at")
   lastSeenAt      DateTime @default(now()) @map("last_seen_at")

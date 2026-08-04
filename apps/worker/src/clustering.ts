@@ -103,28 +103,19 @@ export const assignCluster = async (
     where: { id: match.candidate.id },
     data: { clusterId: created.id },
   })
-  await prisma.errorCluster.update({
-    where: { id: created.id },
-    data: { signatureCount: { increment: 1 } },
-  })
 
   return { clusterId: created.id, createdCluster: true, adoptedSignatureId: match.candidate.id }
 }
 
+/** Counts live on the signatures and are summed on read, so a cluster only tracks when
+ * it was last seen — a maintained counter would drift the moment retention pruned an
+ * execution or a merge moved one. */
 export const recordClusterOccurrence = async (
   prisma: ClusterClient,
   clusterId: string,
   now: Date,
-  addedSignature: boolean,
 ): Promise<void> => {
-  await prisma.errorCluster.update({
-    where: { id: clusterId },
-    data: {
-      lastSeenAt: now,
-      occurrenceCount: { increment: 1 },
-      ...(addedSignature ? { signatureCount: { increment: 1 } } : {}),
-    },
-  })
+  await prisma.errorCluster.update({ where: { id: clusterId }, data: { lastSeenAt: now } })
 }
 
 const sameTokens = (stored: readonly string[], computed: readonly string[]): boolean =>
@@ -190,7 +181,7 @@ export const backfillSignatureClusters = async (
       })
       await prisma.errorCluster.update({
         where: { id: assignment.clusterId },
-        data: { signatureCount: { increment: 1 }, lastSeenAt: now },
+        data: { lastSeenAt: now },
       })
       assigned += 1
 

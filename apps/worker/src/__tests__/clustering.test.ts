@@ -148,16 +148,15 @@ describe.skipIf(!hasDb)('backfillSignatureClusters', () => {
 
     const clusters = await prisma.errorCluster.findMany({
       where: { projectId: tenant.projectId },
-      orderBy: { signatureCount: 'desc' },
-      select: { label: true, signatureCount: true },
+      select: { label: true, _count: { select: { signatures: true } } },
     })
+    const sizes = clusters.map((cluster) => cluster._count.signatures).sort((a, b) => b - a)
 
     // A cluster id used to be a bare uuid pointing at nothing, so there was nowhere to
-    // hang a name, a count, or a known-issue reference.
+    // hang a name or a known-issue reference.
     expect(clusters).toHaveLength(2)
-    expect(clusters[0]?.signatureCount).toBe(2)
-    expect(clusters[1]?.signatureCount).toBe(1)
-    expect(clusters[0]?.label).toContain('not visible')
+    expect(sizes).toEqual([2, 1])
+    expect(clusters.map((cluster) => cluster.label).join(' ')).toContain('not visible')
   })
 
   it('counts a signature once even when an earlier row pulled it into the cluster', async () => {
@@ -180,10 +179,11 @@ describe.skipIf(!hasDb)('backfillSignatureClusters', () => {
 
     const clusters = await prisma.errorCluster.findMany({
       where: { projectId: tenant.projectId },
-      orderBy: { signatureCount: 'desc' },
-      select: { signatureCount: true },
+      select: { _count: { select: { signatures: true } } },
     })
-    expect(clusters.map((cluster) => cluster.signatureCount)).toEqual([2, 1])
+    expect(clusters.map((cluster) => cluster._count.signatures).sort((a, b) => b - a)).toEqual([
+      2, 1,
+    ])
   })
 
   it('settles tokens seeded by the migration onto the real tokenizer', async () => {
