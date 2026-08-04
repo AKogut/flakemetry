@@ -38,6 +38,7 @@ export default defineConfig({
           items: [
             { text: 'Introduction', link: '/guide/introduction' },
             { text: 'Self-hosting', link: '/guide/self-hosting' },
+            { text: 'Integrating a project', link: '/guide/integrate' },
             { text: 'Your first insight', link: '/guide/first-insight' },
           ],
         },

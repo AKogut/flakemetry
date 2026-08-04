@@ -86,6 +86,11 @@ workspace.
 The demo dataset is only written when the database is empty, so restarting the stack keeps
 everything you have ingested. Use `pnpm demo` when you do want a clean slate.
 
+Wiring an existing project into its own instance? The
+[integration guide](https://akogut.github.io/flakemetry/guide/integrate.html) walks the
+whole path — OAuth app, stack, token, reporter, and seeding history from CI artifacts so
+the board is useful the same day.
+
 For a horizontally scaled hosted environment, [`deploy/`](deploy) ships a Helm chart
 (stateless `api`/`worker`/`web` with autoscaling, a migration hook, and ingress) plus an
 operations [runbook](deploy/RUNBOOK.md) with SLOs — see the [deploy guide](deploy/README.md).
