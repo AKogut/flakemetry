@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import type { LlmProvider } from '@flakemetry/ai'
 import type { HealthEventKind, IngestRunBatch } from '@flakemetry/contracts'
 import {
@@ -39,6 +41,15 @@ export interface ProcessResult {
 
 const runDurationMs = (startedAt: Date, finishedAt: Date | null): number | null =>
   finishedAt ? Math.max(0, finishedAt.getTime() - startedAt.getTime()) : null
+
+const PENDING_IDENTITY = 'pending:'
+
+/**
+ * Prisma defaults an interactive transaction to five seconds, which a full suite exceeded
+ * before the writes below were batched. The batching is the fix; this is headroom for a
+ * loaded database, not a licence to go back to a statement per test.
+ */
+const TRANSACTION_LIMITS = { timeout: 120_000, maxWait: 15_000 }
 
 export const processJob = async (
   prisma: PrismaClient,
@@ -140,7 +151,12 @@ export const processJob = async (
       })),
     )
 
-    const createdIds: string[] = []
+    const assignments: string[] = []
+    const refreshed: string[] = []
+    const rewritten: { identityId: string; data: Prisma.TestIdentityUpdateInput }[] = []
+    const stitches: Prisma.IdentityStitchCreateManyInput[] = []
+    const additions = new Map<string, Prisma.TestIdentityCreateManyInput>()
+
     for (const { execution, paramsHash, fingerprint } of prepared) {
       const resolution = resolveIdentity(
         {
@@ -157,20 +173,25 @@ export const processJob = async (
       let identityId: string
       if (resolution.kind === 'exact') {
         identityId = resolution.identityId
-        await tx.testIdentity.update({
-          where: { id: identityId },
-          data: {
-            lastSeenAt: startedAt,
-            filePath: execution.filePath,
-            params: (execution.params ?? null) as Prisma.InputJsonValue,
-          },
-        })
+        const entry = existing.find((item) => item.id === identityId)
+        if (entry?.fingerprint === fingerprint) {
+          refreshed.push(identityId)
+        } else {
+          rewritten.push({
+            identityId,
+            data: {
+              lastSeenAt: startedAt,
+              filePath: execution.filePath,
+              params: (execution.params ?? null) as Prisma.InputJsonValue,
+            },
+          })
+        }
       } else if (resolution.kind === 'moved' || resolution.kind === 'renamed') {
         identityId = resolution.identityId
         movedIdentities += 1
         const entry = existing.find((item) => item.id === identityId)
-        await tx.testIdentity.update({
-          where: { id: identityId },
+        rewritten.push({
+          identityId,
           data: {
             aliases: { push: resolution.addAlias },
             filePath: execution.filePath,
@@ -178,19 +199,17 @@ export const processJob = async (
             lastSeenAt: startedAt,
           },
         })
-        await tx.identityStitch.create({
-          data: {
-            ...tenant,
-            testIdentityId: identityId,
-            level: resolution.level,
-            fromFingerprint: resolution.addAlias,
-            fromFilePath: entry?.filePath ?? null,
-            fromTitle: entry?.title ?? null,
-            toFilePath: execution.filePath,
-            toTitle: execution.title,
-            confidence: resolution.kind === 'renamed' ? resolution.confidence : null,
-            runStartedAt: startedAt,
-          },
+        stitches.push({
+          ...tenant,
+          testIdentityId: identityId,
+          level: resolution.level,
+          fromFingerprint: resolution.addAlias,
+          fromFilePath: entry?.filePath ?? null,
+          fromTitle: entry?.title ?? null,
+          toFilePath: execution.filePath,
+          toTitle: execution.title,
+          confidence: resolution.kind === 'renamed' ? resolution.confidence : null,
+          runStartedAt: startedAt,
         })
         if (entry) {
           entry.aliases = [...entry.aliases, resolution.addAlias]
@@ -202,10 +221,10 @@ export const processJob = async (
           alias: resolution.addAlias,
         })
       } else {
-        newIdentities += 1
-        const created = await tx.testIdentity.upsert({
-          where: { projectId_fingerprint: { projectId: ctx.projectId, fingerprint } },
-          create: {
+        identityId = `${PENDING_IDENTITY}${fingerprint}`
+        if (!additions.has(fingerprint)) {
+          newIdentities += 1
+          additions.set(fingerprint, {
             ...tenant,
             fingerprint,
             filePath: execution.filePath,
@@ -215,61 +234,128 @@ export const processJob = async (
             params: (execution.params ?? null) as Prisma.InputJsonValue,
             firstSeenAt: startedAt,
             lastSeenAt: startedAt,
-          },
-          update: { lastSeenAt: startedAt },
+          })
+          existing.push({
+            id: identityId,
+            fingerprint,
+            suite: execution.suite,
+            title: execution.title,
+            paramsHash,
+            aliases: [],
+            filePath: execution.filePath,
+          })
+          createdEvents.push({ testIdentityId: identityId, projectId: ctx.projectId, fingerprint })
+        }
+      }
+
+      assignments.push(identityId)
+    }
+
+    const identityIdByFingerprint = new Map<string, string>()
+    if (additions.size > 0) {
+      await tx.testIdentity.createMany({ data: [...additions.values()], skipDuplicates: true })
+      // Re-read rather than trusting the ids we generated: a concurrent run for the same
+      // project may have inserted the same fingerprint first, in which case skipDuplicates
+      // dropped ours and the authoritative id is theirs.
+      const stored = await tx.testIdentity.findMany({
+        where: { projectId: ctx.projectId, fingerprint: { in: [...additions.keys()] } },
+        select: { id: true, fingerprint: true },
+      })
+      for (const row of stored) identityIdByFingerprint.set(row.fingerprint, row.id)
+    }
+
+    const settle = (id: string): string => {
+      if (!id.startsWith(PENDING_IDENTITY)) return id
+      const resolved = identityIdByFingerprint.get(id.slice(PENDING_IDENTITY.length))
+      if (!resolved) throw new Error(`identity ${id} was not persisted`)
+      return resolved
+    }
+
+    if (refreshed.length > 0) {
+      // An exact match on the primary fingerprint implies the file path, suite, title and
+      // params hash are unchanged, so last-seen is the only field that can move. Collapsing
+      // these into one statement is what keeps a full-suite run off the transaction timeout.
+      await tx.testIdentity.updateMany({
+        where: { id: { in: [...new Set(refreshed.map(settle))] } },
+        data: { lastSeenAt: startedAt },
+      })
+    }
+
+    for (const update of rewritten) {
+      await tx.testIdentity.update({ where: { id: settle(update.identityId) }, data: update.data })
+    }
+
+    if (stitches.length > 0) {
+      await tx.identityStitch.createMany({
+        data: stitches.map((row) => ({ ...row, testIdentityId: settle(row.testIdentityId) })),
+      })
+    }
+
+    for (const id of assignments) affected.add(settle(id))
+    for (const event of createdEvents) event.testIdentityId = settle(event.testIdentityId)
+
+    const prior = await tx.testExecution.findMany({
+      where: { runId: run.id },
+      select: { id: true, ordinal: true },
+    })
+    // Reprocessing the same idempotency key has to keep execution ids stable — RCA reports
+    // and artifacts reference them — so reuse what is already stored for each ordinal.
+    const executionIds: string[] = prepared.map(() => randomUUID())
+    for (const row of prior) {
+      if (row.ordinal != null && row.ordinal < executionIds.length)
+        executionIds[row.ordinal] = row.id
+    }
+
+    const executionFields = prepared.map(({ execution }, ordinal) => ({
+      testIdentityId: settle(assignments[ordinal]!),
+      attempt: execution.attempt,
+      retryOf:
+        execution.retryOfIndex != null && execution.retryOfIndex < ordinal
+          ? (executionIds[execution.retryOfIndex] ?? null)
+          : null,
+      status: execution.status,
+      durationMs: execution.durationMs,
+      errorMessage: execution.error?.message ?? null,
+      otelTraceId: execution.traceId ?? batch.run.traceId ?? null,
+      otelSpanId: execution.spanId ?? null,
+      artifactsRef: (execution.artifacts ?? null) as Prisma.InputJsonValue,
+      attributes: (execution.attributes ?? null) as Prisma.InputJsonValue,
+      spans: (execution.spans ?? null) as Prisma.InputJsonValue,
+      startedAt: execution.startedAt,
+    }))
+
+    if (prior.length === 0) {
+      await tx.testExecution.createMany({
+        data: executionFields.map((fields, ordinal) => ({
+          ...tenant,
+          id: executionIds[ordinal]!,
+          runId: run.id,
+          ordinal,
+          ...fields,
+        })),
+      })
+    } else {
+      for (const [ordinal, fields] of executionFields.entries()) {
+        await tx.testExecution.upsert({
+          where: { runId_ordinal: { runId: run.id, ordinal } },
+          create: { ...tenant, id: executionIds[ordinal]!, runId: run.id, ordinal, ...fields },
+          update: fields,
           select: { id: true },
         })
-        identityId = created.id
-        existing.push({
-          id: identityId,
-          fingerprint,
-          suite: execution.suite,
-          title: execution.title,
-          paramsHash,
-          aliases: [],
-          filePath: execution.filePath,
-        })
-        createdEvents.push({ testIdentityId: identityId, projectId: ctx.projectId, fingerprint })
       }
+    }
 
-      affected.add(identityId)
-      const retryOf =
-        execution.retryOfIndex != null ? (createdIds[execution.retryOfIndex] ?? null) : null
-      const ordinal = createdIds.length
-
-      const fields = {
-        testIdentityId: identityId,
-        attempt: execution.attempt,
-        retryOf,
-        status: execution.status,
-        durationMs: execution.durationMs,
-        errorMessage: execution.error?.message ?? null,
-        otelTraceId: execution.traceId ?? batch.run.traceId ?? null,
-        otelSpanId: execution.spanId ?? null,
-        artifactsRef: (execution.artifacts ?? null) as Prisma.InputJsonValue,
-        attributes: (execution.attributes ?? null) as Prisma.InputJsonValue,
-        spans: (execution.spans ?? null) as Prisma.InputJsonValue,
-        startedAt: execution.startedAt,
-      }
-      const row = await tx.testExecution.upsert({
-        where: { runId_ordinal: { runId: run.id, ordinal } },
-        create: { ...tenant, runId: run.id, ordinal, ...fields },
-        update: fields,
-        select: { id: true },
+    for (const [ordinal, { execution }] of prepared.entries()) {
+      if (!execution.error) continue
+      failures.push({
+        executionId: executionIds[ordinal]!,
+        filePath: execution.filePath,
+        suite: execution.suite,
+        title: execution.title,
+        errorType: execution.error.type ?? null,
+        errorMessage: execution.error.message,
+        errorStack: execution.error.stack ?? null,
       })
-      createdIds.push(row.id)
-
-      if (execution.error) {
-        failures.push({
-          executionId: row.id,
-          filePath: execution.filePath,
-          suite: execution.suite,
-          title: execution.title,
-          errorType: execution.error.type ?? null,
-          errorMessage: execution.error.message,
-          errorStack: execution.error.stack ?? null,
-        })
-      }
     }
 
     await tx.testExecution.deleteMany({
@@ -280,7 +366,7 @@ export const processJob = async (
     })
 
     return run.id
-  })
+  }, TRANSACTION_LIMITS)
 
   for (const event of createdEvents) ctx.events?.emit('identity.created', event)
   for (const event of movedEvents) ctx.events?.emit('identity.moved', event)
