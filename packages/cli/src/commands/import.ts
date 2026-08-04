@@ -110,11 +110,6 @@ export const planHistoricalImport = (
   return { runs, skipped }
 }
 
-export const collectJunitFiles = (
-  directory: string,
-  reader: { list: (dir: string) => string[]; read: (path: string) => HistoricalFile },
-): HistoricalFile[] => reader.list(directory).map((path) => reader.read(path))
-
 export const listXmlFiles = (directory: string): string[] => {
   const found: string[] = []
   const walk = (dir: string): void => {

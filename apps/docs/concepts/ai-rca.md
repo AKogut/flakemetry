@@ -28,3 +28,28 @@ judgement.
 The architecture is documented in the
 [AI RCA wiki page](https://github.com/AKogut/flakemetry/wiki/AI-RCA-Architecture). Provider
 and budget configuration live in the [Configuration reference](/reference/configuration).
+
+## Keeping it honest
+
+An analysis can be marked helpful or not from the RCA panel, and a reviewer can write
+what the real cause actually was. Only those written corrections become evaluation
+cases — a bare thumbs-down says an answer was wrong without saying what right looks
+like, and there is nothing to score against that.
+
+Prompts are versioned, and every report records which version produced it, so a change
+in the numbers can be attributed to a prompt rather than guessed at:
+
+```bash
+# score the active prompt and keep the result as a baseline
+pnpm --filter @flakemetry/worker eval --project <projectId> --write-baseline base.json
+
+# a candidate prompt has to beat it, or the command exits non-zero
+pnpm --filter @flakemetry/worker eval --project <projectId> --prompt v3 --baseline base.json
+```
+
+Scoring is keyword recall against the correction, not a model grading a model. It is
+blunt and says nothing about whether an explanation reads well, but it is deterministic
+and needs no provider to compute — a judge model would make the measure itself a moving
+target. An answer that cannot be parsed counts as unanswered rather than merely wrong,
+tracked separately, because a prompt that stops emitting JSON is a different failure
+from one that explains badly.
