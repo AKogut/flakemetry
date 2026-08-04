@@ -51,6 +51,36 @@ const PENDING_IDENTITY = 'pending:'
  */
 const TRANSACTION_LIMITS = { timeout: 120_000, maxWait: 15_000 }
 
+const parsedScoringConcurrency = Number(process.env.FLAKEMETRY_SCORING_CONCURRENCY)
+const SCORING_CONCURRENCY =
+  Number.isFinite(parsedScoringConcurrency) && parsedScoringConcurrency > 0
+    ? Math.floor(parsedScoringConcurrency)
+    : 4
+
+/**
+ * Scoring an identity costs five reads and a transaction, and identities do not depend on
+ * one another, so running them one after another spent almost all of a large run's wall
+ * clock waiting on round trips. The cap is deliberately low: each task holds a connection,
+ * briefly two, and overrunning Prisma's pool trades latency for pool timeouts.
+ */
+const scoreConcurrently = async (
+  identityIds: readonly string[],
+  score: (identityId: string) => Promise<void>,
+): Promise<void> => {
+  const pending = [...identityIds]
+  const workers = Array.from(
+    { length: Math.min(SCORING_CONCURRENCY, pending.length) },
+    async () => {
+      for (;;) {
+        const identityId = pending.shift()
+        if (identityId === undefined) return
+        await score(identityId)
+      }
+    },
+  )
+  await Promise.all(workers)
+}
+
 export const processJob = async (
   prisma: PrismaClient,
   batch: IngestRunBatch,
@@ -371,9 +401,7 @@ export const processJob = async (
   for (const event of createdEvents) ctx.events?.emit('identity.created', event)
   for (const event of movedEvents) ctx.events?.emit('identity.moved', event)
 
-  for (const identityId of affected) {
-    await scoreIdentity(prisma, identityId, ctx)
-  }
+  await scoreConcurrently([...affected], (identityId) => scoreIdentity(prisma, identityId, ctx))
 
   await updateRollups(
     prisma,
