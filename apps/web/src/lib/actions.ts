@@ -5,6 +5,7 @@ import { generateToken, getPrismaClient, hashToken } from '@flakemetry/db'
 import { isEmailAddress, isSafeWebhookUrl } from '@flakemetry/notify'
 import {
   mergeIdentities,
+  recordRcaFeedback,
   setClusterKnownIssue,
   splitIdentity,
   unmergeIdentity,
@@ -260,6 +261,29 @@ export const updateClusterKnownIssue = async (formData: FormData): Promise<void>
     throw new Error('only owners and admins can mark a cluster as a known issue')
 
   await setClusterKnownIssue(prisma, projectId, clusterId, knownIssueRef)
+
+  revalidatePath(`/projects/${projectId}/tests/${testId}`)
+}
+
+export const submitRcaFeedback = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const testId = String(formData.get('testId') ?? '')
+  const reportId = String(formData.get('reportId') ?? '')
+  const verdict = String(formData.get('verdict') ?? '')
+  const correction = String(formData.get('correction') ?? '')
+  if (verdict !== 'helpful' && verdict !== 'unhelpful') throw new Error('unknown verdict')
+
+  const project = await requireProjectAccess(user.id, projectId)
+
+  await recordRcaFeedback(prisma, {
+    orgId: project.orgId,
+    projectId,
+    reportId,
+    userId: user.id,
+    verdict,
+    correction,
+  })
 
   revalidatePath(`/projects/${projectId}/tests/${testId}`)
 }

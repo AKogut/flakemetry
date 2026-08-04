@@ -24,6 +24,7 @@ export interface RcaInput {
   error: ScrubbableError
   flakyScore?: number | null
   similarPast?: readonly PriorAnalysis[]
+  promptVersion?: string
 }
 
 export interface RcaOutcome {
@@ -31,19 +32,32 @@ export interface RcaOutcome {
   model: string
   tokenCost: number
   groundedIn: number
+  promptVersion: string
 }
 
 export const MAX_PRIOR_ANALYSES = 4
 
-export const RCA_SYSTEM_PROMPT =
-  'You are a test failure root-cause analyst for a flaky-test intelligence platform. ' +
-  'Given a failed test and its scrubbed error, produce a concise, actionable root-cause analysis. ' +
-  'You may be shown analyses of earlier failures from the same project. Use them when they ' +
-  'genuinely explain this failure, and say so in the summary; ignore them when they do not, ' +
-  'rather than forcing a match. Let the confidence reflect that: higher when earlier cases ' +
-  'corroborate this one, lower when the evidence is thin or the prior cases do not fit. ' +
-  'Respond with ONLY a JSON object with keys "summary", "likelyCause", "suggestedAction", and ' +
-  '"confidence" (a number between 0 and 1). No prose, no markdown fences.'
+export const RCA_PROMPT_VERSIONS: Record<string, string> = {
+  v1:
+    'You are a test failure root-cause analyst for a flaky-test intelligence platform. ' +
+    'Given a failed test and its scrubbed error, produce a concise, actionable root-cause analysis. ' +
+    'Respond with ONLY a JSON object with keys "summary", "likelyCause", "suggestedAction", and ' +
+    '"confidence" (a number between 0 and 1). No prose, no markdown fences.',
+  v2:
+    'You are a test failure root-cause analyst for a flaky-test intelligence platform. ' +
+    'Given a failed test and its scrubbed error, produce a concise, actionable root-cause analysis. ' +
+    'You may be shown analyses of earlier failures from the same project. Use them when they ' +
+    'genuinely explain this failure, and say so in the summary; ignore them when they do not, ' +
+    'rather than forcing a match. Let the confidence reflect that: higher when earlier cases ' +
+    'corroborate this one, lower when the evidence is thin or the prior cases do not fit. ' +
+    'Respond with ONLY a JSON object with keys "summary", "likelyCause", "suggestedAction", and ' +
+    '"confidence" (a number between 0 and 1). No prose, no markdown fences.',
+}
+
+/** Stamped onto every report, so a change in eval numbers can be attributed to a prompt. */
+export const ACTIVE_RCA_PROMPT_VERSION = 'v2'
+
+export const RCA_SYSTEM_PROMPT = RCA_PROMPT_VERSIONS[ACTIVE_RCA_PROMPT_VERSION] as string
 
 export const buildRcaPrompt = (input: RcaInput): string => {
   const error = scrubError(input.error)
@@ -79,8 +93,10 @@ export const analyzeFailure = async (
   provider: LlmProvider,
   input: RcaInput,
 ): Promise<RcaOutcome | null> => {
+  const promptVersion = input.promptVersion ?? ACTIVE_RCA_PROMPT_VERSION
+  const system = RCA_PROMPT_VERSIONS[promptVersion] ?? RCA_SYSTEM_PROMPT
   const result = await provider.complete({
-    system: RCA_SYSTEM_PROMPT,
+    system,
     prompt: buildRcaPrompt(input),
     maxTokens: 1024,
   })
@@ -91,5 +107,6 @@ export const analyzeFailure = async (
     model: provider.model,
     tokenCost: result.inputTokens + result.outputTokens,
     groundedIn: Math.min(input.similarPast?.length ?? 0, MAX_PRIOR_ANALYSES),
+    promptVersion,
   }
 }

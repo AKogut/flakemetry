@@ -31,6 +31,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "@flakemetry/ai": "workspace:*",
     "@flakemetry/contracts": "workspace:*",
     "@flakemetry/core": "workspace:*",
     "@flakemetry/db": "workspace:*"

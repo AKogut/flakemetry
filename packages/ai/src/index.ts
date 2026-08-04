@@ -1,3 +1,4 @@
+export * from './eval'
 export * from './provider'
 export * from './providers'
 export * from './rca'

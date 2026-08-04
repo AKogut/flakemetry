@@ -306,6 +306,7 @@ export const processFailures = async (
         confidence: outcome.analysis.confidence,
         similarPast,
         llmModel: outcome.model,
+        promptVersion: outcome.promptVersion,
         tokenCost: outcome.tokenCost,
       },
     })

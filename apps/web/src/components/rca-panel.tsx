@@ -1,13 +1,25 @@
 import type { RcaGetResult } from '@flakemetry/contracts'
 
+import { submitRcaFeedback } from '@/lib/actions'
+
 const percent = (value: number): string => `${Math.round(value * 100)}%`
+
+export interface RcaFeedbackState {
+  reportId: string
+  projectId: string
+  testId: string
+  verdict: 'helpful' | 'unhelpful' | null
+  correction: string | null
+}
 
 export const RcaPanel = ({
   report,
   errorMessage,
+  feedback,
 }: {
   report: RcaGetResult
   errorMessage: string | null
+  feedback?: RcaFeedbackState | null
 }) => (
   <div className="card rca">
     <div className="row-between" style={{ marginBottom: '0.75rem' }}>
@@ -65,6 +77,45 @@ export const RcaPanel = ({
               ))}
             </ul>
           </div>
+        ) : null}
+
+        {feedback ? (
+          <form action={submitRcaFeedback} style={{ marginTop: '0.9rem' }}>
+            <input type="hidden" name="projectId" value={feedback.projectId} />
+            <input type="hidden" name="testId" value={feedback.testId} />
+            <input type="hidden" name="reportId" value={feedback.reportId} />
+            <div className="rca-label" style={{ marginBottom: '0.4rem' }}>
+              {feedback.verdict ? 'Your verdict' : 'Was this useful?'}
+            </div>
+            <textarea
+              className="input"
+              name="correction"
+              rows={2}
+              placeholder="What was the real cause? (optional — this is what builds the eval set)"
+              defaultValue={feedback.correction ?? ''}
+              style={{ width: '100%', marginBottom: '0.4rem' }}
+            />
+            <div style={{ display: 'flex', gap: '0.4rem' }}>
+              <button
+                className="btn"
+                type="submit"
+                name="verdict"
+                value="helpful"
+                aria-pressed={feedback.verdict === 'helpful'}
+              >
+                Helpful
+              </button>
+              <button
+                className="btn"
+                type="submit"
+                name="verdict"
+                value="unhelpful"
+                aria-pressed={feedback.verdict === 'unhelpful'}
+              >
+                Not helpful
+              </button>
+            </div>
+          </form>
         ) : null}
 
         <p className="muted" style={{ fontSize: '0.78rem', marginTop: '0.9rem', marginBottom: 0 }}>
