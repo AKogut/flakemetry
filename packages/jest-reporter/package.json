@@ -1,6 +1,6 @@
 {
   "name": "@flakemetry/jest-reporter",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Jest reporter emitting OpenTelemetry test spans to Flakemetry",
   "license": "MIT",
   "author": "Andrii Kohut",
