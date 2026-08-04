@@ -228,6 +228,30 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@22.20.1)(vite@7.3.6(@types/node@22.20.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
 
+  examples/reporter-smoke:
+    devDependencies:
+      '@flakemetry/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@flakemetry/jest-reporter':
+        specifier: workspace:*
+        version: link:../../packages/jest-reporter
+      '@flakemetry/playwright-reporter':
+        specifier: workspace:*
+        version: link:../../packages/reporter
+      '@flakemetry/vitest-reporter':
+        specifier: workspace:*
+        version: link:../../packages/vitest-reporter
+      '@playwright/test':
+        specifier: ^1.62.1
+        version: 1.62.1
+      jest:
+        specifier: ^30.2.0
+        version: 30.4.2(@types/node@22.20.1)
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@22.20.1)(vite@7.3.6(@types/node@22.20.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
+
   packages/ai:
     dependencies:
       '@anthropic-ai/sdk':

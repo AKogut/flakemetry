@@ -1,0 +1,23 @@
+{
+  "name": "flakemetry-reporter-smoke",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Runs each reporter inside its real runner against a live stack and checks the data arrived.",
+  "type": "module",
+  "scripts": {
+    "provision": "node provision.mjs",
+    "verify": "node verify.mjs",
+    "smoke:playwright": "playwright test",
+    "smoke:vitest": "vitest run",
+    "smoke:jest": "jest"
+  },
+  "devDependencies": {
+    "@flakemetry/db": "workspace:*",
+    "@flakemetry/jest-reporter": "workspace:*",
+    "@flakemetry/playwright-reporter": "workspace:*",
+    "@flakemetry/vitest-reporter": "workspace:*",
+    "@playwright/test": "^1.62.1",
+    "jest": "^30.2.0",
+    "vitest": "^4.1.10"
+  }
+}

@@ -1,0 +1,108 @@
+name: reporters
+
+# The reporters' unit tests exercise their mapping functions directly, never the
+# runner's lifecycle. That is structurally blind to the way this package broke once
+# already: Vitest 4 removed the hook the reporter implemented, so it was simply never
+# called — the suite passed, and no data was ever sent. Nothing in a green test run
+# could have said otherwise. This job runs each reporter inside its real runner
+# against a live API and worker, and fails if the data does not turn up.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: reporters-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: every reporter delivers against a live stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: flakemetry
+          POSTGRES_PASSWORD: flakemetry
+          POSTGRES_DB: flakemetry
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U flakemetry"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://flakemetry:flakemetry@localhost:5432/flakemetry?schema=public
+      FLAKEMETRY_ENDPOINT: http://localhost:4000
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations
+        run: pnpm --filter @flakemetry/db exec prisma migrate deploy
+
+      - name: Build the packages the reporters consume
+        run: pnpm turbo run build --filter @flakemetry/api... --filter @flakemetry/worker... --filter flakemetry-reporter-smoke...
+
+      - name: Start the API and the worker
+        run: |
+          pnpm --filter @flakemetry/api start > /tmp/api.log 2>&1 &
+          pnpm --filter @flakemetry/worker start > /tmp/worker.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -sf http://localhost:4000/health >/dev/null; then
+              echo "api healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "the api never became healthy"
+          cat /tmp/api.log
+          exit 1
+
+      - name: Give each runner its own project and token
+        working-directory: examples/reporter-smoke
+        run: pnpm provision
+
+      - name: Playwright
+        working-directory: examples/reporter-smoke
+        env:
+          FLAKEMETRY_TOKEN: ${{ env.PLAYWRIGHT_TOKEN }}
+        # The suite contains a deliberate failure, so a non-zero exit is the expected
+        # outcome. Whether the reporter delivered is decided by the verify step.
+        run: pnpm smoke:playwright || true
+
+      - name: Vitest
+        working-directory: examples/reporter-smoke
+        env:
+          FLAKEMETRY_TOKEN: ${{ env.VITEST_TOKEN }}
+        run: pnpm smoke:vitest || true
+
+      - name: Jest
+        working-directory: examples/reporter-smoke
+        env:
+          FLAKEMETRY_TOKEN: ${{ env.JEST_TOKEN }}
+        run: pnpm smoke:jest || true
+
+      - name: Every reporter's run must have landed
+        working-directory: examples/reporter-smoke
+        run: pnpm verify
+
+      - name: Service logs
+        if: failure()
+        run: |
+          echo '--- api ---'; cat /tmp/api.log || true
+          echo '--- worker ---'; cat /tmp/worker.log || true
