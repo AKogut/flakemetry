@@ -26,30 +26,141 @@ const prNumberFromRef = (ref: string | undefined): number | null => {
 const pick = (value: string | undefined): string | undefined =>
   value && value.length > 0 ? value : undefined
 
+const asNumber = (value: string | undefined): number | null => {
+  if (!value) return null
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+interface CiSignals {
+  provider: CiProvider
+  commitSha?: string
+  branch?: string
+  runId?: string
+  attempt?: string
+  prNumber: number | null
+  trigger: RunTrigger
+  shardIndex?: number | null
+  shardTotal?: number | null
+}
+
+type Env = Record<string, string | undefined>
+
+/**
+ * Every provider below already had a value in the CiProvider enum and nothing that ever
+ * produced it. A run outside GitHub Actions arrived as `local` at commit "0000000" on
+ * branch "local", which collapses a project's whole history onto one commit — and
+ * scoring reads "same commit, different result" as flakiness, so it manufactured that
+ * signal for every test. The pull-request gate and shard correlation were equally blind.
+ */
+const DETECTORS: ((env: Env) => CiSignals | null)[] = [
+  (env) =>
+    env.GITHUB_ACTIONS === 'true'
+      ? {
+          provider: 'github_actions',
+          commitSha: pick(env.GITHUB_SHA),
+          branch: pick(env.GITHUB_REF_NAME),
+          runId: pick(env.GITHUB_RUN_ID),
+          attempt: pick(env.GITHUB_RUN_ATTEMPT),
+          prNumber: prNumberFromRef(pick(env.GITHUB_REF)),
+          trigger:
+            env.GITHUB_EVENT_NAME === 'pull_request'
+              ? 'pull_request'
+              : env.GITHUB_EVENT_NAME === 'schedule'
+                ? 'schedule'
+                : 'push',
+        }
+      : null,
+
+  (env) =>
+    env.GITLAB_CI === 'true'
+      ? {
+          provider: 'gitlab_ci',
+          commitSha: pick(env.CI_COMMIT_SHA),
+          branch: pick(env.CI_COMMIT_REF_NAME),
+          runId: pick(env.CI_PIPELINE_ID),
+          attempt: pick(env.CI_JOB_ID),
+          prNumber: asNumber(pick(env.CI_MERGE_REQUEST_IID)),
+          trigger:
+            env.CI_PIPELINE_SOURCE === 'merge_request_event'
+              ? 'pull_request'
+              : env.CI_PIPELINE_SOURCE === 'schedule'
+                ? 'schedule'
+                : 'push',
+          shardIndex: asNumber(pick(env.CI_NODE_INDEX)),
+          shardTotal: asNumber(pick(env.CI_NODE_TOTAL)),
+        }
+      : null,
+
+  (env) =>
+    env.CIRCLECI === 'true'
+      ? {
+          provider: 'circleci',
+          commitSha: pick(env.CIRCLE_SHA1),
+          branch: pick(env.CIRCLE_BRANCH),
+          runId: pick(env.CIRCLE_WORKFLOW_ID) ?? pick(env.CIRCLE_BUILD_NUM),
+          attempt: pick(env.CIRCLE_BUILD_NUM),
+          // CIRCLE_PULL_REQUEST is the pull request URL, not its number.
+          prNumber: asNumber(/\/(\d+)\/?$/.exec(env.CIRCLE_PULL_REQUEST ?? '')?.[1]),
+          trigger: env.CIRCLE_PULL_REQUEST ? 'pull_request' : 'push',
+          // CircleCI numbers parallel containers from zero; Flakemetry counts from one.
+          shardIndex: (() => {
+            const raw = env.CIRCLE_NODE_INDEX
+            if (raw === undefined || raw === '') return null
+            const parsed = Number(raw)
+            return Number.isInteger(parsed) && parsed >= 0 ? parsed + 1 : null
+          })(),
+          shardTotal: asNumber(pick(env.CIRCLE_NODE_TOTAL)),
+        }
+      : null,
+
+  (env) =>
+    pick(env.JENKINS_URL)
+      ? {
+          provider: 'jenkins',
+          commitSha: pick(env.GIT_COMMIT),
+          branch: pick(env.BRANCH_NAME) ?? pick(env.GIT_BRANCH),
+          runId: pick(env.BUILD_ID) ?? pick(env.BUILD_NUMBER),
+          attempt: pick(env.BUILD_NUMBER),
+          prNumber: asNumber(pick(env.CHANGE_ID)),
+          trigger: pick(env.CHANGE_ID) ? 'pull_request' : 'push',
+        }
+      : null,
+]
+
+export const detectCi = (env: Env): CiSignals | null => {
+  for (const detect of DETECTORS) {
+    const signals = detect(env)
+    if (signals) return signals
+  }
+  return null
+}
+
 export const resolveRunContext = (
   env: Record<string, string | undefined>,
   shard?: ShardInfo | null,
 ): RunContext => {
-  const onGithub = env.GITHUB_ACTIONS === 'true'
-  const ciProvider: CiProvider = onGithub ? 'github_actions' : 'local'
-  const trigger: RunTrigger = onGithub
-    ? env.GITHUB_EVENT_NAME === 'pull_request'
-      ? 'pull_request'
-      : env.GITHUB_EVENT_NAME === 'schedule'
-        ? 'schedule'
-        : 'push'
-    : 'manual'
+  const ci = detectCi(env)
+  const explicitShard = shard && shard.total > 1 ? shard : null
 
   return {
     project: pick(env.FLAKEMETRY_PROJECT) ?? 'local/project',
-    commitSha: pick(env.GITHUB_SHA) ?? pick(env.FLAKEMETRY_COMMIT_SHA) ?? '0000000',
-    branch: pick(env.GITHUB_REF_NAME) ?? pick(env.FLAKEMETRY_BRANCH) ?? 'local',
-    ciProvider,
-    trigger,
-    ciRunId: pick(env.GITHUB_RUN_ID) ?? null,
-    prNumber: prNumberFromRef(pick(env.GITHUB_REF)),
-    shardIndex: shard && shard.total > 1 ? shard.current : null,
-    shardTotal: shard && shard.total > 1 ? shard.total : null,
+    commitSha: ci?.commitSha ?? pick(env.FLAKEMETRY_COMMIT_SHA) ?? '0000000',
+    branch: ci?.branch ?? pick(env.FLAKEMETRY_BRANCH) ?? 'local',
+    ciProvider: ci?.provider ?? 'local',
+    trigger: ci?.trigger ?? 'manual',
+    ciRunId: ci?.runId ?? null,
+    prNumber: ci?.prNumber ?? null,
+    shardIndex: explicitShard
+      ? explicitShard.current
+      : (ci?.shardTotal ?? 0) > 1
+        ? (ci?.shardIndex ?? null)
+        : null,
+    shardTotal: explicitShard
+      ? explicitShard.total
+      : (ci?.shardTotal ?? 0) > 1
+        ? (ci?.shardTotal ?? null)
+        : null,
   }
 }
 
@@ -60,7 +171,9 @@ export const buildIdempotencyKey = (
   const explicit = env.FLAKEMETRY_IDEMPOTENCY_KEY
   if (explicit) return explicit
   if (context.ciRunId) {
-    const attempt = env.GITHUB_RUN_ATTEMPT ?? '1'
+    // Fall back to the GitHub variable so a hand-built context keeps working when
+    // detection finds nothing to go on.
+    const attempt = detectCi(env)?.attempt ?? pick(env.GITHUB_RUN_ATTEMPT) ?? '1'
     const shard = context.shardIndex != null ? `-shard${context.shardIndex}` : ''
     return `${context.ciProvider}-${context.ciRunId}-${attempt}${shard}`
   }
