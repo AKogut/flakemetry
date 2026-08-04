@@ -122,12 +122,15 @@ const sameTokens = (stored: readonly string[], computed: readonly string[]): boo
   stored.length === computed.length &&
   new Set(stored).size === new Set([...stored, ...computed]).size
 
+export const BACKFILL_BATCH = 2000
+
 export const backfillSignatureClusters = async (
   prisma: PrismaClient,
-  options: { threshold?: number; now?: Date } = {},
+  options: { threshold?: number; now?: Date; batchSize?: number } = {},
 ): Promise<number> => {
   const threshold = options.threshold ?? resolveClusterThreshold()
   const now = options.now ?? new Date()
+  const batchSize = options.batchSize ?? BACKFILL_BATCH
 
   const projects = await prisma.errorSignature.findMany({
     where: { OR: [{ clusterId: null }, { tokens: { isEmpty: true } }] },
@@ -137,9 +140,13 @@ export const backfillSignatureClusters = async (
 
   let assigned = 0
   for (const { projectId, orgId } of projects) {
+    // Bounded, and selecting only rows that still need work. Taking the first N of every
+    // signature instead would spend the batch re-reading rows already clustered on an
+    // earlier pass, and the backfill would never reach the end of a large project.
     const rows = await prisma.errorSignature.findMany({
-      where: { projectId },
+      where: { projectId, OR: [{ clusterId: null }, { tokens: { isEmpty: true } }] },
       orderBy: { firstSeenAt: 'asc' },
+      take: batchSize,
       select: {
         id: true,
         clusterId: true,
@@ -148,6 +155,12 @@ export const backfillSignatureClusters = async (
         tokens: true,
       },
     })
+
+    if (rows.length === batchSize) {
+      process.stdout.write(
+        `worker: cluster backfill processed ${batchSize} signature(s) for project ${projectId}; more remain\n`,
+      )
+    }
 
     // Tokens first, for every row: candidate lookup narrows on token overlap, so a row
     // that has not been tokenized yet is invisible and would be missed as a match. The
