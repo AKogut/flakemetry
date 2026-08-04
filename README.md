@@ -83,6 +83,9 @@ an OAuth app with callback `http://localhost:3000/api/auth/callback/github` and 
 `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` in `.env`. The first account to sign in adopts the seeded
 workspace.
 
+The demo dataset is only written when the database is empty, so restarting the stack keeps
+everything you have ingested. Use `pnpm demo` when you do want a clean slate.
+
 For a horizontally scaled hosted environment, [`deploy/`](deploy) ships a Helm chart
 (stateless `api`/`worker`/`web` with autoscaling, a migration hook, and ingress) plus an
 operations [runbook](deploy/RUNBOOK.md) with SLOs — see the [deploy guide](deploy/README.md).

@@ -108,7 +108,16 @@ const SIGNATURES = {
   },
 }
 
+const forced = process.argv.includes('--force') || process.env.FLAKEMETRY_SEED_FORCE === '1'
+
 async function main() {
+  if (!forced && (await prisma.org.count()) > 0) {
+    process.stdout.write(
+      'Database already holds data — leaving it untouched. Run `pnpm demo` to reset it to the demo dataset.\n',
+    )
+    return
+  }
+
   await prisma.rcaReport.deleteMany()
   await prisma.flakyScore.deleteMany()
   await prisma.testExecution.deleteMany()
