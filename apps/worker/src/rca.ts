@@ -31,12 +31,76 @@ export interface RcaContext {
 const startOfUtcDay = (now: Date): Date =>
   new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
 
+export const KNOWN_ISSUE_MODEL = 'known-issue'
+
 interface SignatureGroup {
   signatureId: string
   representative: FailureRecord
   testIdentityId: string | null
   clusterId: string | null
   isNew: boolean
+}
+
+/**
+ * Reuses a cluster's known-issue answer instead of paying for a fresh analysis.
+ * Returns false when the cluster has no known issue, or when this execution already
+ * carries a report. No notification is emitted: a failure we already recognise is
+ * exactly the noise the known-issue path exists to remove.
+ */
+const explainFromKnownIssue = async (
+  prisma: PrismaClient,
+  ctx: RcaContext,
+  group: SignatureGroup,
+): Promise<boolean> => {
+  if (!group.clusterId) return false
+
+  const cluster = await prisma.errorCluster.findFirst({
+    where: { id: group.clusterId, projectId: ctx.projectId },
+    select: { knownIssueRef: true },
+  })
+  const knownIssueRef = cluster?.knownIssueRef
+  if (!knownIssueRef) return false
+
+  const existing = await prisma.rcaReport.findUnique({
+    where: { executionId: group.representative.executionId },
+    select: { id: true },
+  })
+  if (existing) return true
+
+  const prior = await prisma.rcaReport.findFirst({
+    where: { projectId: ctx.projectId, signature: { clusterId: group.clusterId } },
+    orderBy: { createdAt: 'desc' },
+    select: { signatureId: true, summary: true, likelyCause: true, suggestedAction: true },
+  })
+
+  await prisma.rcaReport.create({
+    data: {
+      orgId: ctx.orgId,
+      projectId: ctx.projectId,
+      executionId: group.representative.executionId,
+      signatureId: group.signatureId,
+      summary: prior ? prior.summary : `Known issue ${knownIssueRef}`,
+      likelyCause: prior
+        ? prior.likelyCause
+        : `This failure matches a cluster already tracked as ${knownIssueRef}.`,
+      suggestedAction: prior ? prior.suggestedAction : `Follow ${knownIssueRef}.`,
+      confidence: 1,
+      similarPast: prior
+        ? [
+            {
+              signatureId: prior.signatureId,
+              summary: prior.summary,
+              resolution: prior.suggestedAction,
+            },
+          ]
+        : [],
+      llmModel: KNOWN_ISSUE_MODEL,
+      tokenCost: 0,
+    },
+  })
+
+  workerMetrics.rcaSkipped.add(1)
+  return true
 }
 
 export const processFailures = async (
@@ -126,6 +190,18 @@ export const processFailures = async (
         clusterId: signatureClusterId,
         isNew,
       })
+  }
+
+  // A cluster with a known issue already has its answer. Reusing it costs nothing and
+  // keeps repeat failures labelled, so it runs before the provider is even considered:
+  // known failures are explained whether or not AI is configured or in budget.
+  // Deliberately not restricted to new signatures. A repeat of a signature we already
+  // know is exactly the case this exists for, and the analysis path skips those
+  // entirely — so without this they would carry no explanation at all.
+  for (const group of groups.values()) {
+    if (!group.clusterId) continue
+    const explained = await explainFromKnownIssue(prisma, ctx, group)
+    if (explained) group.isNew = false
   }
 
   const provider = ctx.provider

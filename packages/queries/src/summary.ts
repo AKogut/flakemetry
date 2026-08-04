@@ -11,6 +11,7 @@ export interface RunSummaryTest {
   score: number | null
   quarantined: boolean
   topReason: string | null
+  knownIssueRef: string | null
 }
 
 export interface RunSummary {
@@ -34,6 +35,7 @@ interface IdentityRollup {
   lastAttempt: number
   hasFlaky: boolean
   errorMessage: string | null
+  knownIssueRef: string | null
 }
 
 export const getRunSummaryByCommit = async (
@@ -57,6 +59,7 @@ export const getRunSummaryByCommit = async (
       attempt: true,
       errorMessage: true,
       identity: { select: { filePath: true, suite: true, title: true, quarantined: true } },
+      errorSignature: { select: { cluster: { select: { knownIssueRef: true } } } },
     },
   })
 
@@ -73,9 +76,11 @@ export const getRunSummaryByCommit = async (
         lastAttempt: execution.attempt,
         hasFlaky: execution.status === 'flaky',
         errorMessage: execution.status === 'fail' ? execution.errorMessage : null,
+        knownIssueRef: execution.errorSignature?.cluster?.knownIssueRef ?? null,
       })
       continue
     }
+    current.knownIssueRef ??= execution.errorSignature?.cluster?.knownIssueRef ?? null
     if (execution.status === 'flaky') current.hasFlaky = true
     if (execution.attempt >= current.lastAttempt) {
       current.lastAttempt = execution.attempt
@@ -112,6 +117,7 @@ export const getRunSummaryByCommit = async (
       score: score?.score ?? null,
       quarantined: rollup.quarantined,
       topReason: reasons[0]?.message ?? null,
+      knownIssueRef: rollup.knownIssueRef,
     }
   })
 
@@ -160,7 +166,8 @@ export const renderPrComment = (summary: RunSummary): string => {
     const state = test.status === 'fail' ? 'failed' : 'flaked'
     const score =
       test.score === null ? '—' : `${test.score.toFixed(2)}${test.quarantined ? ' 🔒' : ''}`
-    lines.push(`| ${label} | ${state} | ${score} |`)
+    const known = test.knownIssueRef ? ` · known issue ${escapeCell(test.knownIssueRef)}` : ''
+    lines.push(`| ${label} | ${state}${known} | ${score} |`)
   }
 
   const reasoned = summary.tests.find((test) => test.topReason)

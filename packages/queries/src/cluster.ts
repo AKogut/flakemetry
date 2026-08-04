@@ -14,7 +14,50 @@ export interface ClusterImpact {
   tests: ClusterImpactTest[]
 }
 
+export interface ExecutionCluster {
+  clusterId: string
+  label: string
+  knownIssueRef: string | null
+}
+
 const RELATED_TEST_LIMIT = 25
+
+/**
+ * The cluster behind one execution, whether or not it has siblings. `getClusterImpact`
+ * deliberately stays silent for a cluster of one, but a known-issue reference still has
+ * to be readable and settable there.
+ */
+export const getExecutionCluster = async (
+  prisma: PrismaClient,
+  projectId: string,
+  executionId: string,
+): Promise<ExecutionCluster | null> => {
+  const execution = await prisma.testExecution.findFirst({
+    where: { id: executionId, projectId },
+    select: {
+      errorSignature: {
+        select: { cluster: { select: { id: true, label: true, knownIssueRef: true } } },
+      },
+    },
+  })
+  const cluster = execution?.errorSignature?.cluster
+  if (!cluster) return null
+  return { clusterId: cluster.id, label: cluster.label, knownIssueRef: cluster.knownIssueRef }
+}
+
+export const setClusterKnownIssue = async (
+  prisma: PrismaClient,
+  projectId: string,
+  clusterId: string,
+  knownIssueRef: string | null,
+): Promise<boolean> => {
+  const trimmed = knownIssueRef?.trim()
+  const { count } = await prisma.errorCluster.updateMany({
+    where: { id: clusterId, projectId },
+    data: { knownIssueRef: trimmed ? trimmed : null },
+  })
+  return count > 0
+}
 
 export const getClusterImpact = async (
   prisma: PrismaClient,
