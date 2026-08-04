@@ -24,8 +24,6 @@ ALTER TABLE "error_cluster" ADD CONSTRAINT "error_cluster_project_id_fkey"
 WITH aggregated AS (
     SELECT
         cluster_id,
-        min(org_id) AS org_id,
-        min(project_id) AS project_id,
         count(*)::int AS signature_count,
         sum(occurrence_count)::int AS occurrence_count,
         min(first_seen_at) AS first_seen_at,
@@ -33,9 +31,14 @@ WITH aggregated AS (
     FROM "error_signature"
     WHERE cluster_id IS NOT NULL
     GROUP BY cluster_id
-), labelled AS (
+), representative AS (
+    -- Tenant and label both come from the busiest signature in the cluster. Postgres
+    -- has no min()/max() aggregate for uuid before 18, so org and project cannot be
+    -- aggregated; taking them from one chosen row is also the more honest answer.
     SELECT DISTINCT ON (cluster_id)
         cluster_id,
+        org_id,
+        project_id,
         left(sample_message, 200) AS label
     FROM "error_signature"
     WHERE cluster_id IS NOT NULL
@@ -47,15 +50,15 @@ INSERT INTO "error_cluster" (
 )
 SELECT
     aggregated.cluster_id,
-    aggregated.org_id,
-    aggregated.project_id,
-    labelled.label,
+    representative.org_id,
+    representative.project_id,
+    representative.label,
     aggregated.signature_count,
     aggregated.occurrence_count,
     aggregated.first_seen_at,
     aggregated.last_seen_at
 FROM aggregated
-JOIN labelled ON labelled.cluster_id = aggregated.cluster_id;
+JOIN representative ON representative.cluster_id = aggregated.cluster_id;
 
 ALTER TABLE "error_signature" ADD COLUMN "tokens" TEXT[] NOT NULL DEFAULT '{}';
 
