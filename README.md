@@ -18,7 +18,10 @@ Test observability · explainable flaky-test detection · AI-assisted root-cause
 
 </div>
 
-> **Status: early development, built in the open.** Foundations are landing milestone by milestone (M0 → M6). Follow the [public roadmap board](https://github.com/users/AKogut/projects/14).
+> **Status: built in the open, usable today.** M0–M3 are complete — ingestion, flaky
+> scoring, deep observability and test intelligence all ship. M4–M7 (platform,
+> scale, launch, actionability) are open. Follow the
+> [public roadmap board](https://github.com/users/AKogut/projects/14).
 
 ---
 
