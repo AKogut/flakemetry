@@ -20,7 +20,7 @@
     "db:migrate": "pnpm --filter @flakemetry/db db:migrate",
     "db:reset": "pnpm --filter @flakemetry/db db:reset",
     "db:seed": "pnpm --filter @flakemetry/db db:seed",
-    "demo": "pnpm --filter @flakemetry/db db:seed",
+    "demo": "pnpm --filter @flakemetry/db db:seed:force",
     "stack:up": "docker compose up -d --build",
     "stack:down": "docker compose down",
     "stack:logs": "docker compose logs -f",

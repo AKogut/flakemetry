@@ -63,4 +63,21 @@ describe.skipIf(!hasDb)('first-user bootstrap', () => {
     const user = await makeUser('solo')
     expect(await adoptUnclaimedOrgs(prisma, user.id)).toBe(0)
   })
+
+  it('hands the workspace back to a returning user after a reset dropped their membership', async () => {
+    const user = await makeUser('returning')
+    const before = await makeOrg('before-reset')
+    await prisma.membership.create({ data: { userId: user.id, orgId: before.id, role: 'owner' } })
+
+    // A forced re-seed deletes the org, and the membership cascades away with it.
+    await prisma.org.deleteMany()
+    const after = await makeOrg('after-reset')
+
+    // The user already exists, so createUser never fires again: adoption has to run
+    // on every sign-in, or the instance is unreachable with no way back from the UI.
+    expect(await adoptUnclaimedOrgs(prisma, user.id)).toBe(1)
+
+    const membership = await prisma.membership.findFirstOrThrow({ where: { userId: user.id } })
+    expect(membership.orgId).toBe(after.id)
+  })
 })
