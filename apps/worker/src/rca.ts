@@ -1,27 +1,12 @@
-import { randomUUID } from 'node:crypto'
-
 import { analyzeFailure, type LlmProvider, scrubText } from '@flakemetry/ai'
-import {
-  computeErrorSignature,
-  DEFAULT_CLUSTER_THRESHOLD,
-  errorTokens,
-  nearestCluster,
-} from '@flakemetry/core'
+import { computeErrorSignature, errorTokens } from '@flakemetry/core'
 import type { PrismaClient } from '@flakemetry/db'
 
+import { assignCluster, recordClusterOccurrence, resolveClusterThreshold } from './clustering'
 import type { EventBus } from './events'
 import { workerMetrics } from './telemetry'
 
-interface ClusterCandidate {
-  id: string
-  clusterId: string | null
-  tokens: Set<string>
-}
-
-export const resolveClusterThreshold = (): number => {
-  const raw = Number(process.env.FLAKEMETRY_CLUSTER_THRESHOLD)
-  return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : DEFAULT_CLUSTER_THRESHOLD
-}
+export { resolveClusterThreshold }
 
 export interface FailureRecord {
   executionId: string
@@ -62,28 +47,6 @@ export const processFailures = async (
   if (failures.length === 0) return
 
   const clusterThreshold = resolveClusterThreshold()
-  const signatureRows = await prisma.errorSignature.findMany({
-    where: { projectId: ctx.projectId },
-    select: { id: true, clusterId: true, sampleMessage: true, stackTemplate: true },
-    orderBy: { lastSeenAt: 'desc' },
-    take: 1000,
-  })
-  const candidates: ClusterCandidate[] = signatureRows.map((row) => ({
-    id: row.id,
-    clusterId: row.clusterId,
-    tokens: errorTokens(row.sampleMessage, row.stackTemplate),
-  }))
-
-  const assignCluster = async (tokens: Set<string>): Promise<string> => {
-    const match = nearestCluster(tokens, candidates, clusterThreshold)
-    if (!match) return randomUUID()
-    if (match.candidate.clusterId) return match.candidate.clusterId
-    const clusterId = randomUUID()
-    await prisma.errorSignature.update({ where: { id: match.candidate.id }, data: { clusterId } })
-    match.candidate.clusterId = clusterId
-    return clusterId
-  }
-
   const groups = new Map<string, SignatureGroup>()
 
   for (const failure of failures) {
@@ -118,10 +81,17 @@ export const processFailures = async (
           lastSeenAt: ctx.now,
         },
       })
+      if (existing.clusterId && !alreadyCounted) {
+        await recordClusterOccurrence(prisma, existing.clusterId, ctx.now, false)
+      }
     } else {
-      const tokens = errorTokens(scrubbedMessage, signature.stackTemplate)
-      const clusterId = await assignCluster(tokens)
-      signatureClusterId = clusterId
+      const tokens = [...errorTokens(scrubbedMessage, signature.stackTemplate)]
+      const assignment = await assignCluster(
+        prisma,
+        { orgId: ctx.orgId, projectId: ctx.projectId, now: ctx.now },
+        { tokens, sampleMessage: scrubbedMessage, threshold: clusterThreshold },
+      )
+      signatureClusterId = assignment.clusterId
       const created = await prisma.errorSignature.create({
         data: {
           orgId: ctx.orgId,
@@ -129,14 +99,15 @@ export const processFailures = async (
           normalizedHash: signature.normalizedHash,
           sampleMessage: scrubbedMessage,
           stackTemplate: signature.stackTemplate,
-          clusterId,
+          clusterId: assignment.clusterId,
+          tokens,
           firstSeenAt: ctx.now,
           lastSeenAt: ctx.now,
         },
         select: { id: true },
       })
       signatureId = created.id
-      candidates.push({ id: created.id, clusterId, tokens })
+      await recordClusterOccurrence(prisma, assignment.clusterId, ctx.now, true)
       isNew = true
     }
 

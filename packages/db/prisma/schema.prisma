@@ -144,6 +144,7 @@ model Project {
   executions      TestExecution[]
   flakyScores     FlakyScore[]
   errorSignatures ErrorSignature[]
+  errorClusters   ErrorCluster[]
   rcaReports      RcaReport[]
   ingestTokens    IngestToken[]
   ingestionJobs   IngestionJob[]
@@ -389,6 +390,25 @@ model FlakyScore {
   @@map("flaky_score")
 }
 
+model ErrorCluster {
+  id              String   @id @default(uuid()) @db.Uuid
+  orgId           String   @map("org_id") @db.Uuid
+  projectId       String   @map("project_id") @db.Uuid
+  label           String
+  signatureCount  Int      @default(0) @map("signature_count")
+  occurrenceCount Int      @default(0) @map("occurrence_count")
+  knownIssueRef   String?  @map("known_issue_ref")
+  firstSeenAt     DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt      DateTime @default(now()) @map("last_seen_at")
+
+  project    Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  signatures ErrorSignature[]
+
+  @@index([orgId])
+  @@index([projectId, lastSeenAt(sort: Desc)])
+  @@map("error_cluster")
+}
+
 model ErrorSignature {
   id              String   @id @default(uuid()) @db.Uuid
   orgId           String   @map("org_id") @db.Uuid
@@ -397,12 +417,14 @@ model ErrorSignature {
   sampleMessage   String   @map("sample_message")
   stackTemplate   String   @map("stack_template")
   clusterId       String?  @map("cluster_id") @db.Uuid
+  tokens          String[] @default([])
   occurrenceCount Int      @default(1) @map("occurrence_count")
   knownIssueRef   String?  @map("known_issue_ref")
   firstSeenAt     DateTime @default(now()) @map("first_seen_at")
   lastSeenAt      DateTime @default(now()) @map("last_seen_at")
 
   project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  cluster    ErrorCluster?   @relation(fields: [clusterId], references: [id], onDelete: SetNull)
   executions TestExecution[]
   rcaReports RcaReport[]
 
