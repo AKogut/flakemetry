@@ -3,7 +3,7 @@ import { PrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createEventBus, type DomainEventMap } from '../events'
-import { type FailureRecord, processFailures } from '../rca'
+import { type FailureRecord, KNOWN_ISSUE_MODEL, processFailures } from '../rca'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
 const prisma = new PrismaClient()
@@ -58,6 +58,31 @@ const seed = async () => {
     },
   })
   return { ...tenant, executionId: execution.id }
+}
+
+const seedExecution = async (
+  tenant: { orgId: string; projectId: string },
+  errorMessage: string,
+): Promise<string> => {
+  const identity = await prisma.testIdentity.findFirstOrThrow({
+    where: { projectId: tenant.projectId },
+  })
+  const run = await prisma.run.findFirstOrThrow({ where: { projectId: tenant.projectId } })
+  const execution = await prisma.testExecution.create({
+    data: {
+      orgId: tenant.orgId,
+      projectId: tenant.projectId,
+      runId: run.id,
+      testIdentityId: identity.id,
+      attempt: 1,
+      status: 'fail',
+      durationMs: 1200,
+      errorMessage,
+      startedAt: NOW,
+    },
+    select: { id: true },
+  })
+  return execution.id
 }
 
 const failure = (
@@ -353,5 +378,109 @@ describe.skipIf(!hasDb)('processFailures', () => {
     expect(signature.occurrenceCount).toBe(2)
     expect(await prisma.rcaReport.count()).toBe(1)
     expect(provider.complete).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe.skipIf(!hasDb)('known-issue fast path', () => {
+  beforeEach(async () => {
+    await prisma.rcaReport.deleteMany()
+    await prisma.errorSignature.deleteMany()
+    await prisma.testExecution.deleteMany()
+    await prisma.testIdentity.deleteMany()
+    await prisma.run.deleteMany()
+    await prisma.project.deleteMany()
+    await prisma.org.deleteMany()
+  })
+
+  afterAll(async () => {
+    await prisma.$disconnect()
+  })
+
+  const markClusterKnown = async (projectId: string, ref: string) => {
+    const cluster = await prisma.errorCluster.findFirstOrThrow({ where: { projectId } })
+    await prisma.errorCluster.update({ where: { id: cluster.id }, data: { knownIssueRef: ref } })
+    return cluster.id
+  }
+
+  it('explains a repeat failure from the known issue without calling the provider', async () => {
+    const first = await seed()
+    const provider = fakeProvider()
+    const spy = vi.spyOn(provider, 'complete')
+
+    await processFailures(
+      prisma,
+      {
+        orgId: first.orgId,
+        projectId: first.projectId,
+        now: NOW,
+        provider,
+        aiEnabled: true,
+        dailyTokenBudget: 10_000,
+      },
+      [failure(first.executionId)],
+    )
+    expect(spy).toHaveBeenCalledTimes(1)
+
+    await markClusterKnown(first.projectId, 'JIRA-42')
+
+    const second = await seedExecution(first, 'Timeout 30000ms exceeded for someone@example.com')
+    await processFailures(
+      prisma,
+      {
+        orgId: first.orgId,
+        projectId: first.projectId,
+        now: NOW,
+        provider,
+        aiEnabled: true,
+        dailyTokenBudget: 10_000,
+      },
+      [failure(second, 'Timeout 30000ms exceeded for someone@example.com')],
+    )
+
+    // The provider must not be consulted a second time: the cluster already has an answer.
+    expect(spy).toHaveBeenCalledTimes(1)
+
+    const report = await prisma.rcaReport.findUniqueOrThrow({ where: { executionId: second } })
+    expect(report.llmModel).toBe(KNOWN_ISSUE_MODEL)
+    expect(report.tokenCost).toBe(0)
+  })
+
+  it('labels a known failure even when no provider is configured at all', async () => {
+    const ctx = await seed()
+    await processFailures(prisma, { orgId: ctx.orgId, projectId: ctx.projectId, now: NOW }, [
+      failure(ctx.executionId),
+    ])
+    await markClusterKnown(ctx.projectId, 'JIRA-7')
+
+    const next = await seedExecution(ctx, 'Timeout 30000ms exceeded for other@example.com')
+    await processFailures(prisma, { orgId: ctx.orgId, projectId: ctx.projectId, now: NOW }, [
+      failure(next, 'Timeout 30000ms exceeded for other@example.com'),
+    ])
+
+    const report = await prisma.rcaReport.findUniqueOrThrow({ where: { executionId: next } })
+    expect(report.summary).toContain('JIRA-7')
+    expect(report.tokenCost).toBe(0)
+  })
+
+  it('still pays for analysis when the cluster is not a known issue', async () => {
+    const ctx = await seed()
+    const provider = fakeProvider()
+    const spy = vi.spyOn(provider, 'complete')
+    const options = {
+      orgId: ctx.orgId,
+      projectId: ctx.projectId,
+      now: NOW,
+      provider,
+      aiEnabled: true,
+      dailyTokenBudget: 10_000,
+    }
+
+    await processFailures(prisma, options, [failure(ctx.executionId)])
+    const next = await seedExecution(ctx, 'Connection refused reaching payments upstream')
+    await processFailures(prisma, options, [
+      failure(next, 'Connection refused reaching payments upstream'),
+    ])
+
+    expect(spy).toHaveBeenCalledTimes(2)
   })
 })

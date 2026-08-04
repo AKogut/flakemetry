@@ -3,6 +3,7 @@ import { getPrismaClient } from '@flakemetry/db'
 import {
   findMergeCandidates,
   getClusterImpact,
+  getExecutionCluster,
   getParamBuckets,
   getRca,
   getTest,
@@ -12,7 +13,12 @@ import { notFound } from 'next/navigation'
 import { RcaPanel } from '@/components/rca-panel'
 import { ReasonCodes, ScoreBadge } from '@/components/score'
 import { Sparkline } from '@/components/sparkline'
-import { mergeTestIdentity, splitTestIdentity, unmergeTestIdentity } from '@/lib/actions'
+import {
+  mergeTestIdentity,
+  splitTestIdentity,
+  unmergeTestIdentity,
+  updateClusterKnownIssue,
+} from '@/lib/actions'
 import { requireUser } from '@/lib/session'
 import { requireProjectAccess } from '@/lib/tenant'
 
@@ -69,6 +75,9 @@ export default async function TestDetailPage({
     failures.find((point) => point.executionId === selectedExecutionId) ?? failures[0] ?? null
   const rcaReport = selected ? await getRca(prisma, projectId, selected.executionId) : null
   const cluster = selected ? await getClusterImpact(prisma, projectId, selected.executionId) : null
+  const executionCluster = selected
+    ? await getExecutionCluster(prisma, projectId, selected.executionId)
+    : null
 
   const base = `/projects/${projectId}/tests/${testId}`
 
@@ -328,6 +337,38 @@ export default async function TestDetailPage({
       {selected ? (
         <div style={{ marginBottom: '1.25rem' }}>
           <RcaPanel report={rcaReport} errorMessage={selected.errorMessage} />
+        </div>
+      ) : null}
+
+      {executionCluster && canSplit ? (
+        <div className="card" style={{ marginBottom: '1.25rem' }}>
+          <div className="row-between" style={{ marginBottom: '0.6rem' }}>
+            <strong>Known issue</strong>
+            {executionCluster.knownIssueRef ? (
+              <span className="mono" style={{ fontSize: '0.8rem' }}>
+                {executionCluster.knownIssueRef}
+              </span>
+            ) : null}
+          </div>
+          <p className="muted" style={{ marginBottom: '0.6rem' }}>
+            Marking this error cluster as a known issue labels every future failure that lands in it
+            and skips the cost of analysing it again. Clear the field to undo.
+          </p>
+          <form action={updateClusterKnownIssue} className="row-between" style={{ gap: '0.5rem' }}>
+            <input type="hidden" name="projectId" value={projectId} />
+            <input type="hidden" name="testId" value={testId} />
+            <input type="hidden" name="clusterId" value={executionCluster.clusterId} />
+            <input
+              className="input mono"
+              name="knownIssueRef"
+              placeholder="JIRA-123 or a tracker URL"
+              defaultValue={executionCluster.knownIssueRef ?? ''}
+              style={{ flex: 1 }}
+            />
+            <button className="btn" type="submit">
+              Save
+            </button>
+          </form>
         </div>
       ) : null}
 

@@ -5,6 +5,7 @@ import { generateToken, getPrismaClient, hashToken } from '@flakemetry/db'
 import { isEmailAddress, isSafeWebhookUrl } from '@flakemetry/notify'
 import {
   mergeIdentities,
+  setClusterKnownIssue,
   splitIdentity,
   unmergeIdentity,
   updateProjectPolicy as persistProjectPolicy,
@@ -246,4 +247,19 @@ export const updateProjectPolicy = async (formData: FormData): Promise<void> => 
 
   revalidatePath(`/projects/${projectId}/settings/policy`)
   redirect(`/projects/${projectId}/settings/policy?saved=${changed.length}`)
+}
+
+export const updateClusterKnownIssue = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const testId = String(formData.get('testId') ?? '')
+  const clusterId = String(formData.get('clusterId') ?? '')
+  const knownIssueRef = String(formData.get('knownIssueRef') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.role))
+    throw new Error('only owners and admins can mark a cluster as a known issue')
+
+  await setClusterKnownIssue(prisma, projectId, clusterId, knownIssueRef)
+
+  revalidatePath(`/projects/${projectId}/tests/${testId}`)
 }

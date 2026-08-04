@@ -228,6 +228,7 @@ describe('renderPrComment', () => {
           score: null,
           quarantined: false,
           topReason: null,
+          knownIssueRef: null,
         },
         {
           testIdentityId: 'b',
@@ -239,6 +240,7 @@ describe('renderPrComment', () => {
           score: 0.66,
           quarantined: true,
           topReason: 'same commit, different result',
+          knownIssueRef: null,
         },
       ],
     })
