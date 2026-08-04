@@ -12,23 +12,36 @@ export const rcaAnalysisSchema = z.object({
 
 export type RcaAnalysis = z.infer<typeof rcaAnalysisSchema>
 
+export interface PriorAnalysis {
+  summary: string
+  resolution: string
+}
+
 export interface RcaInput {
   testTitle: string
   suite: string
   filePath: string
   error: ScrubbableError
   flakyScore?: number | null
+  similarPast?: readonly PriorAnalysis[]
 }
 
 export interface RcaOutcome {
   analysis: RcaAnalysis
   model: string
   tokenCost: number
+  groundedIn: number
 }
+
+export const MAX_PRIOR_ANALYSES = 4
 
 export const RCA_SYSTEM_PROMPT =
   'You are a test failure root-cause analyst for a flaky-test intelligence platform. ' +
   'Given a failed test and its scrubbed error, produce a concise, actionable root-cause analysis. ' +
+  'You may be shown analyses of earlier failures from the same project. Use them when they ' +
+  'genuinely explain this failure, and say so in the summary; ignore them when they do not, ' +
+  'rather than forcing a match. Let the confidence reflect that: higher when earlier cases ' +
+  'corroborate this one, lower when the evidence is thin or the prior cases do not fit. ' +
   'Respond with ONLY a JSON object with keys "summary", "likelyCause", "suggestedAction", and ' +
   '"confidence" (a number between 0 and 1). No prose, no markdown fences.'
 
@@ -38,6 +51,15 @@ export const buildRcaPrompt = (input: RcaInput): string => {
   if (input.flakyScore != null) lines.push(`Current flaky score: ${input.flakyScore.toFixed(2)}`)
   lines.push(`Error type: ${error.type ?? 'unknown'}`, `Error message: ${error.message}`)
   if (error.stack) lines.push(`Stack:\n${error.stack}`)
+
+  const priors = (input.similarPast ?? []).slice(0, MAX_PRIOR_ANALYSES)
+  if (priors.length > 0) {
+    lines.push('', `Earlier failures in this project (${priors.length}), most recent first:`)
+    priors.forEach((prior, index) => {
+      lines.push(`${index + 1}. Cause: ${prior.summary}`, `   Resolution: ${prior.resolution}`)
+    })
+  }
+
   return lines.join('\n')
 }
 
@@ -68,5 +90,6 @@ export const analyzeFailure = async (
     analysis,
     model: provider.model,
     tokenCost: result.inputTokens + result.outputTokens,
+    groundedIn: Math.min(input.similarPast?.length ?? 0, MAX_PRIOR_ANALYSES),
   }
 }

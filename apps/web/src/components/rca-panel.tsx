@@ -40,13 +40,22 @@ export const RcaPanel = ({
           </div>
           <div>
             <div className="rca-label">Confidence</div>
-            <div>{percent(report.confidence)}</div>
+            <div>
+              {percent(report.confidence)}
+              {report.similarPast.length > 0 ? (
+                <span className="muted" style={{ fontSize: '0.78rem' }}>
+                  {' '}
+                  · grounded in {report.similarPast.length} past{' '}
+                  {report.similarPast.length === 1 ? 'analysis' : 'analyses'}
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
 
         {report.similarPast.length > 0 ? (
           <div style={{ marginTop: '0.9rem' }}>
-            <div className="rca-label">Seen before</div>
+            <div className="rca-label">Seen before — shown to the model</div>
             <ul className="reasons">
               {report.similarPast.map((similar) => (
                 <li key={similar.signatureId}>
