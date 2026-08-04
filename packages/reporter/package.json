@@ -41,7 +41,7 @@
     "@flakemetry/tsup-config": "workspace:*",
     "@playwright/test": "^1.49.1",
     "@types/node": "^22.10.5",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "@flakemetry/contracts": "workspace:*",
