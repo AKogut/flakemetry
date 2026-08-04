@@ -484,3 +484,68 @@ describe.skipIf(!hasDb)('known-issue fast path', () => {
     expect(spy).toHaveBeenCalledTimes(2)
   })
 })
+
+describe.skipIf(!hasDb)('grounding analysis in history', () => {
+  beforeEach(async () => {
+    await prisma.rcaReport.deleteMany()
+    await prisma.errorSignature.deleteMany()
+    await prisma.testExecution.deleteMany()
+    await prisma.testIdentity.deleteMany()
+    await prisma.run.deleteMany()
+    await prisma.project.deleteMany()
+    await prisma.org.deleteMany()
+  })
+
+  afterAll(async () => {
+    await prisma.$disconnect()
+  })
+
+  it('shows the model what it already concluded about this test', async () => {
+    const ctx = await seed()
+    const provider = fakeProvider()
+    const spy = vi.spyOn(provider, 'complete')
+    const options = {
+      orgId: ctx.orgId,
+      projectId: ctx.projectId,
+      now: NOW,
+      provider,
+      aiEnabled: true,
+      dailyTokenBudget: 10_000,
+    }
+
+    await processFailures(prisma, options, [failure(ctx.executionId)])
+
+    const second = await seedExecution(ctx, 'Connection refused reaching payments upstream')
+    await processFailures(prisma, options, [
+      failure(second, 'Connection refused reaching payments upstream'),
+    ])
+
+    // The second call must carry the first analysis. Retrieval was already stored on the
+    // report before this, but it never reached the prompt — the "augmented" half of
+    // retrieval-augmented was missing.
+    const secondPrompt = spy.mock.calls[1]?.[0]?.prompt ?? ''
+    expect(secondPrompt).toContain('Earlier failures in this project')
+    expect(secondPrompt).toContain('add retry')
+  })
+
+  it('sends no history for the very first failure it ever sees', async () => {
+    const ctx = await seed()
+    const provider = fakeProvider()
+    const spy = vi.spyOn(provider, 'complete')
+
+    await processFailures(
+      prisma,
+      {
+        orgId: ctx.orgId,
+        projectId: ctx.projectId,
+        now: NOW,
+        provider,
+        aiEnabled: true,
+        dailyTokenBudget: 10_000,
+      },
+      [failure(ctx.executionId)],
+    )
+
+    expect(spy.mock.calls[0]?.[0]?.prompt ?? '').not.toContain('Earlier failures')
+  })
+})

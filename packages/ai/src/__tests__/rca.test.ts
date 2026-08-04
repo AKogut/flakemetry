@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { LlmProvider } from '../provider'
-import { analyzeFailure, buildRcaPrompt, parseRcaAnalysis } from '../rca'
+import { analyzeFailure, buildRcaPrompt, MAX_PRIOR_ANALYSES, parseRcaAnalysis } from '../rca'
 
 const fakeProvider = (text: string, usage = { input: 100, output: 40 }): LlmProvider => ({
   name: 'fake',
@@ -62,5 +62,62 @@ describe('analyzeFailure', () => {
 
   it('returns null when the model output cannot be parsed', async () => {
     expect(await analyzeFailure(fakeProvider('sorry, no idea'), input)).toBeNull()
+  })
+})
+
+describe('grounding the prompt in earlier failures', () => {
+  const input = {
+    testTitle: 'creates an order',
+    suite: 'api',
+    filePath: 'e2e/orders.spec.ts',
+    error: { type: 'Error', message: '422 Unprocessable Entity', stack: null },
+  }
+
+  it('puts prior causes and their resolutions in front of the model', () => {
+    const prompt = buildRcaPrompt({
+      ...input,
+      similarPast: [
+        { summary: 'Orders API rejects the payload', resolution: 'Send the idempotency header' },
+      ],
+    })
+
+    expect(prompt).toContain('Orders API rejects the payload')
+    expect(prompt).toContain('Send the idempotency header')
+  })
+
+  it('says nothing about history when there is none', () => {
+    expect(buildRcaPrompt(input)).not.toContain('Earlier failures')
+  })
+
+  it('caps how much history it will carry', () => {
+    const many = Array.from({ length: 10 }, (_, index) => ({
+      summary: `cause ${index}`,
+      resolution: `fix ${index}`,
+    }))
+    const prompt = buildRcaPrompt({ ...input, similarPast: many })
+
+    expect(prompt).toContain(`cause ${MAX_PRIOR_ANALYSES - 1}`)
+    expect(prompt).not.toContain(`cause ${MAX_PRIOR_ANALYSES}`)
+  })
+
+  it('reports how many past analyses the answer was grounded in', async () => {
+    const provider = {
+      name: 'fake',
+      model: 'fake-model',
+      complete: async () => ({
+        text: '{"summary":"s","likelyCause":"c","suggestedAction":"a","confidence":0.7}',
+        inputTokens: 10,
+        outputTokens: 5,
+      }),
+    }
+
+    const withHistory = await analyzeFailure(provider, {
+      ...input,
+      similarPast: [{ summary: 'a', resolution: 'b' }],
+    })
+    const without = await analyzeFailure(provider, input)
+
+    expect(withHistory?.groundedIn).toBe(1)
+    expect(without?.groundedIn).toBe(0)
   })
 })
