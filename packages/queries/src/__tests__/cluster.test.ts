@@ -29,7 +29,11 @@ const seed = async (): Promise<Seed> => {
     data: { ...tenant, fingerprint: 'fp-c', filePath: 'c.spec.ts', suite: 's', title: 'C' },
   })
 
-  const clusterId = '11111111-1111-1111-1111-111111111111'
+  const cluster = await prisma.errorCluster.create({
+    data: { ...tenant, label: 'boom' },
+    select: { id: true },
+  })
+  const clusterId = cluster.id
   const sigA = await prisma.errorSignature.create({
     data: {
       ...tenant,
@@ -106,6 +110,7 @@ describe.skipIf(!hasDb)('getClusterImpact', () => {
   beforeEach(async () => {
     await prisma.testExecution.deleteMany()
     await prisma.errorSignature.deleteMany()
+    await prisma.errorCluster.deleteMany()
     await prisma.testIdentity.deleteMany()
     await prisma.run.deleteMany()
     await prisma.project.deleteMany()
