@@ -1,0 +1,90 @@
+name: python release
+
+# The npm packages have shipped since M1; pytest-flakemetry never has, so a Python
+# project could read the docs, run `pip install pytest-flakemetry`, and get nothing.
+# This publishes it the same way the JavaScript side publishes: on an explicit tag,
+# from a build CI produced rather than one a laptop produced.
+#
+# Authentication is PyPI Trusted Publishing (OIDC) — no API token is stored in this
+# repository. It requires a one-time setup on PyPI, described in
+# packages/pytest-flakemetry/RELEASING.md.
+on:
+  push:
+    tags: ['pytest-flakemetry-v*']
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: Where to publish
+        required: true
+        default: testpypi
+        type: choice
+        options: [testpypi, pypi]
+
+defaults:
+  run:
+    working-directory: packages/pytest-flakemetry
+
+jobs:
+  build:
+    name: build and check the distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: The tag has to agree with the version being published
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          declared=$(python -c "import tomllib,pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          tagged="${GITHUB_REF_NAME#pytest-flakemetry-v}"
+          echo "pyproject=$declared tag=$tagged"
+          [ "$declared" = "$tagged" ] || {
+            echo "the tag says $tagged but pyproject.toml says $declared"
+            exit 1
+          }
+
+      - name: Install the plugin and run its tests
+        run: |
+          python -m pip install --upgrade pip build twine
+          pip install -e ".[dev]"
+          pytest -q
+
+      - run: python -m build
+
+      - run: python -m twine check dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pytest-flakemetry-dist
+          path: packages/pytest-flakemetry/dist/
+
+  publish:
+    name: publish to ${{ github.event.inputs.repository || 'pypi' }}
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.repository || 'pypi' }}
+    permissions:
+      # Trusted Publishing mints a short-lived credential from this token, so there is
+      # no long-lived secret to leak or rotate.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pytest-flakemetry-dist
+          path: dist/
+
+      - name: Publish to TestPyPI
+        if: github.event.inputs.repository == 'testpypi'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          repository-url: https://test.pypi.org/legacy/
+
+      - name: Publish to PyPI
+        if: github.event.inputs.repository != 'testpypi'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

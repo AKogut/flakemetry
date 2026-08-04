@@ -10,8 +10,11 @@ retries, so a test that passes on rerun is reported as **flaky** rather than as 
 
 ## Install
 
+Not on PyPI yet — `pip install pytest-flakemetry` will not resolve. Install from the
+repository until [RELEASING.md](RELEASING.md) has been carried out:
+
 ```bash
-pip install pytest-flakemetry
+pip install "git+https://github.com/AKogut/flakemetry@main#subdirectory=packages/pytest-flakemetry"
 ```
 
 The plugin registers itself; there is nothing to add to `conftest.py`.
