@@ -30,6 +30,7 @@ export default async function ProjectLayout({
         </div>
 
         <nav className="nav">
+          <a href="/projects">Projects</a>
           <a href={`/projects/${projectId}/runs`}>Runs</a>
           <a href={`/projects/${projectId}/flaky`}>Flaky board</a>
           <a href={`/projects/${projectId}/suite-health`}>Suite health</a>
