@@ -60,7 +60,7 @@ describe('mapJestResults', () => {
     expect(byTitle.get('is skipped')?.suite).toBe('')
   })
 
-  it('maps statuses, treats a retried pass as flaky, and captures the first failure line', () => {
+  it('maps statuses, treats a retried pass as flaky, and captures the failure', () => {
     const byTitle = new Map(
       batchFrom(results).executions.map((execution) => [execution.title, execution]),
     )
@@ -70,5 +70,51 @@ describe('mapJestResults', () => {
     const failed = byTitle.get('rejects bad password')
     expect(failed?.status).toBe('fail')
     expect(failed?.error?.message).toBe('AssertionError: expected 200')
+  })
+
+  const expectFailure = (message: string): string | undefined =>
+    batchFrom({
+      startTime: START.getTime(),
+      testResults: [
+        {
+          testFilePath: '/repo/src/a.test.ts',
+          testResults: [{ title: 't', status: 'failed', failureMessages: [message] }],
+        },
+      ],
+    }).executions[0]?.error?.message
+
+  it('keeps the expected and received values, not just the matcher header', () => {
+    // Jest renders one string instead of a structured error, and its first line is the
+    // same for every toBe in the project. Keeping only that line gave every assertion
+    // failure an identical error signature, so clustering merged unrelated tests and RCA
+    // saw a prompt with no values in it.
+    const message = expectFailure(
+      'Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: "ready"\nReceived: "pending"\n\n    at Object.<anonymous> (/repo/src/a.test.ts:3:20)',
+    )
+
+    expect(message).toContain('Expected: "ready"')
+    expect(message).toContain('Received: "pending"')
+    expect(message).not.toContain('at Object.<anonymous>')
+  })
+
+  it('separates two failures that share a matcher', () => {
+    const first = expectFailure(
+      'Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: "ready"\nReceived: "pending"\n\n    at a (/repo/a.ts:1:1)',
+    )
+    const second = expectFailure(
+      'Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n\n    at b (/repo/b.ts:1:1)',
+    )
+
+    expect(first).not.toBe(second)
+  })
+
+  it('strips the colour codes jest renders into the message', () => {
+    const message = expectFailure('[2mExpected:[22m [32m"ready"[39m\n    at a (/repo/a.ts:1:1)')
+
+    expect(message).toBe('Expected: "ready"')
+  })
+
+  it('falls back rather than sending an empty message the contract would reject', () => {
+    expect(expectFailure('    at a (/repo/a.ts:1:1)')).toBe('test failed')
   })
 })
