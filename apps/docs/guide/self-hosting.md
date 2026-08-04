@@ -21,6 +21,9 @@ docker compose up
 The dashboard is on [localhost:3000](http://localhost:3000) and the ingestion API on
 [localhost:4000](http://localhost:4000), seeded with demo runs.
 
+The demo dataset is only written when the database is empty, so restarting the stack keeps
+everything you have ingested. Use `pnpm demo` when you do want a clean slate.
+
 ## GitHub sign-in
 
 Sign-in uses GitHub OAuth. Create an OAuth app with callback
