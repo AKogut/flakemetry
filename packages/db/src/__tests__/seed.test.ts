@@ -17,7 +17,9 @@ const runSeed = (...args: string[]) =>
     env: { ...process.env },
   })
 
-describe.skipIf(!hasDb)('demo seed', () => {
+// Each case shells out to the real seed script, which takes a couple of seconds,
+// and one of them runs it twice.
+describe.skipIf(!hasDb)('demo seed', { timeout: 60_000 }, () => {
   beforeEach(async () => {
     await prisma.membership.deleteMany()
     await prisma.project.deleteMany()
