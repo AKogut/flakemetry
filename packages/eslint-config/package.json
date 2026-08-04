@@ -11,9 +11,9 @@
   "dependencies": {
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-simple-import-sort": "^12.1.1",
-    "typescript-eslint": "^8.19.0"
+    "typescript-eslint": "^8.65.0"
   },
   "peerDependencies": {
-    "eslint": ">=9"
+    "eslint": "^10.8.0"
   }
 }

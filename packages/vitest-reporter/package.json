@@ -40,13 +40,13 @@
     "@flakemetry/tsconfig": "workspace:*",
     "@flakemetry/tsup-config": "workspace:*",
     "@types/node": "^22.10.5",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "@flakemetry/contracts": "workspace:*",
     "@flakemetry/sdk": "workspace:*"
   },
   "peerDependencies": {
-    "vitest": ">=1.6"
+    "vitest": "^4.1.10"
   }
 }

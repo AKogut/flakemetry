@@ -34,7 +34,7 @@
     "@flakemetry/tsup-config": "workspace:*",
     "@types/node": "^22.10.5",
     "@types/nodemailer": "^8.0.1",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.10"
   },
   "private": true
 }

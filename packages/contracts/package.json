@@ -43,6 +43,6 @@
     "@flakemetry/eslint-config": "workspace:*",
     "@flakemetry/tsconfig": "workspace:*",
     "@flakemetry/tsup-config": "workspace:*",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.10"
   }
 }
