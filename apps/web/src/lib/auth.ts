@@ -13,7 +13,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: 'database' },
   pages: { signIn: '/sign-in' },
   events: {
-    async createUser({ user }) {
+    async signIn({ user }) {
       if (user.id) await adoptUnclaimedOrgs(prisma, user.id)
     },
   },
