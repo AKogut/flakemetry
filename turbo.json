@@ -1,16 +1,19 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
+    "@flakemetry/db#db:generate": {
+      "cache": false
+    },
     "build": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "@flakemetry/db#db:generate"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**", ".vitepress/dist/**"]
     },
     "typecheck": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "@flakemetry/db#db:generate"]
     },
     "lint": {},
     "test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "@flakemetry/db#db:generate"],
       "env": ["DATABASE_URL", "REQUIRE_DB"]
     },
     "dev": {

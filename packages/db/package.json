@@ -19,8 +19,8 @@
     "prisma"
   ],
   "scripts": {
-    "build": "prisma generate && tsup",
-    "typecheck": "prisma generate && tsc -p tsconfig.json",
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -28,7 +28,7 @@
     "db:reset": "prisma migrate reset --force",
     "db:seed": "prisma generate && tsx prisma/seed.ts",
     "clean": "rm -rf dist .turbo",
-    "test": "prisma generate && vitest run"
+    "test": "vitest run"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
