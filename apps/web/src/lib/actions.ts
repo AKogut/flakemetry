@@ -56,6 +56,44 @@ const uniqueOrgSlug = async (base: string): Promise<string> => {
   throw new Error('could not allocate a unique workspace slug')
 }
 
+/** Slugs are unique per workspace, so a second project named like one in another
+ * workspace is fine — but two "Web" projects side by side would collide, and Prisma
+ * would surface that as a raw constraint error rather than anything a user can act on. */
+const uniqueProjectSlug = async (orgId: string, base: string): Promise<string> => {
+  const seed = base || 'project'
+  for (let suffix = 0; suffix < 50; suffix += 1) {
+    const candidate = suffix === 0 ? seed : `${seed}-${suffix}`
+    const taken = await prisma.project.findFirst({
+      where: { orgId, slug: candidate },
+      select: { id: true },
+    })
+    if (!taken) return candidate
+  }
+  throw new Error('could not allocate a unique project slug')
+}
+
+export const createProject = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const orgId = String(formData.get('orgId') ?? '')
+  const name = String(formData.get('projectName') ?? '').trim()
+  if (!name) throw new Error('project name is required')
+
+  const membership = await prisma.membership.findFirst({
+    where: { userId: user.id, orgId },
+    select: { role: true },
+  })
+  if (!membership || !canManage(membership.role))
+    throw new Error('only owners and admins can add a project')
+
+  const project = await prisma.project.create({
+    data: { orgId, name, slug: await uniqueProjectSlug(orgId, slugify(name)) },
+    select: { id: true },
+  })
+
+  revalidatePath('/projects')
+  redirect(`/projects/${project.id}/settings/tokens`)
+}
+
 export const createWorkspace = async (formData: FormData): Promise<void> => {
   const user = await requireUser()
   const orgName = String(formData.get('orgName') ?? '').trim()
