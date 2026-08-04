@@ -438,6 +438,9 @@ importers:
 
   packages/queries:
     dependencies:
+      '@flakemetry/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@flakemetry/contracts':
         specifier: workspace:*
         version: link:../contracts

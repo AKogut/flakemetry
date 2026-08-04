@@ -146,7 +146,7 @@ export const processFailures = async (
         },
       })
       if (existing.clusterId && !alreadyCounted) {
-        await recordClusterOccurrence(prisma, existing.clusterId, ctx.now, false)
+        await recordClusterOccurrence(prisma, existing.clusterId, ctx.now)
       }
     } else {
       const tokens = [...errorTokens(scrubbedMessage, signature.stackTemplate)]
@@ -171,7 +171,7 @@ export const processFailures = async (
         select: { id: true },
       })
       signatureId = created.id
-      await recordClusterOccurrence(prisma, assignment.clusterId, ctx.now, true)
+      await recordClusterOccurrence(prisma, assignment.clusterId, ctx.now)
       isNew = true
     }
 
@@ -306,6 +306,7 @@ export const processFailures = async (
         confidence: outcome.analysis.confidence,
         similarPast,
         llmModel: outcome.model,
+        promptVersion: outcome.promptVersion,
         tokenCost: outcome.tokenCost,
       },
     })

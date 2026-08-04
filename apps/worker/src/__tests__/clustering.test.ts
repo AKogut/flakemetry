@@ -148,16 +148,15 @@ describe.skipIf(!hasDb)('backfillSignatureClusters', () => {
 
     const clusters = await prisma.errorCluster.findMany({
       where: { projectId: tenant.projectId },
-      orderBy: { signatureCount: 'desc' },
-      select: { label: true, signatureCount: true },
+      select: { label: true, _count: { select: { signatures: true } } },
     })
+    const sizes = clusters.map((cluster) => cluster._count.signatures).sort((a, b) => b - a)
 
     // A cluster id used to be a bare uuid pointing at nothing, so there was nowhere to
-    // hang a name, a count, or a known-issue reference.
+    // hang a name or a known-issue reference.
     expect(clusters).toHaveLength(2)
-    expect(clusters[0]?.signatureCount).toBe(2)
-    expect(clusters[1]?.signatureCount).toBe(1)
-    expect(clusters[0]?.label).toContain('not visible')
+    expect(sizes).toEqual([2, 1])
+    expect(clusters.map((cluster) => cluster.label).join(' ')).toContain('not visible')
   })
 
   it('counts a signature once even when an earlier row pulled it into the cluster', async () => {
@@ -180,10 +179,11 @@ describe.skipIf(!hasDb)('backfillSignatureClusters', () => {
 
     const clusters = await prisma.errorCluster.findMany({
       where: { projectId: tenant.projectId },
-      orderBy: { signatureCount: 'desc' },
-      select: { signatureCount: true },
+      select: { _count: { select: { signatures: true } } },
     })
-    expect(clusters.map((cluster) => cluster.signatureCount)).toEqual([2, 1])
+    expect(clusters.map((cluster) => cluster._count.signatures).sort((a, b) => b - a)).toEqual([
+      2, 1,
+    ])
   })
 
   it('settles tokens seeded by the migration onto the real tokenizer', async () => {
@@ -209,5 +209,55 @@ describe.skipIf(!hasDb)('backfillSignatureClusters', () => {
 
     expect(await backfillSignatureClusters(prisma, { now: NOW })).toBe(0)
     expect(await prisma.errorCluster.count({ where: { projectId: tenant.projectId } })).toBe(after)
+  })
+})
+
+describe.skipIf(!hasDb)('backfill bounds', () => {
+  beforeEach(async () => {
+    await prisma.errorSignature.deleteMany()
+    await prisma.errorCluster.deleteMany()
+    await prisma.project.deleteMany()
+    await prisma.org.deleteMany()
+  })
+
+  afterAll(async () => {
+    await prisma.$disconnect()
+  })
+
+  it('stops at the batch size and picks up the rest on the next pass', async () => {
+    const tenant = await seed()
+    for (let index = 0; index < 6; index += 1) {
+      await signature(
+        tenant,
+        `h${index}`,
+        `Unrelated failure ${'x'.repeat(index + 3)} alpha${index}`,
+        {
+          seenAt: new Date(2026, 0, index + 1),
+        },
+      )
+    }
+
+    // It runs on every worker start; a project with a long history must not pull its
+    // whole signature table into memory. Exact per-pass counts are not asserted because
+    // a pass can also adopt a neighbour into the cluster it creates — what matters is
+    // that one bounded pass does not finish the job, and repeated passes converge.
+    const first = await backfillSignatureClusters(prisma, { now: NOW, batchSize: 2 })
+    expect(first).toBeGreaterThan(0)
+    expect(
+      await prisma.errorSignature.count({
+        where: { projectId: tenant.projectId, clusterId: null },
+      }),
+    ).toBeGreaterThan(0)
+
+    for (let pass = 0; pass < 6; pass += 1) {
+      await backfillSignatureClusters(prisma, { now: NOW, batchSize: 2 })
+    }
+
+    expect(
+      await prisma.errorSignature.count({
+        where: { projectId: tenant.projectId, clusterId: null },
+      }),
+    ).toBe(0)
+    expect(await backfillSignatureClusters(prisma, { now: NOW, batchSize: 2 })).toBe(0)
   })
 })

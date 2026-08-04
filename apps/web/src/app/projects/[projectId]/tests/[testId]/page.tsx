@@ -6,6 +6,7 @@ import {
   getExecutionCluster,
   getParamBuckets,
   getRca,
+  getRcaFeedback,
   getTest,
 } from '@flakemetry/queries'
 import { notFound } from 'next/navigation'
@@ -74,6 +75,15 @@ export default async function TestDetailPage({
   const selected =
     failures.find((point) => point.executionId === selectedExecutionId) ?? failures[0] ?? null
   const rcaReport = selected ? await getRca(prisma, projectId, selected.executionId) : null
+  const rcaFeedback = rcaReport
+    ? await getRcaFeedback(prisma, rcaReport.id, user.id).then((existing) => ({
+        reportId: rcaReport.id,
+        projectId,
+        testId,
+        verdict: existing?.verdict ?? null,
+        correction: existing?.correction ?? null,
+      }))
+    : null
   const cluster = selected ? await getClusterImpact(prisma, projectId, selected.executionId) : null
   const executionCluster = selected
     ? await getExecutionCluster(prisma, projectId, selected.executionId)
@@ -336,7 +346,11 @@ export default async function TestDetailPage({
 
       {selected ? (
         <div style={{ marginBottom: '1.25rem' }}>
-          <RcaPanel report={rcaReport} errorMessage={selected.errorMessage} />
+          <RcaPanel
+            report={rcaReport}
+            errorMessage={selected.errorMessage}
+            feedback={rcaFeedback}
+          />
         </div>
       ) : null}
 

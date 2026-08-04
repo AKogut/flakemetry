@@ -11,7 +11,8 @@
     "clean": "rm -rf dist .turbo",
     "start": "node dist/index.js",
     "test": "vitest run",
-    "restitch": "tsx src/restitch.ts"
+    "restitch": "tsx src/restitch.ts",
+    "eval": "tsx src/eval.ts"
   },
   "devDependencies": {
     "@flakemetry/api": "workspace:*",
