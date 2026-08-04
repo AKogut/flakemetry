@@ -1,5 +1,5 @@
 import { getPrismaClient } from '@flakemetry/db'
-import { listRuns } from '@flakemetry/queries'
+import { getIngestionHealth, listRuns } from '@flakemetry/queries'
 
 import { requireUser } from '@/lib/session'
 import { requireProjectAccess } from '@/lib/tenant'
@@ -44,11 +44,14 @@ export default async function RunsPage({
   const user = await requireUser()
   await requireProjectAccess(user.id, projectId)
 
-  const { items, nextCursor } = await listRuns(prisma, projectId, {
-    limit: RUNS_PER_PAGE,
-    ...(cursor ? { cursor } : {}),
-    ...(branch ? { branch } : {}),
-  })
+  const [{ items, nextCursor }, ingestion] = await Promise.all([
+    listRuns(prisma, projectId, {
+      limit: RUNS_PER_PAGE,
+      ...(cursor ? { cursor } : {}),
+      ...(branch ? { branch } : {}),
+    }),
+    getIngestionHealth(prisma, projectId),
+  ])
 
   const base = `/projects/${projectId}/runs`
   const branchQuery = branch ? `&branch=${encodeURIComponent(branch)}` : ''
@@ -56,6 +59,7 @@ export default async function RunsPage({
   return (
     <>
       <h1 className="page-title">Runs</h1>
+
       <p className="page-subtitle">
         {branch ? (
           <>
@@ -68,6 +72,30 @@ export default async function RunsPage({
           'Every CI run ingested for this project, newest first.'
         )}
       </p>
+
+      {ingestion.failed > 0 ? (
+        <div className="error-box">
+          <strong>
+            {ingestion.failed} run{ingestion.failed === 1 ? '' : 's'} could not be processed
+          </strong>
+          <p style={{ fontSize: '0.85rem', margin: '0.35rem 0 0.5rem' }}>
+            These were accepted by the API but failed every retry, so they are missing from the list
+            below.
+          </p>
+          <ul style={{ fontSize: '0.8rem', margin: 0, paddingLeft: '1.1rem' }}>
+            {ingestion.recent.map((job) => (
+              <li key={job.id}>
+                <span className="mono">{job.idempotencyKey}</span> —{' '}
+                {job.lastError ?? 'no reason recorded'}{' '}
+                <span className="muted">
+                  ({job.attempts} attempt{job.attempts === 1 ? '' : 's'},{' '}
+                  {formatWhen(job.updatedAt)})
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div className="card">
         {items.length === 0 ? (
