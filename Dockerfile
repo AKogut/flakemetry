@@ -9,7 +9,7 @@ COPY apps ./apps
 COPY packages ./packages
 RUN corepack pnpm install --frozen-lockfile
 ENV AUTH_SECRET=build-time-placeholder
-RUN corepack pnpm build
+RUN corepack pnpm turbo run build --filter @flakemetry/api... --filter @flakemetry/worker... --filter @flakemetry/web...
 
 FROM build AS migrate
 WORKDIR /app/packages/db

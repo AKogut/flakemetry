@@ -1,0 +1,85 @@
+name: stack
+
+# The README's first instruction is `docker compose up`. Nothing else in CI builds
+# the images or boots the stack, so this job runs the quickstart exactly as written
+# and then restarts it — the restart is the part that used to destroy the database.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: stack-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compose:
+    name: docker compose quickstart
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Configure the environment the way the README says to
+        run: |
+          cp .env.example .env
+          echo "AUTH_SECRET=$(openssl rand -base64 32)" >> .env
+
+      - name: docker compose up
+        run: docker compose up -d --build
+
+      - name: Wait for the API and the dashboard to report healthy
+        run: |
+          for service in 4000 3000; do
+            for attempt in $(seq 1 60); do
+              if curl -sf "http://localhost:$service/health" >/dev/null; then
+                echo "port $service is healthy"
+                break
+              fi
+              if [ "$attempt" = 60 ]; then
+                echo "port $service never became healthy"
+                docker compose ps
+                docker compose logs --no-color
+                exit 1
+              fi
+              sleep 5
+            done
+          done
+
+      - name: The dashboard opens on demo data, not an empty page
+        run: |
+          orgs=$(docker compose exec -T postgres psql -U flakemetry -d flakemetry -tAc 'select count(*) from org')
+          runs=$(docker compose exec -T postgres psql -U flakemetry -d flakemetry -tAc 'select count(*) from run')
+          echo "orgs=$orgs runs=$runs"
+          [ "$orgs" -eq 1 ] || { echo 'the demo seed did not land'; exit 1; }
+          [ "$runs" -gt 0 ] || { echo 'the demo seed produced no runs'; exit 1; }
+
+      - name: Stand in for a user who ingested something
+        run: |
+          docker compose exec -T postgres psql -U flakemetry -d flakemetry -c \
+            "insert into project (id, org_id, name, slug, default_branch) \
+             select gen_random_uuid(), id, 'Ingested By Hand', 'ingested-by-hand', 'main' from org limit 1"
+
+      - name: Restart the stack
+        run: |
+          docker compose down
+          docker compose up -d --build
+
+      - name: Wait for the API to report healthy again
+        run: |
+          for attempt in $(seq 1 60); do
+            curl -sf http://localhost:4000/health >/dev/null && break
+            if [ "$attempt" = 60 ]; then docker compose logs --no-color; exit 1; fi
+            sleep 5
+          done
+
+      - name: A restart must not throw the user's data away
+        run: |
+          kept=$(docker compose exec -T postgres psql -U flakemetry -d flakemetry -tAc \
+            "select count(*) from project where slug = 'ingested-by-hand'")
+          [ "$kept" -eq 1 ] || { echo 'the restart wiped data that was there before it'; exit 1; }
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
