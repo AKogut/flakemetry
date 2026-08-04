@@ -24,7 +24,25 @@ export default class FlakemetryVitestReporter {
     if (context?.config?.root) this.rootDir = context.config.root
   }
 
+  /**
+   * Vitest 4 dropped `onFinished` and reports through `onTestRunEnd` with its own
+   * TestModule wrapper. The wrapper still carries the legacy task, which is what the
+   * mapping understands. Both hooks are implemented so one build serves either major —
+   * and because a reporter that silently delivers nothing is the worst failure this
+   * package can have: the suite passes, and no data ever arrives.
+   */
+  async onTestRunEnd(testModules: readonly unknown[] = []): Promise<void> {
+    const files = testModules
+      .map((module) => (module as { task?: VitestFile }).task)
+      .filter((file): file is VitestFile => Boolean(file))
+    await this.report(files)
+  }
+
   async onFinished(files: VitestFile[] = []): Promise<void> {
+    await this.report(files)
+  }
+
+  private async report(files: VitestFile[]): Promise<void> {
     const startedAt = new Date()
     const context = resolveRunContext(this.env)
     const recorder = new TestRunRecorder(context)
