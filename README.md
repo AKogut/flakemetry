@@ -151,10 +151,10 @@ export default {
 }
 ```
 
-Python? Install the pytest plugin — it registers itself, and with `pytest-rerunfailures` a test that passes on rerun is reported as flaky:
+Python? Install the pytest plugin — it registers itself, and with `pytest-rerunfailures` a test that passes on rerun is reported as flaky. It is **not on PyPI yet**, so install it from this repository:
 
 ```bash
-pip install pytest-flakemetry
+pip install "git+https://github.com/AKogut/flakemetry@main#subdirectory=packages/pytest-flakemetry"
 pytest --reruns 2
 ```
 
