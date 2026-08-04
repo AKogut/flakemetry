@@ -131,3 +131,74 @@ describe('assertConformantBatch', () => {
     ).toThrow()
   })
 })
+
+describe('detecting CI providers other than GitHub', () => {
+  it('reads a GitLab pipeline', () => {
+    const context = resolveRunContext({
+      GITLAB_CI: 'true',
+      CI_COMMIT_SHA: 'aaaa111bbbb222',
+      CI_COMMIT_REF_NAME: 'feature/checkout',
+      CI_PIPELINE_ID: '55',
+      CI_PIPELINE_SOURCE: 'merge_request_event',
+      CI_MERGE_REQUEST_IID: '9',
+    })
+
+    expect(context.ciProvider).toBe('gitlab_ci')
+    expect(context.commitSha).toBe('aaaa111bbbb222')
+    expect(context.branch).toBe('feature/checkout')
+    expect(context.trigger).toBe('pull_request')
+    expect(context.prNumber).toBe(9)
+    expect(context.ciRunId).toBe('55')
+  })
+
+  it('reads a CircleCI build, counting containers from one', () => {
+    const context = resolveRunContext({
+      CIRCLECI: 'true',
+      CIRCLE_SHA1: 'ccc333ddd444',
+      CIRCLE_BRANCH: 'main',
+      CIRCLE_WORKFLOW_ID: 'wf-1',
+      CIRCLE_PULL_REQUEST: 'https://github.com/acme/web/pull/42',
+      CIRCLE_NODE_INDEX: '0',
+      CIRCLE_NODE_TOTAL: '4',
+    })
+
+    expect(context.ciProvider).toBe('circleci')
+    expect(context.prNumber).toBe(42)
+    // CircleCI numbers containers from zero and Flakemetry from one; shipping the raw
+    // value would put two different shards under the same index across providers.
+    expect(context.shardIndex).toBe(1)
+    expect(context.shardTotal).toBe(4)
+  })
+
+  it('reads a Jenkins build', () => {
+    const context = resolveRunContext({
+      JENKINS_URL: 'https://ci.example.com/',
+      GIT_COMMIT: 'eee555fff666',
+      BRANCH_NAME: 'release/1.2',
+      BUILD_ID: '312',
+      CHANGE_ID: '77',
+    })
+
+    expect(context.ciProvider).toBe('jenkins')
+    expect(context.commitSha).toBe('eee555fff666')
+    expect(context.branch).toBe('release/1.2')
+    expect(context.trigger).toBe('pull_request')
+    expect(context.prNumber).toBe(77)
+  })
+
+  it('gives each provider a distinct idempotency key for the same run id', () => {
+    const gitlab = { GITLAB_CI: 'true', CI_PIPELINE_ID: '7', CI_JOB_ID: '1' }
+    const circle = { CIRCLECI: 'true', CIRCLE_WORKFLOW_ID: '7', CIRCLE_BUILD_NUM: '1' }
+
+    expect(buildIdempotencyKey(resolveRunContext(gitlab), gitlab)).not.toBe(
+      buildIdempotencyKey(resolveRunContext(circle), circle),
+    )
+  })
+
+  it('still falls back to local when no CI is present', () => {
+    const context = resolveRunContext({})
+    expect(context.ciProvider).toBe('local')
+    expect(context.commitSha).toBe('0000000')
+    expect(context.trigger).toBe('manual')
+  })
+})
