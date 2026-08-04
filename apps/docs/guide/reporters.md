@@ -47,6 +47,18 @@ export default {
 
 ## pytest
 
+::: warning Not on PyPI yet
+`pytest-flakemetry` is not published, so `pip install pytest-flakemetry` will not resolve.
+Install it from the repository until it is:
+
+```bash
+pip install "git+https://github.com/AKogut/flakemetry@main#subdirectory=packages/pytest-flakemetry"
+```
+
+Everything below works the same either way. If you would rather not install from git, a
+pytest suite can also report through [JUnit XML](/guide/junit).
+:::
+
 ```bash
 pip install pytest-flakemetry
 ```
