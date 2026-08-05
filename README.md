@@ -18,9 +18,10 @@ Test observability · explainable flaky-test detection · AI-assisted root-cause
 
 </div>
 
-> **Status: built in the open, usable today.** M0–M3 are complete — ingestion, flaky
-> scoring, deep observability and test intelligence all ship. M4–M7 (platform,
-> scale, launch, actionability) are open. Follow the
+> **Status: built in the open, usable today.** M0–M3 and M7 are complete — ingestion,
+> flaky scoring, deep observability, test intelligence, and the actionability layer
+> (cost, bisect, tracker issues, badges) all ship. M4 is done apart from the plugin
+> system; M5 (scale) and M6 (launch) are open. Follow the
 > [public roadmap board](https://github.com/users/AKogut/projects/14).
 
 ---
@@ -47,7 +48,13 @@ If every test execution is modelled as an **OpenTelemetry span**, then historica
 | **Stable test identity** | Fingerprints that survive file moves, renames, and parameterization |
 | **Explainable flaky scoring** | A transparent Bayesian score with human-readable reason codes — not a black box |
 | **AI root-cause analysis** | Structured "likely cause + suggested action", budget-gated, provider-agnostic (Claude or local Ollama) |
-| **CI-native** | GitHub Action + sticky PR comment; never blocks your build |
+| **Which change caused it** | The commit a test stopped being reliable at, and what landed around it |
+| **Cost of flakiness** | The CI minutes and engineer hours a flaky test is spending, in money |
+| **Acts on what it finds** | Auto-quarantine, tracker issues filed and closed as tests recover, README health badges |
+| **CI-native** | GitHub Action, sticky PR comment, and a quality gate that blocks only *new* failures — never your build |
+| **Any test runner** | Playwright, Vitest, Jest and pytest reporters, or JUnit XML from anything else |
+| **Public API** | Read-only REST with OpenAPI, signed outbound webhooks, and a CLI |
+| **Your data, yours** | One-command export, configurable retention, and hard deletion that verifies itself |
 | **Self-hostable** | One `docker compose up`, MIT-licensed core |
 
 ## Architecture
@@ -227,33 +234,42 @@ Prefer sending straight from your own tooling? `flakemetry upload flakemetry-res
 ```
 apps/
   web/            Next.js dashboard
-  api/            Fastify ingestion + tRPC query
-  worker/         processing (identity, scoring, clustering, RCA)
+  api/            Fastify ingestion + tRPC query + public read API
+  worker/         processing (identity, scoring, clustering, RCA, retention, erasure)
   docs/           VitePress documentation site
 packages/
   contracts/      zod schemas + shared types (single source of truth)
   db/             Prisma schema + migrations
   core/           pure domain logic (identity, flaky scoring)
+  queries/        tenant-scoped read queries shared by the api and the dashboard
   reporter/       @flakemetry/playwright-reporter
+  vitest-reporter/  @flakemetry/vitest-reporter
+  jest-reporter/  @flakemetry/jest-reporter
+  pytest-flakemetry/  pytest plugin (Python)
   sdk/            OTel instrumentation + ingest client
   ai/             LLMProvider abstraction + RCA
+  notify/         notification channels (Slack, Discord, email, signed webhooks)
+  storage/        object storage for artifacts
   cli/            @flakemetry/cli
-  pytest-flakemetry/  pytest plugin (Python)
 ```
 
 Built with pnpm workspaces + Turborepo. Rationale in [ADR-0001](https://github.com/AKogut/flakemetry/wiki/Architecture).
 
 ## Roadmap
 
-| Milestone | Focus |
-|---|---|
-| **M0** | Foundation & DevEx — monorepo, contracts, schema, CI, one-command local dev |
-| **M1** | MVP — OTel-native ingestion, test identity, explainable flaky scoring, AI RCA, dashboard, GitHub Action |
-| **M2** | Deep observability & test intelligence — full traces, artifacts, waterfall, suite health, signature clustering, auto-quarantine, PR quality gate, notifications, code ownership |
-| **M3** | Known-issue detection, cross-run correlation, deeper root-cause analysis |
-| **M4** | Platform — multi-framework reporters, plugins, public API |
-| **M5** | SaaS & scale — multi-tenant, RBAC/SSO, columnar span store |
-| **M6** | Community, docs & launch |
+| Milestone | Focus | Status |
+|---|---|---|
+| **M0** | Foundation & DevEx — monorepo, contracts, schema, CI, one-command local dev | Complete |
+| **M1** | MVP — OTel-native ingestion, test identity, explainable flaky scoring, AI RCA, dashboard, GitHub Action | Complete |
+| **M2** | Deep observability & test intelligence — full traces, artifacts, waterfall, suite health, signature clustering, auto-quarantine, PR quality gate, notifications, code ownership | Complete |
+| **M3** | Known-issue detection, cross-run correlation, deeper root-cause analysis | Complete |
+| **M7** | Actionability — cost of flakiness, flake bisect, tracker issues, health badges | Complete |
+| **M4** | Platform — multi-framework reporters, public REST API + webhooks, CLI, data governance, plugins | Plugins left |
+| **M5** | SaaS & scale — multi-tenant, RBAC/SSO, columnar span store | Open |
+| **M6** | Community, docs & launch | Open |
+
+M7 was pulled forward ahead of M4–M6: shipping the actions a team takes on a flaky test
+mattered more than the platform work underneath them.
 
 Tracked issue-by-issue on the [roadmap board](https://github.com/users/AKogut/projects/14).
 
