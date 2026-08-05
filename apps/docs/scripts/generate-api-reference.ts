@@ -6,6 +6,7 @@ const AUTH_LABELS: Record<string, string> = {
   none: 'none',
   'ingest-token': 'project token with the `ingest` scope (`Authorization: Bearer …`)',
   'read-token': 'project token with the `read` scope (`Authorization: Bearer …`)',
+  'quarantine-token': 'project token with the `quarantine` scope (`Authorization: Bearer …`)',
   'any-token': 'project token with either scope (`Authorization: Bearer …`)',
 }
 

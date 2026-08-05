@@ -42,6 +42,30 @@ flakemetry flaky --json | jq '.[] | select(.score > 0.8) | .title'
 
 `--json` prints the rows unchanged, for scripting.
 
+## `flakemetry quarantine`
+
+Quarantines a test so it stops failing the build, releases one, or hands it back to the
+scorer. Needs a token with the **`quarantine`** scope.
+
+```bash
+flakemetry quarantine <testIdentityId> --reason "known bad, tracked in JIRA-123"
+flakemetry quarantine <testIdentityId> --release
+flakemetry quarantine <testIdentityId> --auto
+```
+
+Its own scope, deliberately. Quarantining is the one call that can hide a real regression, so
+neither a token that reads a dashboard nor the one pasted into every CI job in the company
+gets to make that decision.
+
+**A person's decision sticks.** While a test is quarantined or released by hand, the scorer
+stops moving it — in both directions. Otherwise the next run would silently undo you: a
+manually quarantined test that the scorer does not consider flaky gets released, and a
+manually released test that it does gets quarantined again.
+
+`--auto` gives the test back. The current state is left alone and the scorer takes over from
+the next run: the cooldown that decides when a quarantined test is safe to release needs run
+history, and guessing here would be a second copy of that rule, free to drift from the first.
+
 ## `flakemetry doctor`
 
 Checks the configuration file, the endpoint, whether it answers, and what the token is

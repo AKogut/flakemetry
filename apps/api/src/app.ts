@@ -12,6 +12,7 @@ import {
   otlpToIngestBatch,
   otlpTraceRequestSchema,
   parseJunitXml,
+  quarantineSetSchema,
 } from '@flakemetry/contracts'
 import { IngestionQueue, type PrismaClient } from '@flakemetry/db'
 import {
@@ -24,6 +25,7 @@ import {
   renderBadgeSvg,
   renderGateComment,
   renderPrComment,
+  setQuarantine,
   toBadge,
   toShieldsJson,
 } from '@flakemetry/queries'
@@ -449,6 +451,52 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     })
 
     return reply.code(200).send({ ok: true })
+  })
+
+  /**
+   * Its own scope, not `read` and not `ingest`. Quarantining a test stops it failing the
+   * build, so this is the one call that can hide a real regression — a credential that
+   * merely reads a dashboard, or one pasted into every CI job in the company, must not
+   * also be able to make that decision.
+   */
+  app.post('/v1/tests/:testIdentityId/quarantine', async (request, reply) => {
+    const project = await authenticateProject(prisma, request)
+    if (!project) {
+      return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
+    }
+    if (!hasScope(project, 'quarantine')) {
+      return reply.code(403).send({
+        error: 'insufficient_scope',
+        message: 'this endpoint needs a token with the "quarantine" scope',
+      })
+    }
+
+    if (rateLimited(project.projectId, reply)) {
+      return reply.code(429).send({ error: 'rate_limited' })
+    }
+
+    const parsed = quarantineSetSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid_payload', message: parsed.error.message })
+    }
+
+    const outcome = await setQuarantine(prisma, {
+      orgId: project.orgId,
+      projectId: project.projectId,
+      testIdentityId: (request.params as { testIdentityId: string }).testIdentityId,
+      decision: parsed.data.decision,
+      reason: parsed.data.reason ?? null,
+    })
+
+    if (outcome.status === 'rejected') {
+      return reply.code(404).send({ error: 'not_found', message: outcome.reason })
+    }
+
+    return reply.code(200).send({
+      quarantined: outcome.quarantined,
+      override: outcome.override,
+      changed: outcome.changed,
+    })
   })
 
   app.put('/v1/notifications/routing', async (request, reply) => {

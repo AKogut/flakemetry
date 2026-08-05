@@ -83,6 +83,12 @@ export const testDetailSchema = z.object({
   suite: z.string(),
   title: z.string(),
   quarantined: z.boolean(),
+  quarantineReason: z.string().nullable(),
+  quarantineOverride: z
+    .enum(['quarantined', 'released'])
+    .nullable()
+    .describe('Set when a person decided; null means the scorer is in charge'),
+  quarantineOverrideAt: timestampSchema.nullable(),
   score: z.number().min(0).max(1).nullable(),
   reasonCodes: z.array(reasonCodeSchema),
   aliases: z.array(z.string()),

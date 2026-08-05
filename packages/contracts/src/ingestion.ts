@@ -149,6 +149,15 @@ export const codeownersUploadSchema = z.object({
   content: z.string().max(MAX_CODEOWNERS_BYTES),
 })
 
+export const quarantineSetSchema = z.object({
+  decision: z
+    .enum(['quarantined', 'released', 'auto'])
+    .describe(
+      'quarantined and released are a person deciding; auto returns the test to the scorer',
+    ),
+  reason: z.string().max(200).optional().describe('Why, shown beside the test'),
+})
+
 export type JunitIngestRequest = z.infer<typeof junitIngestSchema>
 export type IngestResource = z.infer<typeof ingestResourceSchema>
 export type IngestError = z.infer<typeof ingestErrorSchema>
@@ -165,3 +174,4 @@ export type ArtifactPresignRequest = z.infer<typeof artifactPresignRequestSchema
 export type ArtifactPresignItemResult = z.infer<typeof artifactPresignItemResultSchema>
 export type ArtifactPresignResponse = z.infer<typeof artifactPresignResponseSchema>
 export type CodeownersUpload = z.infer<typeof codeownersUploadSchema>
+export type QuarantineSetRequest = z.infer<typeof quarantineSetSchema>

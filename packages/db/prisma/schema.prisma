@@ -277,6 +277,11 @@ model IngestionJob {
   @@map("ingestion_job")
 }
 
+enum QuarantineOverride {
+  quarantined
+  released
+}
+
 model TestIdentity {
   id               String    @id @default(uuid()) @db.Uuid
   orgId            String    @map("org_id") @db.Uuid
@@ -290,6 +295,14 @@ model TestIdentity {
   aliases          String[]
   quarantined      Boolean   @default(false)
   quarantineReason String?   @map("quarantine_reason")
+
+  /// Null means the scorer decides. Set, it means a person decided and the scorer must
+  /// leave this test alone — in both directions, since releasing a still-flaky test is
+  /// exactly as much a decision as quarantining a healthy one.
+  quarantineOverride   QuarantineOverride? @map("quarantine_override")
+  quarantineOverrideBy String?             @map("quarantine_override_by") @db.Uuid
+  quarantineOverrideAt DateTime?           @map("quarantine_override_at")
+
   firstSeenAt      DateTime  @default(now()) @map("first_seen_at")
   lastSeenAt       DateTime  @default(now()) @map("last_seen_at")
 

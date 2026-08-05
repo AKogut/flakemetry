@@ -51,6 +51,23 @@ const batch = (overrides: Partial<IngestRunBatch> = {}): IngestRunBatch => ({
   ...overrides,
 })
 
+const greenBatch = (idempotencyKey: string): IngestRunBatch =>
+  batch({
+    idempotencyKey,
+    run: { status: 'passed', startedAt: new Date('2026-07-16T11:00:00Z') },
+    executions: [
+      {
+        filePath: 'e2e/login.spec.ts',
+        suite: 'auth',
+        title: 'logs in',
+        status: 'pass',
+        attempt: 1,
+        startedAt: new Date('2026-07-16T11:00:01Z'),
+        durationMs: 900,
+      },
+    ],
+  })
+
 describe.skipIf(!hasDb)('processJob', () => {
   beforeEach(async () => {
     await prisma.flakyScore.deleteMany()
@@ -143,6 +160,130 @@ describe.skipIf(!hasDb)('processJob', () => {
     const kinds = healthEvents.map((event) => event.kind).sort()
     expect(kinds).toEqual(['flaked', 'quarantined'])
     expect(healthEvents.every((event) => event.createdAt.getTime() === NOW.getTime())).toBe(true)
+  })
+
+  it('does not re-quarantine a test a person released', async () => {
+    const ctx = {
+      ...(await seedProject()),
+      now: NOW,
+      threshold: 0.01,
+      minSamples: 1,
+      quarantineEnabled: true,
+    }
+    await processJob(prisma, batch(), ctx)
+
+    const quarantined = await prisma.testIdentity.findFirstOrThrow({
+      where: { projectId: ctx.projectId },
+    })
+    expect(quarantined.quarantined).toBe(true)
+
+    await prisma.testIdentity.update({
+      where: { id: quarantined.id },
+      data: { quarantined: false, quarantineReason: null, quarantineOverride: 'released' },
+    })
+
+    await processJob(prisma, batch({ idempotencyKey: 'run-2' }), ctx)
+
+    // The score still says quarantine. A person said otherwise, and a control the next run
+    // silently undoes is worse than no control at all.
+    const after = await prisma.testIdentity.findUniqueOrThrow({ where: { id: quarantined.id } })
+    expect(after.quarantined).toBe(false)
+    expect(after.quarantineOverride).toBe('released')
+  })
+
+  it('does not release a test a person quarantined by hand', async () => {
+    const ctx = {
+      ...(await seedProject()),
+      now: NOW,
+      threshold: 0.99,
+      minSamples: 1,
+      quarantineEnabled: true,
+      quarantineCooldownRuns: 1,
+    }
+    await processJob(prisma, batch(), ctx)
+
+    const identity = await prisma.testIdentity.findFirstOrThrow({
+      where: { projectId: ctx.projectId },
+    })
+    // A threshold of 0.99 means the scorer would never quarantine this on its own, so any
+    // release below is the automation overriding the person rather than agreeing with them.
+    expect(identity.quarantined).toBe(false)
+
+    await prisma.testIdentity.update({
+      where: { id: identity.id },
+      data: { quarantined: true, quarantineReason: 'manual', quarantineOverride: 'quarantined' },
+    })
+
+    // A clean run, so the cooldown window is satisfied and the automation would release it.
+    // Without this the test passes on the cooldown alone and proves nothing about overrides.
+    await processJob(prisma, greenBatch('run-2'), ctx)
+
+    const after = await prisma.testIdentity.findUniqueOrThrow({ where: { id: identity.id } })
+    expect(after.quarantined).toBe(true)
+    expect(after.quarantineReason).toBe('manual')
+  })
+
+  it('would have released that test if nobody had decided', async () => {
+    const ctx = {
+      ...(await seedProject()),
+      now: NOW,
+      threshold: 0.99,
+      minSamples: 1,
+      quarantineEnabled: true,
+      quarantineCooldownRuns: 1,
+    }
+    await processJob(prisma, batch(), ctx)
+
+    const identity = await prisma.testIdentity.findFirstOrThrow({
+      where: { projectId: ctx.projectId },
+    })
+    await prisma.testIdentity.update({
+      where: { id: identity.id },
+      data: { quarantined: true, quarantineReason: 'auto: flaky score above threshold' },
+    })
+
+    await processJob(prisma, greenBatch('run-2'), ctx)
+
+    // Guard the guard: the same setup without an override does get released, so the test
+    // above is held up by the override rather than by the cooldown never being satisfied.
+    expect(
+      (await prisma.testIdentity.findUniqueOrThrow({ where: { id: identity.id } })).quarantined,
+    ).toBe(false)
+  })
+
+  it('resumes deciding once the test is handed back', async () => {
+    const ctx = {
+      ...(await seedProject()),
+      now: NOW,
+      threshold: 0.01,
+      minSamples: 1,
+      quarantineEnabled: true,
+    }
+    await processJob(prisma, batch(), ctx)
+
+    const identity = await prisma.testIdentity.findFirstOrThrow({
+      where: { projectId: ctx.projectId },
+    })
+    await prisma.testIdentity.update({
+      where: { id: identity.id },
+      data: { quarantined: false, quarantineOverride: 'released' },
+    })
+    await processJob(prisma, batch({ idempotencyKey: 'run-2' }), ctx)
+    expect(
+      (await prisma.testIdentity.findUniqueOrThrow({ where: { id: identity.id } })).quarantined,
+    ).toBe(false)
+
+    await prisma.testIdentity.update({
+      where: { id: identity.id },
+      data: { quarantineOverride: null },
+    })
+    await processJob(prisma, batch({ idempotencyKey: 'run-3' }), ctx)
+
+    // Guard the guard: without this the two tests above would pass just as well if
+    // enforceQuarantine had stopped working altogether.
+    expect(
+      (await prisma.testIdentity.findUniqueOrThrow({ where: { id: identity.id } })).quarantined,
+    ).toBe(true)
   })
 
   it('correlates parallel shards so a co-failing test is not scored as isolated', async () => {
