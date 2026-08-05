@@ -8,6 +8,7 @@ import { startNotifications } from './notify'
 import { startRetention } from './retention'
 import { createWorker } from './runner'
 import { initSelfTelemetry, observeQueueDepth } from './telemetry'
+import { startTrackerSync } from './tracker'
 
 const prisma = getPrismaClient()
 const visibilityTimeoutMs = Number(process.env.FLAKEMETRY_QUEUE_VISIBILITY_MS)
@@ -54,6 +55,7 @@ process.on('SIGINT', () => void shutdown())
 process.on('SIGTERM', () => void shutdown())
 
 startRetention(prisma, resolveObjectStore(process.env))
+startTrackerSync(prisma)
 
 void backfillSignatureClusters(prisma)
   .then((assigned) => {

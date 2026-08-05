@@ -11,6 +11,11 @@ export const POLICY_DEFAULTS = {
   ciMinuteCost: 0.008,
   developerHourCost: 75,
   investigationMinutes: 15,
+  trackerEnabled: false,
+  // Long enough that a test which flakes once on a bad afternoon does not earn a ticket,
+  // short enough that a real one is filed while the change that caused it is still recent.
+  trackerAfterDays: 3,
+  trackerRecoveryDays: 7,
 } as const
 
 export type ProjectPolicyValues = {
@@ -24,6 +29,9 @@ export type ProjectPolicyValues = {
   ciMinuteCost: number
   developerHourCost: number
   investigationMinutes: number
+  trackerEnabled: boolean
+  trackerAfterDays: number
+  trackerRecoveryDays: number
 }
 
 export const POLICY_FIELDS = [
@@ -37,6 +45,9 @@ export const POLICY_FIELDS = [
   'ciMinuteCost',
   'developerHourCost',
   'investigationMinutes',
+  'trackerEnabled',
+  'trackerAfterDays',
+  'trackerRecoveryDays',
 ] as const
 
 export type PolicyField = (typeof POLICY_FIELDS)[number]
@@ -53,6 +64,9 @@ export const projectPolicyInputSchema = z
     ciMinuteCost: z.number().min(0).nullable(),
     developerHourCost: z.number().min(0).nullable(),
     investigationMinutes: z.number().int().min(0).nullable(),
+    trackerEnabled: z.boolean().nullable(),
+    trackerAfterDays: z.number().int().min(1).nullable(),
+    trackerRecoveryDays: z.number().int().min(1).nullable(),
   })
   .strict()
   .partial()
@@ -75,6 +89,9 @@ export type EffectiveProjectPolicy = {
   ciMinuteCost: ResolvedPolicyField<number>
   developerHourCost: ResolvedPolicyField<number>
   investigationMinutes: ResolvedPolicyField<number>
+  trackerEnabled: ResolvedPolicyField<boolean>
+  trackerAfterDays: ResolvedPolicyField<number>
+  trackerRecoveryDays: ResolvedPolicyField<number>
 }
 
 export type PolicyOverrides = Partial<{ [K in PolicyField]: ProjectPolicyValues[K] | null }>
@@ -106,6 +123,9 @@ export const resolveProjectPolicy = (layers: PolicyLayers): EffectiveProjectPoli
   ciMinuteCost: resolveField('ciMinuteCost', layers),
   developerHourCost: resolveField('developerHourCost', layers),
   investigationMinutes: resolveField('investigationMinutes', layers),
+  trackerEnabled: resolveField('trackerEnabled', layers),
+  trackerAfterDays: resolveField('trackerAfterDays', layers),
+  trackerRecoveryDays: resolveField('trackerRecoveryDays', layers),
 })
 
 export const normalizePolicyOverrides = (

@@ -57,6 +57,10 @@ export default async function TestDetailPage({
   const canSplit = access.role === 'owner' || access.role === 'admin'
 
   const test = await getTest(prisma, projectId, testId, HISTORY_LIMIT)
+  const tracker = await prisma.trackerIssue.findUnique({
+    where: { testIdentityId: testId },
+    select: { url: true, externalId: true, state: true },
+  })
   if (!test) notFound()
 
   const project = await prisma.project.findUnique({
@@ -121,6 +125,14 @@ export default async function TestDetailPage({
             <ScoreBadge score={test.score} />
           </div>
           {test.quarantined ? <span className="pill pill-quarantined">quarantined</span> : null}
+          {tracker ? (
+            <div style={{ marginTop: '0.4rem', fontSize: '0.82rem' }}>
+              <a href={tracker.url} target="_blank" rel="noreferrer">
+                #{tracker.externalId}
+              </a>{' '}
+              <span className="muted">({tracker.state})</span>
+            </div>
+          ) : null}
         </div>
       </div>
 
