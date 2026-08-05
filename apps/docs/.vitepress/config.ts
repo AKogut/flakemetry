@@ -75,6 +75,7 @@ export default defineConfig({
           items: [
             { text: 'Configuration', link: '/reference/configuration' },
             { text: 'API reference', link: '/reference/api' },
+            { text: 'Data governance', link: '/reference/data-governance' },
             { text: 'Threat model', link: '/reference/threat-model' },
           ],
         },

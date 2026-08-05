@@ -13,15 +13,18 @@ import {
 import {
   mergeIdentities,
   recordRcaFeedback,
+  requestErasure,
   setClusterKnownIssue,
   splitIdentity,
   unmergeIdentity,
   updateProjectPolicy as persistProjectPolicy,
 } from '@flakemetry/queries'
+import { orgArtifactPrefix, projectArtifactPrefix } from '@flakemetry/storage'
 import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
+import { checkErasureRequest, type ErasureRefusal } from './erasure-guard'
 import { NOTIFY_EVENTS } from './notify-events'
 import { requireUser } from './session'
 import { requireProjectAccess } from './tenant'
@@ -376,6 +379,76 @@ export const updateClusterKnownIssue = async (formData: FormData): Promise<void>
   await setClusterKnownIssue(prisma, projectId, clusterId, knownIssueRef)
 
   revalidatePath(`/projects/${projectId}/tests/${testId}`)
+}
+
+const refuseErasure = (refusal: ErasureRefusal | null, subject: string, expected: string): void => {
+  if (refusal === 'not-owner') {
+    throw new Error(`only the workspace owner can delete a ${subject}`)
+  }
+  if (refusal === 'confirmation-mismatch') {
+    throw new Error(`type ${expected} to confirm the deletion`)
+  }
+}
+
+export const requestProjectErasure = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+
+  refuseErasure(
+    checkErasureRequest({
+      role: project.role,
+      typed: String(formData.get('confirm') ?? ''),
+      expected: project.slug,
+    }),
+    'project',
+    project.slug,
+  )
+
+  await requestErasure(prisma, {
+    target: {
+      kind: 'project',
+      id: project.id,
+      orgId: project.orgId,
+      artifactPrefix: projectArtifactPrefix(project.orgId, project.id),
+    },
+    subject: `project "${project.name}" (${project.slug})`,
+    actor: user.email ?? user.id,
+    actorUserId: user.id,
+  })
+
+  revalidatePath(`/projects/${projectId}/settings/data`)
+  redirect(`/projects/${projectId}/settings/data?requested=project`)
+}
+
+export const requestWorkspaceErasure = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+
+  refuseErasure(
+    checkErasureRequest({
+      role: project.role,
+      typed: String(formData.get('confirm') ?? ''),
+      expected: project.orgSlug,
+    }),
+    'workspace',
+    project.orgSlug,
+  )
+
+  await requestErasure(prisma, {
+    target: {
+      kind: 'org',
+      id: project.orgId,
+      orgId: project.orgId,
+      artifactPrefix: orgArtifactPrefix(project.orgId),
+    },
+    subject: `workspace "${project.orgName}" (${project.orgSlug})`,
+    actor: user.email ?? user.id,
+    actorUserId: user.id,
+  })
+
+  redirect('/projects')
 }
 
 export const submitRcaFeedback = async (formData: FormData): Promise<void> => {

@@ -205,7 +205,7 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     badgeHandler(request, reply, request.url.endsWith('.json') ? 'json' : 'svg'),
   )
 
-  registerReadApi(app, { prisma, limiter })
+  registerReadApi(app, { prisma, limiter, store: options.store ?? null })
 
   void app.register(fastifyTRPCPlugin, {
     prefix: '/trpc',

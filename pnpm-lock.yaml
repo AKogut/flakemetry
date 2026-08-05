@@ -478,6 +478,9 @@ importers:
       '@flakemetry/eslint-config':
         specifier: workspace:*
         version: link:../eslint-config
+      '@flakemetry/storage':
+        specifier: workspace:*
+        version: link:../storage
       '@flakemetry/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig

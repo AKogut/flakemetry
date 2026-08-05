@@ -23,10 +23,10 @@ Security model for a self-hosted Flakemetry instance. Scope: the ingestion API, 
 |---|---|---|
 | **Spoofing** | Forged ingest requests | Bearer token, looked up by SHA-256 hash (no plaintext compare); unknown/revoked tokens rejected. Dashboard requires an authenticated session. |
 | **Tampering** | Cross-tenant writes; malicious payloads | Every read/write is scoped by `orgId` + `projectId`; ingest is validated against zod contracts before enqueue. Migrations are additive. |
-| **Repudiation** | Untraceable policy changes | Policy changes are recorded with actor and timestamp; the `authorization` header is redacted in logs. |
+| **Repudiation** | Untraceable policy changes; an export or deletion nobody can account for | Policy changes are recorded with actor and timestamp; the `authorization` header is redacted in logs. Every export and every erasure writes an audit row naming the actor, which deliberately has no foreign key to the tenant so a deletion cannot take its own record with it. |
 | **Information disclosure** | Reading another tenant's data or artifacts | Tenant scoping on all queries; artifact keys are tenant-prefixed and served only through short-lived signed URLs. Auth cookies are `httpOnly` + `secure` (prod) + `sameSite`. |
 | **Denial of service** | Request floods, oversized/compressed bodies, ReDoS, alert/LLM abuse | Per-token fixed-window rate limiting with `Retry-After`; queue-depth backpressure (`503`); an 8 MB body limit that also bounds the decompressed gzip stream, plus an explicit 16 MB decompression ceiling as defense-in-depth; the CODEOWNERS glob compiler collapses adjacent wildcards and caps pattern length/count; the notification dedupe window and per-project daily LLM token cap bound outbound cost. |
-| **Elevation of privilege** | A viewer changing settings | Owner/admin role checks on token, policy, and notification management. |
+| **Elevation of privilege** | A viewer changing settings; a read credential becoming a write one | Owner/admin role checks on token, policy, and notification management; tenant deletion is owner-only and needs the slug typed, checked server-side. The bulk export omits ingest token hashes, webhook signing secrets and the badge token, so a `read` credential cannot be turned into one that writes. |
 
 ## Attacker-controllable input, and how it is contained
 
