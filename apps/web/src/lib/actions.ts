@@ -4,7 +4,12 @@ import { randomUUID } from 'node:crypto'
 
 import { projectPolicyInputSchema, TOKEN_SCOPES } from '@flakemetry/contracts'
 import { generateToken, getPrismaClient, hashToken } from '@flakemetry/db'
-import { isEmailAddress, isSafeWebhookUrl, isValidRepository } from '@flakemetry/notify'
+import {
+  generateWebhookSecret,
+  isEmailAddress,
+  isSafeWebhookUrl,
+  isValidRepository,
+} from '@flakemetry/notify'
 import {
   mergeIdentities,
   recordRcaFeedback,
@@ -171,7 +176,7 @@ export const revokeIngestToken = async (formData: FormData): Promise<void> => {
   revalidatePath(`/projects/${projectId}/settings/tokens`)
 }
 
-const CHANNEL_KINDS = ['slack', 'discord', 'email']
+const CHANNEL_KINDS = ['slack', 'discord', 'email', 'webhook']
 
 const isValidTarget = (kind: string, target: string): boolean =>
   kind === 'email' ? isEmailAddress(target) : isSafeWebhookUrl(target)
@@ -195,6 +200,9 @@ export const createNotificationChannel = async (formData: FormData): Promise<voi
       projectId,
       kind,
       target,
+      // Generated here, never taken from the form. A caller-chosen signing secret is one
+      // the caller can also forge deliveries with.
+      ...(kind === 'webhook' ? { secret: generateWebhookSecret() } : {}),
       events: events.length > 0 ? events : NOTIFY_EVENTS,
     },
   })

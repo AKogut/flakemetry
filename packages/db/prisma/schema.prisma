@@ -175,6 +175,7 @@ model NotificationChannel {
   projectId String   @map("project_id") @db.Uuid
   kind      String
   target    String
+  secret    String?
   events    String[]
   enabled   Boolean  @default(true)
   source    String   @default("dashboard")
