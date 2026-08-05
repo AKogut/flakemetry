@@ -44,6 +44,7 @@ export default defineConfig({
             { text: 'Tracker issues', link: '/guide/tracker' },
             { text: 'Which change caused it', link: '/guide/bisect' },
             { text: 'Health badges', link: '/guide/badges' },
+            { text: 'Webhooks', link: '/guide/webhooks' },
           ],
         },
         {

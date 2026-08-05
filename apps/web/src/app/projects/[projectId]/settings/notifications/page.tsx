@@ -28,7 +28,15 @@ export default async function NotificationsPage({
   const channels = await prisma.notificationChannel.findMany({
     where: { projectId },
     orderBy: { createdAt: 'asc' },
-    select: { id: true, kind: true, target: true, events: true, enabled: true, source: true },
+    select: {
+      id: true,
+      kind: true,
+      target: true,
+      secret: true,
+      events: true,
+      enabled: true,
+      source: true,
+    },
   })
 
   const maskTarget = (target: string): string =>
@@ -71,6 +79,14 @@ export default async function NotificationsPage({
                 <tr key={channel.id}>
                   <td className="mono">
                     {channel.kind}
+                    {channel.secret ? (
+                      <div
+                        className="mono muted"
+                        style={{ fontSize: '0.72rem', wordBreak: 'break-all' }}
+                      >
+                        {channel.secret}
+                      </div>
+                    ) : null}
                     {channel.source === 'config' ? (
                       <span className="pill pill-candidate" style={{ marginLeft: '0.5rem' }}>
                         flakemetry.yml
@@ -119,6 +135,7 @@ export default async function NotificationsPage({
                   <option value="slack">Slack</option>
                   <option value="discord">Discord</option>
                   <option value="email">Email</option>
+                  <option value="webhook">Signed webhook</option>
                 </select>
               </div>
             </div>
