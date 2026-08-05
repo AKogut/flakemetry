@@ -204,6 +204,7 @@ describe.skipIf(!hasDb)('query api', () => {
       orgId: ctx.orgId,
       projectId: ctx.projectId,
       tokenId: 't',
+      scopes: ['ingest', 'read'],
     }).runs.list({ limit: 20 })
 
     expect(result.items).toHaveLength(2)
@@ -219,7 +220,12 @@ describe.skipIf(!hasDb)('query api', () => {
 
   it('paginates runs via cursor', async () => {
     const ctx = await seed()
-    const api = caller({ orgId: ctx.orgId, projectId: ctx.projectId, tokenId: 't' })
+    const api = caller({
+      orgId: ctx.orgId,
+      projectId: ctx.projectId,
+      tokenId: 't',
+      scopes: ['ingest', 'read'],
+    })
     const first = await api.runs.list({ limit: 1 })
     expect(first.items).toHaveLength(1)
     expect(first.nextCursor).not.toBeNull()
@@ -235,6 +241,7 @@ describe.skipIf(!hasDb)('query api', () => {
       orgId: ctx.orgId,
       projectId: ctx.projectId,
       tokenId: 't',
+      scopes: ['ingest', 'read'],
     }).run.get({ runId: ctx.run1Id })
     expect(detail.executions).toHaveLength(2)
     const failing = detail.executions.find((execution) => execution.status === 'fail')
@@ -251,6 +258,7 @@ describe.skipIf(!hasDb)('query api', () => {
       orgId: ctx.orgId,
       projectId: ctx.projectId,
       tokenId: 't',
+      scopes: ['ingest', 'read'],
     }).test.get({ testIdentityId: ctx.flakyId, historyLimit: 50 })
     expect(test.score).toBeCloseTo(0.82)
     expect(test.reasonCodes[0]?.code).toBe('SAME_SHA_VARIANCE')
@@ -261,7 +269,12 @@ describe.skipIf(!hasDb)('query api', () => {
 
   it('ranks the flaky board by score and hides low scores when filtered', async () => {
     const ctx = await seed()
-    const api = caller({ orgId: ctx.orgId, projectId: ctx.projectId, tokenId: 't' })
+    const api = caller({
+      orgId: ctx.orgId,
+      projectId: ctx.projectId,
+      tokenId: 't',
+      scopes: ['ingest', 'read'],
+    })
     const all = await api.flaky.board({ limit: 20, minScore: 0, includeQuarantined: true })
     expect(all.items[0]?.testIdentityId).toBe(ctx.flakyId)
 
@@ -272,7 +285,12 @@ describe.skipIf(!hasDb)('query api', () => {
 
   it('returns an rca report or null', async () => {
     const ctx = await seed()
-    const api = caller({ orgId: ctx.orgId, projectId: ctx.projectId, tokenId: 't' })
+    const api = caller({
+      orgId: ctx.orgId,
+      projectId: ctx.projectId,
+      tokenId: 't',
+      scopes: ['ingest', 'read'],
+    })
     const report = await api.rca.get({ executionId: ctx.failExecId })
     expect(report?.likelyCause).toBe('Slow upstream')
 

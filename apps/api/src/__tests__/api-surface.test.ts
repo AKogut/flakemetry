@@ -7,6 +7,7 @@ import type { PrismaClient } from '@flakemetry/db'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { buildApp } from '../app'
+import { READ_ROUTES } from '../rest'
 import { appRouter } from '../trpc/router'
 
 const app = buildApp({ prisma: {} as unknown as PrismaClient, store: null })
@@ -27,9 +28,12 @@ const declaredPaths = (): string[] => {
     resolve(dirname(fileURLToPath(import.meta.url)), '..', 'app.ts'),
     'utf8',
   )
-  return [...source.matchAll(/\bapp\.(?:get|post|put|patch|delete)\(\s*'([^']+)'/g)].map(
+  const inApp = [...source.matchAll(/\bapp\.(?:get|post|put|patch|delete)\(\s*'([^']+)'/g)].map(
     (match) => match[1]!,
   )
+  // The read API registers its routes from a table in rest.ts rather than inline, so a scan
+  // of app.ts alone would let every one of them escape this check entirely.
+  return [...inApp, ...READ_ROUTES.map((route) => route.path), '/openapi.json']
 }
 
 describe('documented API surface', () => {

@@ -41,3 +41,15 @@ export type RunStatus = z.infer<typeof runStatusSchema>
 export type CiProvider = z.infer<typeof ciProviderSchema>
 export type RunTrigger = z.infer<typeof runTriggerSchema>
 export type JsonRecord = z.infer<typeof jsonRecordSchema>
+
+/**
+ * What a project token is allowed to do. `ingest` writes results; `read` serves the public
+ * REST API. They are separate so a credential handed to a script or a dashboard cannot also
+ * forge test data.
+ */
+export const TOKEN_SCOPES = ['ingest', 'read'] as const
+
+export type TokenScope = (typeof TOKEN_SCOPES)[number]
+
+export const isTokenScope = (value: string): value is TokenScope =>
+  (TOKEN_SCOPES as readonly string[]).includes(value)
