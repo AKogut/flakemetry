@@ -2,6 +2,13 @@ import { writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+const AUTH_LABELS: Record<string, string> = {
+  none: 'none',
+  'ingest-token': 'project token with the `ingest` scope (`Authorization: Bearer …`)',
+  'read-token': 'project token with the `read` scope (`Authorization: Bearer …`)',
+  'any-token': 'project token with either scope (`Authorization: Bearer …`)',
+}
+
 import { REST_ENDPOINTS, type RestEndpoint, TRPC_PROCEDURES } from '@flakemetry/contracts'
 import type { ZodTypeAny } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
@@ -66,7 +73,7 @@ const endpointSection = (endpoint: RestEndpoint): string => {
     '',
     endpoint.summary,
     '',
-    `**Auth:** ${endpoint.auth === 'none' ? 'none' : 'project ingest token (`Authorization: Bearer …`)'}`,
+    `**Auth:** ${AUTH_LABELS[endpoint.auth]}`,
     '',
     `**Returns:** ${endpoint.response}`,
     '',

@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'node:crypto'
 
-import { projectPolicyInputSchema } from '@flakemetry/contracts'
+import { projectPolicyInputSchema, TOKEN_SCOPES } from '@flakemetry/contracts'
 import { generateToken, getPrismaClient, hashToken } from '@flakemetry/db'
 import { isEmailAddress, isSafeWebhookUrl, isValidRepository } from '@flakemetry/notify'
 import {
@@ -127,9 +127,20 @@ export const createIngestToken = async (formData: FormData): Promise<void> => {
   const project = await requireProjectAccess(user.id, projectId)
   if (!canManage(project.role)) throw new Error('only owners and admins can manage ingest tokens')
 
+  // Default to ingest alone. A token created without a deliberate choice should be able to
+  // do the one thing tokens have always done, not everything the API offers.
+  const requested = formData.getAll('scopes').map(String)
+  const scopes = TOKEN_SCOPES.filter((scope) => requested.includes(scope))
+
   const raw = generateToken()
   await prisma.ingestToken.create({
-    data: { orgId: project.orgId, projectId: project.id, name, tokenHash: hashToken(raw) },
+    data: {
+      orgId: project.orgId,
+      projectId: project.id,
+      name,
+      tokenHash: hashToken(raw),
+      scopes: scopes.length > 0 ? scopes : ['ingest'],
+    },
   })
 
   const store = await cookies()

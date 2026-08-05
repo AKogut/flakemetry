@@ -35,8 +35,9 @@ import Fastify, {
   type FastifyServerOptions,
 } from 'fastify'
 
-import { authenticateProject } from './auth'
+import { authenticateProject, hasScope } from './auth'
 import { createRateLimiter } from './rate-limit'
+import { registerReadApi } from './rest'
 import { apiMetrics } from './telemetry'
 import { createContextFactory } from './trpc/context'
 import { appRouter } from './trpc/router'
@@ -204,6 +205,8 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     badgeHandler(request, reply, request.url.endsWith('.json') ? 'json' : 'svg'),
   )
 
+  registerReadApi(app, { prisma, limiter })
+
   void app.register(fastifyTRPCPlugin, {
     prefix: '/trpc',
     trpcOptions: { router: appRouter, createContext: createContextFactory(prisma, limiter) },
@@ -221,6 +224,11 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     const project = await authenticateProject(prisma, request)
     if (!project) {
       return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
+    }
+    if (!hasScope(project, 'ingest')) {
+      return reply
+        .code(403)
+        .send({ error: 'insufficient_scope', message: 'this endpoint needs the "ingest" scope' })
     }
 
     const admission = await admit(project.projectId)
@@ -262,6 +270,11 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     const project = await authenticateProject(prisma, request)
     if (!project) {
       return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
+    }
+    if (!hasScope(project, 'ingest')) {
+      return reply
+        .code(403)
+        .send({ error: 'insufficient_scope', message: 'this endpoint needs the "ingest" scope' })
     }
 
     const admission = await admit(project.projectId)
@@ -325,6 +338,11 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     if (!project) {
       return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
     }
+    if (!hasScope(project, 'ingest')) {
+      return reply
+        .code(403)
+        .send({ error: 'insufficient_scope', message: 'this endpoint needs the "ingest" scope' })
+    }
 
     if (rateLimited(project.projectId, reply)) {
       return reply.code(429).send({ error: 'rate_limited' })
@@ -383,6 +401,11 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     if (!project) {
       return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
     }
+    // A summary is a read. Accepting either scope keeps the PR-comment action working with
+    // the ingest token it already has, while a read-only token can fetch it too.
+    if (!hasScope(project, 'ingest') && !hasScope(project, 'read')) {
+      return reply.code(403).send({ error: 'insufficient_scope' })
+    }
 
     if (rateLimited(project.projectId, reply)) {
       return reply.code(429).send({ error: 'rate_limited' })
@@ -403,6 +426,11 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     const project = await authenticateProject(prisma, request)
     if (!project) {
       return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
+    }
+    if (!hasScope(project, 'ingest')) {
+      return reply
+        .code(403)
+        .send({ error: 'insufficient_scope', message: 'this endpoint needs the "ingest" scope' })
     }
 
     if (rateLimited(project.projectId, reply)) {
@@ -427,6 +455,11 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     const project = await authenticateProject(prisma, request)
     if (!project) {
       return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
+    }
+    if (!hasScope(project, 'ingest')) {
+      return reply
+        .code(403)
+        .send({ error: 'insufficient_scope', message: 'this endpoint needs the "ingest" scope' })
     }
 
     if (rateLimited(project.projectId, reply)) {
@@ -462,6 +495,9 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     if (!project) {
       return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
     }
+    if (!hasScope(project, 'ingest') && !hasScope(project, 'read')) {
+      return reply.code(403).send({ error: 'insufficient_scope' })
+    }
 
     if (rateLimited(project.projectId, reply)) {
       return reply.code(429).send({ error: 'rate_limited' })
@@ -492,6 +528,11 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     const project = await authenticateProject(prisma, request)
     if (!project) {
       return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
+    }
+    if (!hasScope(project, 'ingest')) {
+      return reply
+        .code(403)
+        .send({ error: 'insufficient_scope', message: 'this endpoint needs the "ingest" scope' })
     }
 
     const admission = await admit(project.projectId)

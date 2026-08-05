@@ -16,7 +16,7 @@ import {
   testHealthInputSchema,
 } from './query'
 
-export type RestAuth = 'none' | 'ingest-token'
+export type RestAuth = 'none' | 'ingest-token' | 'read-token' | 'any-token'
 
 export interface RestEndpoint {
   method: 'GET' | 'POST' | 'PUT'
@@ -100,6 +100,55 @@ export const REST_ENDPOINTS: readonly RestEndpoint[] = [
       'Upload notification routing from `flakemetry.yml`, replacing the config-managed channels.',
     auth: 'ingest-token',
     response: '`{ ok: true, channels }`',
+  },
+  {
+    method: 'GET',
+    path: '/openapi.json',
+    summary: 'Machine-readable description of the read API, generated from the route table.',
+    auth: 'none',
+    response: 'An OpenAPI 3.1 document',
+  },
+  {
+    method: 'GET',
+    path: '/v1/runs',
+    summary: 'List runs newest first, cursor-paginated.',
+    auth: 'read-token',
+    response: '`{ items, nextCursor }`',
+  },
+  {
+    method: 'GET',
+    path: '/v1/runs/:runId',
+    summary: 'One run with its execution counts.',
+    auth: 'read-token',
+    response: 'A run, or `404`',
+  },
+  {
+    method: 'GET',
+    path: '/v1/tests/:testIdentityId',
+    summary: 'One test identity with its recent execution history.',
+    auth: 'read-token',
+    response: 'A test identity, or `404`',
+  },
+  {
+    method: 'GET',
+    path: '/v1/flaky',
+    summary: 'The flaky board: scored tests, worst first.',
+    auth: 'read-token',
+    response: '`{ items }`',
+  },
+  {
+    method: 'GET',
+    path: '/v1/executions/:executionId/rca',
+    summary: 'Root-cause analysis for one execution, when there is one.',
+    auth: 'read-token',
+    response: 'An RCA report, or `null`',
+  },
+  {
+    method: 'GET',
+    path: '/v1/health',
+    summary: 'Project health metrics over a window.',
+    auth: 'read-token',
+    response: 'Health metrics',
   },
 ]
 

@@ -50,6 +50,14 @@ export default async function TokensPage({ params }: { params: Promise<{ project
         <form action={createIngestToken} style={{ display: 'flex', gap: '0.75rem' }}>
           <input type="hidden" name="projectId" value={projectId} />
           <input name="name" placeholder="Token name (e.g. github-actions)" />
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+            <input type="checkbox" name="scopes" value="ingest" defaultChecked />
+            ingest
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+            <input type="checkbox" name="scopes" value="read" />
+            read
+          </label>
           <button className="btn" type="submit" style={{ whiteSpace: 'nowrap' }}>
             Create token
           </button>
