@@ -1,4 +1,5 @@
 export * from './artifacts'
+export * from './bisect'
 export * from './cluster'
 export * from './cost'
 export * from './feedback'
