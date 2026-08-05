@@ -82,6 +82,13 @@ describe.skipIf(!hasDb)('trend rollups', () => {
     expect(suite.failed).toBe(1)
     expect(suite.avgDurationMs).toBe(1600)
 
+    // Only the second attempt is waste. The first would have run either way, so counting
+    // the whole 3200ms would inflate every cost figure built on this column.
+    expect(daily.rerunCount).toBe(1)
+    expect(daily.rerunMs).toBe(1400)
+    expect(suite.rerunCount).toBe(1)
+    expect(suite.rerunMs).toBe(1400)
+
     const trend = await prisma.flakyTrends.findFirstOrThrow()
     expect(trend.flakyCount).toBeGreaterThanOrEqual(0)
   })

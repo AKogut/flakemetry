@@ -110,6 +110,66 @@ const SIGNATURES = {
 
 const forced = process.argv.includes('--force') || process.env.FLAKEMETRY_SEED_FORCE === '1'
 
+/**
+ * The seed writes executions straight to the database, which skips the worker — and the
+ * worker is what materializes the rollups. Every rollup-backed page therefore opened empty
+ * on the demo dataset: suite health, the trends, and the cost panel. Building them here from
+ * the rows just inserted keeps the demo showing the product rather than a set of blank cards.
+ */
+async function materializeRollups() {
+  await prisma.$executeRawUnsafe(`
+    INSERT INTO daily_test_stats (
+      project_id, org_id, test_identity_id, day,
+      total, passed, failed, flaky, skipped, avg_duration_ms, rerun_count, rerun_ms, updated_at
+    )
+    SELECT e.project_id, e.org_id, e.test_identity_id, date_trunc('day', e.started_at)::date,
+      COUNT(*)::int,
+      COUNT(*) FILTER (WHERE e.status = 'pass')::int,
+      COUNT(*) FILTER (WHERE e.status = 'fail')::int,
+      COUNT(*) FILTER (WHERE e.status = 'flaky')::int,
+      COUNT(*) FILTER (WHERE e.status = 'skip')::int,
+      COALESCE(ROUND(AVG(e.duration_ms)), 0)::int,
+      COUNT(*) FILTER (WHERE e.attempt > 1)::int,
+      COALESCE(SUM(e.duration_ms) FILTER (WHERE e.attempt > 1), 0)::int,
+      now()
+    FROM test_execution e
+    GROUP BY e.project_id, e.org_id, e.test_identity_id, date_trunc('day', e.started_at)::date
+    ON CONFLICT (test_identity_id, day) DO NOTHING
+  `)
+
+  await prisma.$executeRawUnsafe(`
+    INSERT INTO suite_daily (
+      project_id, org_id, suite, day,
+      total, passed, failed, flaky, skipped, avg_duration_ms, rerun_count, rerun_ms, updated_at
+    )
+    SELECT e.project_id, e.org_id, i.suite, date_trunc('day', e.started_at)::date,
+      COUNT(*)::int,
+      COUNT(*) FILTER (WHERE e.status = 'pass')::int,
+      COUNT(*) FILTER (WHERE e.status = 'fail')::int,
+      COUNT(*) FILTER (WHERE e.status = 'flaky')::int,
+      COUNT(*) FILTER (WHERE e.status = 'skip')::int,
+      COALESCE(ROUND(AVG(e.duration_ms)), 0)::int,
+      COUNT(*) FILTER (WHERE e.attempt > 1)::int,
+      COALESCE(SUM(e.duration_ms) FILTER (WHERE e.attempt > 1), 0)::int,
+      now()
+    FROM test_execution e
+    JOIN test_identity i ON i.id = e.test_identity_id
+    GROUP BY e.project_id, e.org_id, i.suite, date_trunc('day', e.started_at)::date
+    ON CONFLICT (project_id, suite, day) DO NOTHING
+  `)
+
+  await prisma.$executeRawUnsafe(`
+    INSERT INTO flaky_trends (project_id, org_id, day, flaky_count, quarantined_count, avg_score, updated_at)
+    SELECT d.project_id, d.org_id, d.day,
+      (SELECT COUNT(*)::int FROM flaky_score s WHERE s.project_id = d.project_id AND s.quarantine_candidate),
+      (SELECT COUNT(*)::int FROM test_identity t WHERE t.project_id = d.project_id AND t.quarantined),
+      COALESCE((SELECT AVG(s.score) FROM flaky_score s WHERE s.project_id = d.project_id), 0),
+      now()
+    FROM (SELECT DISTINCT project_id, org_id, day FROM daily_test_stats) d
+    ON CONFLICT (project_id, day) DO NOTHING
+  `)
+}
+
 async function main() {
   if (!forced && (await prisma.org.count()) > 0) {
     process.stdout.write(
@@ -319,6 +379,14 @@ async function main() {
         modelVersion: '0.1.0',
       },
     })
+
+    // Actually quarantine the worst offender rather than only flagging it a candidate.
+    // Without this the demo never shows what quarantine does — no lock on the flaky board,
+    // and nothing credited back on the cost panel.
+    await prisma.testIdentity.update({
+      where: { id: loginIdentity.id },
+      data: { quarantined: true, quarantineReason: 'auto: flaky score above threshold' },
+    })
   }
 
   if (paymentIdentity) {
@@ -361,6 +429,8 @@ async function main() {
       },
     })
   }
+
+  await materializeRollups()
 
   const counts = {
     orgs: await prisma.org.count(),

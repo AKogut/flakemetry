@@ -1,5 +1,6 @@
 export * from './artifacts'
 export * from './cluster'
+export * from './cost'
 export * from './feedback'
 export * from './flaky'
 export * from './gate'

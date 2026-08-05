@@ -40,6 +40,7 @@ export default defineConfig({
             { text: 'Self-hosting', link: '/guide/self-hosting' },
             { text: 'Integrating a project', link: '/guide/integrate' },
             { text: 'Your first insight', link: '/guide/first-insight' },
+            { text: 'Cost of flakiness', link: '/guide/cost' },
           ],
         },
         {

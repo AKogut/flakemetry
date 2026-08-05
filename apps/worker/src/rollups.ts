@@ -80,6 +80,26 @@ const rollupDay = async (
 ): Promise<void> => {
   const end = new Date(day.getTime() + DAY_MS)
 
+  // One query for the whole day rather than one per test: an attempt beyond the first
+  // exists only because an earlier one failed, so this is measured waste, not an estimate.
+  const rerunRows = await prisma.testExecution.groupBy({
+    by: ['testIdentityId'],
+    where: {
+      projectId: ctx.projectId,
+      startedAt: { gte: day, lt: end },
+      attempt: { gt: 1 },
+      testIdentityId: { in: [...testIdentityIds] },
+    },
+    _count: { _all: true },
+    _sum: { durationMs: true },
+  })
+  const rerunByIdentity = new Map(
+    rerunRows.map((row) => [
+      row.testIdentityId,
+      { count: row._count._all, ms: row._sum.durationMs ?? 0 },
+    ]),
+  )
+
   for (const testIdentityId of testIdentityIds) {
     const grouped = await prisma.testExecution.groupBy({
       by: ['status'],
@@ -105,6 +125,8 @@ const rollupDay = async (
       flaky: bucket.flaky,
       skipped: bucket.skipped,
       avgDurationMs: avg(bucket.sumDuration, bucket.total),
+      rerunCount: rerunByIdentity.get(testIdentityId)?.count ?? 0,
+      rerunMs: rerunByIdentity.get(testIdentityId)?.ms ?? 0,
     }
     await prisma.dailyTestStats.upsert({
       where: { testIdentityId_day: { testIdentityId, day } },
@@ -114,6 +136,18 @@ const rollupDay = async (
   }
 
   for (const suite of suites) {
+    // Scoped by suite rather than summed from the loop above: that loop only covers the
+    // identities this run touched, while a suite rollup has to cover the whole suite.
+    const suiteReruns = await prisma.testExecution.aggregate({
+      where: {
+        projectId: ctx.projectId,
+        startedAt: { gte: day, lt: end },
+        attempt: { gt: 1 },
+        identity: { suite },
+      },
+      _count: { _all: true },
+      _sum: { durationMs: true },
+    })
     const grouped = await prisma.testExecution.groupBy({
       by: ['status'],
       where: {
@@ -141,6 +175,8 @@ const rollupDay = async (
       flaky: bucket.flaky,
       skipped: bucket.skipped,
       avgDurationMs: avg(bucket.sumDuration, bucket.total),
+      rerunCount: suiteReruns._count._all,
+      rerunMs: suiteReruns._sum.durationMs ?? 0,
     }
     await prisma.suiteDaily.upsert({
       where: { projectId_suite_day: { projectId: ctx.projectId, suite, day } },
