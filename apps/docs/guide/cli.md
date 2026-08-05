@@ -6,6 +6,61 @@ shell. Run it with `npx flakemetry <command>` or install it as a dev dependency.
 All commands read `FLAKEMETRY_ENDPOINT` and `FLAKEMETRY_TOKEN` from the environment;
 `--endpoint` and `--token` override them.
 
+## `flakemetry run -- <command>`
+
+Runs a test command, uploads whatever the reporter wrote, and exits with the command's own
+code.
+
+```bash
+flakemetry run -- pnpm test
+```
+
+Two guarantees, and they are the reason to use this over two separate steps:
+
+- **The wrapped command's exit code is the exit code.** A failing suite still fails the build.
+- **An upload problem never changes that.** A dead endpoint, an expired token or a network
+  blip warns on stderr and leaves the build's verdict alone. Observability must not become a
+  source of CI failures.
+
+Results are uploaded whether the suite passed or failed — they are most worth having when it
+failed.
+
+If no results file exists, it says so and does nothing. Wrapping a suite whose reporter is not
+configured yet is ordinary, not an error.
+
+## `flakemetry flaky`
+
+Lists flaky tests for the project, worst first. Needs a token with the **`read`** scope — see
+the [read API](/reference/api).
+
+```bash
+flakemetry flaky --limit 10
+flakemetry flaky --quarantined
+flakemetry flaky --min-score 0.7 --owner @acme/web
+flakemetry flaky --json | jq '.[] | select(.score > 0.8) | .title'
+```
+
+`--json` prints the rows unchanged, for scripting.
+
+## `flakemetry doctor`
+
+Checks the configuration file, the endpoint, whether it answers, and what the token is
+allowed to do.
+
+```
+✓ endpoint: https://flakemetry.internal
+✓ reachable: answered 200
+✓ token: present (fmk_…037e)
+! read scope: valid token without the read scope — uploads will work, queries will not
+```
+
+The token is always redacted: this is the command people paste into a chat when something is
+wrong.
+
+A missing **read** scope is a warning, not a failure, and `doctor` still exits `0` — an
+upload-only token is a perfectly good CI setup, and failing would break the pipeline that has
+one. Only a missing endpoint, an unreachable server or a rejected token exit non-zero.
+
 ## `flakemetry upload [file]`
 
 Uploads a reporter output file (default `flakemetry-results.json`) — the JSON a native
