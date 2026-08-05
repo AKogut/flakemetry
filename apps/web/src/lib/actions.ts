@@ -1,5 +1,7 @@
 'use server'
 
+import { randomUUID } from 'node:crypto'
+
 import { projectPolicyInputSchema } from '@flakemetry/contracts'
 import { generateToken, getPrismaClient, hashToken } from '@flakemetry/db'
 import { isEmailAddress, isSafeWebhookUrl, isValidRepository } from '@flakemetry/notify'
@@ -311,6 +313,35 @@ export const updateProjectRepository = async (formData: FormData): Promise<void>
 
   revalidatePath(`/projects/${projectId}/settings/policy`)
   redirect(`/projects/${projectId}/settings/policy?repository=saved`)
+}
+
+export const rotateBadgeToken = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.role)) throw new Error('only owners and admins can manage badges')
+
+  // Rotating invalidates every README already pointing at the old one, which is the point:
+  // the token is a public capability, so revoking it has to be possible.
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { badgeToken: `bdg_${randomUUID()}` },
+  })
+
+  revalidatePath(`/projects/${projectId}/settings/badges`)
+  redirect(`/projects/${projectId}/settings/badges`)
+}
+
+export const disableBadges = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.role)) throw new Error('only owners and admins can manage badges')
+
+  await prisma.project.update({ where: { id: projectId }, data: { badgeToken: null } })
+
+  revalidatePath(`/projects/${projectId}/settings/badges`)
+  redirect(`/projects/${projectId}/settings/badges`)
 }
 
 export const updateClusterKnownIssue = async (formData: FormData): Promise<void> => {

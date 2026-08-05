@@ -81,6 +81,7 @@ Unknown keys are rejected with an error naming the offending path — typos fail
 | `FLAKEMETRY_TRACKER_ENABLED` | `tracker.enabled` |
 | `FLAKEMETRY_TRACKER_AFTER_DAYS` | `tracker.afterDays` |
 | `FLAKEMETRY_TRACKER_RECOVERY_DAYS` | `tracker.recoveryDays` |
+| `FLAKEMETRY_PUBLIC_API_URL` | Base URL printed in badge snippets |
 
 ### Reporter transport (Playwright)
 

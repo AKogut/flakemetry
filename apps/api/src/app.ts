@@ -15,11 +15,17 @@ import {
 } from '@flakemetry/contracts'
 import { IngestionQueue, type PrismaClient } from '@flakemetry/db'
 import {
+  type BadgeVariant,
   type GateStrictness,
+  getBadgeMetrics,
   getPrGate,
   getRunSummaryByCommit,
+  isBadgeVariant,
+  renderBadgeSvg,
   renderGateComment,
   renderPrComment,
+  toBadge,
+  toShieldsJson,
 } from '@flakemetry/queries'
 import { artifactKey, type ObjectStore } from '@flakemetry/storage'
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify'
@@ -138,6 +144,65 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
   }
 
   app.get('/health', async () => ({ status: 'ok', service: 'api' }))
+
+  const BADGE_CACHE_SECONDS = 300
+  const unknownBadge = { label: 'flakemetry', message: 'unknown', color: '#8b949e' }
+
+  /**
+   * Public by design: GitHub's image proxy fetches this with no headers, so the badge token
+   * in the path is the whole authorisation. It is read-only and grants nothing but the four
+   * aggregate numbers below.
+   *
+   * It never returns 5xx. A broken badge in a README is a broken image for every reader of
+   * that page, so an unknown project, a bad variant and a database that is having a bad
+   * moment all render the same grey "unknown" pill instead.
+   */
+  const badgeHandler = async (
+    request: { params: unknown; url: string },
+    reply: FastifyReply,
+    format: 'svg' | 'json',
+  ): Promise<unknown> => {
+    const { token, variant } = request.params as { token?: string; variant?: string }
+
+    const send = (badge: { label: string; message: string; color: string }, status = 200) => {
+      const body = format === 'svg' ? renderBadgeSvg(badge) : JSON.stringify(toShieldsJson(badge))
+      reply.header('cache-control', `public, max-age=${BADGE_CACHE_SECONDS}`)
+      reply.header(
+        'etag',
+        `W/"${Buffer.from(`${badge.label}:${badge.message}`).toString('base64url')}"`,
+      )
+      reply.header(
+        'content-type',
+        format === 'svg' ? 'image/svg+xml; charset=utf-8' : 'application/json; charset=utf-8',
+      )
+      return reply.code(status).send(body)
+    }
+
+    try {
+      const name = (variant ?? 'health').replace(/\.(svg|json)$/, '')
+      if (!token || !isBadgeVariant(name)) return send(unknownBadge)
+
+      if (!limiter.check(`badge:${token}`).allowed) {
+        apiMetrics.rateLimited.add(1)
+        return send(unknownBadge, 429)
+      }
+
+      const project = await prisma.project.findUnique({
+        where: { badgeToken: token },
+        select: { id: true },
+      })
+      if (!project) return send(unknownBadge)
+
+      const metrics = await getBadgeMetrics(prisma, project.id)
+      return send(toBadge(name as BadgeVariant, metrics))
+    } catch {
+      return send(unknownBadge)
+    }
+  }
+
+  app.get('/badge/:token/:variant', async (request, reply) =>
+    badgeHandler(request, reply, request.url.endsWith('.json') ? 'json' : 'svg'),
+  )
 
   void app.register(fastifyTRPCPlugin, {
     prefix: '/trpc',

@@ -43,6 +43,7 @@ export default defineConfig({
             { text: 'Cost of flakiness', link: '/guide/cost' },
             { text: 'Tracker issues', link: '/guide/tracker' },
             { text: 'Which change caused it', link: '/guide/bisect' },
+            { text: 'Health badges', link: '/guide/badges' },
           ],
         },
         {
