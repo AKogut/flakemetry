@@ -7,6 +7,7 @@ Security model for a self-hosted Flakemetry instance. Scope: the ingestion API, 
 - **Test intelligence data** — runs, executions, error signatures, flaky scores, RCA reports. Tenant-scoped; disclosure across tenants is the primary confidentiality concern.
 - **Ingest tokens** — per-project bearer secrets. Stored only as SHA-256 hashes; the raw value is shown once at creation.
 - **User sessions** — Auth.js database sessions behind OAuth.
+- **Workspace invitations** — bearer links granting membership. Stored only as SHA-256 hashes, shown once, single-use, seven-day expiry, revocable. Accepting deliberately does not require the signed-in address to match the invited one (GitHub emails are frequently private or absent); expiry, revocation and single use carry the weight instead.
 - **Artifacts** — screenshots, video, traces, HAR files in the object store, addressed by tenant-scoped keys and served via short-lived signed URLs.
 - **LLM budget** — per-project daily token cap; abuse is a cost/DoS concern.
 
@@ -34,6 +35,7 @@ Security model for a self-hosted Flakemetry instance. Scope: the ingestion API, 
 - **File paths / titles** — flow into the PR-gate comment, which escapes backticks/pipes/newlines; the base-branch ref is charset-validated at the route.
 - **CODEOWNERS** — compiled with a wildcard-collapsing, length/-count-capped matcher (no catastrophic backtracking).
 - **Notification targets** — webhook URLs must be https and are blocked from loopback/private/link-local/metadata ranges; email targets are format-validated; outbound webhook calls carry a timeout.
+- **Post-sign-in destination** — the `next` parameter on `/sign-in` is validated to a plain path on this origin; `//host` and `/\host` are read as protocol-relative URLs by browsers and would turn the sign-in page into an open redirect wearing our domain.
 
 ## Transport hardening
 

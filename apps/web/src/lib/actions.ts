@@ -11,10 +11,21 @@ import {
   isValidRepository,
 } from '@flakemetry/notify'
 import {
+  acceptInvitation,
+  changeMemberRole,
+  checkInvite,
+  checkRemoval,
+  checkRoleChange,
+  countOwners,
+  createInvitation,
   isQuarantineDecision,
+  type MemberRefusal,
+  type MemberRole,
   mergeIdentities,
   recordRcaFeedback,
+  removeMember,
   requestErasure,
+  revokeInvitation,
   setClusterKnownIssue,
   setQuarantine,
   splitIdentity,
@@ -30,7 +41,7 @@ import { checkErasureRequest, type ErasureRefusal } from './erasure-guard'
 import { NOTIFY_EVENTS } from './notify-events'
 import { requireUser } from './session'
 import { requireProjectAccess } from './tenant'
-import { NEW_TOKEN_COOKIE } from './token-cookie'
+import { NEW_INVITE_COOKIE, NEW_TOKEN_COOKIE } from './token-cookie'
 
 const prisma = getPrismaClient()
 
@@ -449,6 +460,131 @@ export const requestWorkspaceErasure = async (formData: FormData): Promise<void>
     actor: user.email ?? user.id,
     actorUserId: user.id,
   })
+
+  redirect('/projects')
+}
+
+const REFUSAL: Record<MemberRefusal, string> = {
+  'not-a-manager': 'only owners and admins can manage members',
+  'owner-only': 'only the workspace owner can do that',
+  'last-owner': 'a workspace has to keep at least one owner',
+  'unknown-role': 'unknown role',
+}
+
+const refuse = (refusal: MemberRefusal | null): void => {
+  if (refusal) throw new Error(REFUSAL[refusal])
+}
+
+export const inviteMember = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const email = String(formData.get('email') ?? '')
+    .trim()
+    .toLowerCase()
+  const role = String(formData.get('role') ?? 'member')
+  const project = await requireProjectAccess(user.id, projectId)
+
+  refuse(checkInvite({ actorRole: project.role, invitedRole: role }))
+  if (!isEmailAddress(email)) throw new Error('an invitation needs an email address')
+
+  const raw = generateToken()
+  await createInvitation(prisma, {
+    orgId: project.orgId,
+    email,
+    role: role as MemberRole,
+    invitedBy: user.id,
+    tokenHash: hashToken(raw),
+  })
+
+  // Same handling as a new ingest token: shown once, over a short-lived httpOnly cookie, so
+  // the link never lands in a URL that a proxy log or a browser history would keep.
+  const store = await cookies()
+  store.set(NEW_INVITE_COOKIE, raw, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: `/projects/${projectId}/settings/members`,
+    maxAge: 120,
+  })
+
+  revalidatePath(`/projects/${projectId}/settings/members`)
+  redirect(`/projects/${projectId}/settings/members?invited=1`)
+}
+
+export const cancelInvitation = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const invitationId = String(formData.get('invitationId') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.role)) throw new Error('only owners and admins can manage members')
+
+  await revokeInvitation(prisma, project.orgId, invitationId)
+
+  revalidatePath(`/projects/${projectId}/settings/members`)
+}
+
+export const updateMemberRole = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const userId = String(formData.get('userId') ?? '')
+  const newRole = String(formData.get('role') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+
+  const target = await prisma.membership.findFirst({
+    where: { orgId: project.orgId, userId },
+    select: { role: true },
+  })
+  if (!target) throw new Error('that person is not in this workspace')
+
+  refuse(
+    checkRoleChange({
+      actorRole: project.role,
+      targetRole: target.role,
+      newRole,
+      ownerCount: await countOwners(prisma, project.orgId),
+    }),
+  )
+
+  await changeMemberRole(prisma, project.orgId, userId, newRole as MemberRole)
+
+  revalidatePath(`/projects/${projectId}/settings/members`)
+}
+
+export const removeMemberFromWorkspace = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const userId = String(formData.get('userId') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+
+  const target = await prisma.membership.findFirst({
+    where: { orgId: project.orgId, userId },
+    select: { role: true },
+  })
+  if (!target) throw new Error('that person is not in this workspace')
+
+  refuse(
+    checkRemoval({
+      actorRole: project.role,
+      targetRole: target.role,
+      ownerCount: await countOwners(prisma, project.orgId),
+    }),
+  )
+
+  await removeMember(prisma, project.orgId, userId)
+
+  // Removing themselves means they can no longer read this page.
+  if (userId === user.id) redirect('/projects')
+  revalidatePath(`/projects/${projectId}/settings/members`)
+}
+
+export const acceptInvite = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const token = String(formData.get('token') ?? '')
+
+  const outcome = await acceptInvitation(prisma, { tokenHash: hashToken(token), userId: user.id })
+  if (outcome.status === 'rejected') {
+    redirect(`/invite/${encodeURIComponent(token)}?error=${outcome.reason}`)
+  }
 
   redirect('/projects')
 }
