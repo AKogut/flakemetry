@@ -4,6 +4,7 @@ import {
   findMergeCandidates,
   getClusterImpact,
   getExecutionCluster,
+  getFlakeBisect,
   getParamBuckets,
   getRca,
   getRcaFeedback,
@@ -57,6 +58,7 @@ export default async function TestDetailPage({
   const canSplit = access.role === 'owner' || access.role === 'admin'
 
   const test = await getTest(prisma, projectId, testId, HISTORY_LIMIT)
+  const bisect = await getFlakeBisect(prisma, projectId, testId)
   const tracker = await prisma.trackerIssue.findUnique({
     where: { testIdentityId: testId },
     select: { url: true, externalId: true, state: true },
@@ -135,6 +137,46 @@ export default async function TestDetailPage({
           ) : null}
         </div>
       </div>
+
+      {bisect.window ? (
+        <div className="card" style={{ marginBottom: '1.25rem' }}>
+          <div className="rca-label">Introduced by</div>
+          {bisect.verdict === 'identified' && bisect.suspects[0] ? (
+            <p style={{ margin: '0.4rem 0' }}>
+              Likely <span className="mono">{bisect.suspects[0].commitSha.slice(0, 10)}</span>
+            </p>
+          ) : (
+            <p style={{ margin: '0.4rem 0' }}>
+              {bisect.verdict === 'narrowed'
+                ? 'Narrowed to a handful of commits.'
+                : 'Could not narrow this down.'}
+            </p>
+          )}
+          <p className="muted" style={{ fontSize: '0.82rem' }}>
+            {bisect.reason}. Last green was{' '}
+            <span className="mono">
+              {bisect.window.lastGoodRun?.commitSha.slice(0, 10) ?? 'unknown'}
+            </span>
+            ; first failure on{' '}
+            <span className="mono">{bisect.window.firstBadRun.commitSha.slice(0, 10)}</span>.
+          </p>
+          {bisect.suspects.length > 1 ? (
+            <p className="muted" style={{ fontSize: '0.8rem' }}>
+              Suspects, newest first:{' '}
+              {bisect.suspects.map((suspect, index) => (
+                <span key={suspect.commitSha}>
+                  {index > 0 ? ', ' : ''}
+                  <span className="mono">{suspect.commitSha.slice(0, 10)}</span>
+                </span>
+              ))}
+            </p>
+          ) : null}
+          <p className="muted" style={{ fontSize: '0.78rem' }}>
+            Ranked by how close each commit ran to the failure. Flakemetry ingests test results, not
+            source control, so it cannot tell which commit touched this file.
+          </p>
+        </div>
+      ) : null}
 
       <div className="card" style={{ marginBottom: '1.25rem' }}>
         <div className="rca-label">Last {timeline.length} executions</div>
