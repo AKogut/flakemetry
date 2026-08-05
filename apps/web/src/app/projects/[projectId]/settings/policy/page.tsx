@@ -16,6 +16,9 @@ const FIELD_LABELS: Record<string, string> = {
   aiRcaEnabled: 'AI root-cause analysis',
   executionRetentionDays: 'Execution retention (days)',
   artifactRetentionDays: 'Artifact retention (days)',
+  ciMinuteCost: 'CI cost per minute',
+  developerHourCost: 'Developer cost per hour',
+  investigationMinutes: 'Minutes lost per interruption',
 }
 
 const formatDateTime = (date: Date): string =>
@@ -75,7 +78,10 @@ export default async function PolicyPage({
       | 'minSamples'
       | 'quarantineCooldownRuns'
       | 'executionRetentionDays'
-      | 'artifactRetentionDays',
+      | 'artifactRetentionDays'
+      | 'ciMinuteCost'
+      | 'developerHourCost'
+      | 'investigationMinutes',
   ): string => (stored[key] === undefined ? '' : String(stored[key]))
   const tristateValue = (key: 'quarantineEnabled' | 'aiRcaEnabled'): string =>
     stored[key] === undefined ? 'inherit' : stored[key] ? 'on' : 'off'
@@ -261,6 +267,66 @@ export default async function PolicyPage({
                 Days stored artifacts are kept for this project. Never expires before execution
                 retention. Blank inherits the global{' '}
                 <span className="mono">FLAKEMETRY_ARTIFACT_RETENTION_DAYS</span>.
+              </p>
+            </div>
+
+            <div className="policy-field">
+              <div>
+                <label htmlFor="ciMinuteCost">{FIELD_LABELS.ciMinuteCost}</label>
+                <input
+                  id="ciMinuteCost"
+                  name="ciMinuteCost"
+                  type="number"
+                  step="0.001"
+                  min="0"
+                  placeholder="inherits FLAKEMETRY_CI_MINUTE_COST"
+                  defaultValue={numberValue('ciMinuteCost')}
+                />
+              </div>
+              <p className="policy-help">
+                What a minute on your runners costs. Drives the CI half of{' '}
+                <a href={`/projects/${projectId}/cost`}>Cost of flakiness</a>. The default is
+                GitHub&apos;s published rate for a 2-core Linux runner; larger runners and
+                self-hosted fleets cost differently, so this is worth setting.
+              </p>
+            </div>
+
+            <div className="policy-field">
+              <div>
+                <label htmlFor="developerHourCost">{FIELD_LABELS.developerHourCost}</label>
+                <input
+                  id="developerHourCost"
+                  name="developerHourCost"
+                  type="number"
+                  step="1"
+                  min="0"
+                  placeholder="inherits FLAKEMETRY_DEVELOPER_HOUR_COST"
+                  defaultValue={numberValue('developerHourCost')}
+                />
+              </div>
+              <p className="policy-help">
+                Fully-loaded hourly cost, used to price the time a flaky failure interrupts. Set it
+                to 0 to report CI spend only.
+              </p>
+            </div>
+
+            <div className="policy-field">
+              <div>
+                <label htmlFor="investigationMinutes">{FIELD_LABELS.investigationMinutes}</label>
+                <input
+                  id="investigationMinutes"
+                  name="investigationMinutes"
+                  type="number"
+                  step="1"
+                  min="0"
+                  placeholder="inherits FLAKEMETRY_INVESTIGATION_MINUTES"
+                  defaultValue={numberValue('investigationMinutes')}
+                />
+              </div>
+              <p className="policy-help">
+                How long someone loses to a red build that turns out to mean nothing. This is the
+                one assumption in the cost figure that is not measured, which is why it is yours to
+                set rather than ours to guess.
               </p>
             </div>
 

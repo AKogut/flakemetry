@@ -194,6 +194,9 @@ model ProjectPolicy {
   aiRcaEnabled           Boolean? @map("ai_rca_enabled")
   executionRetentionDays Int?     @map("execution_retention_days")
   artifactRetentionDays  Int?     @map("artifact_retention_days")
+  ciMinuteCost           Float?   @map("ci_minute_cost")
+  developerHourCost      Float?   @map("developer_hour_cost")
+  investigationMinutes   Int?     @map("investigation_minutes")
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 
@@ -498,6 +501,8 @@ model DailyTestStats {
   flaky          Int      @default(0)
   skipped        Int      @default(0)
   avgDurationMs  Int      @default(0) @map("avg_duration_ms")
+  rerunCount     Int      @default(0) @map("rerun_count")
+  rerunMs        Int      @default(0) @map("rerun_ms")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -519,6 +524,8 @@ model SuiteDaily {
   flaky         Int      @default(0)
   skipped       Int      @default(0)
   avgDurationMs Int      @default(0) @map("avg_duration_ms")
+  rerunCount    Int      @default(0) @map("rerun_count")
+  rerunMs       Int      @default(0) @map("rerun_ms")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)

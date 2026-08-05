@@ -74,6 +74,9 @@ Unknown keys are rejected with an error naming the offending path — typos fail
 | `FLAKEMETRY_QUARANTINE_COOLDOWN_RUNS` | `quarantine.cooldownRuns` |
 | `FLAKEMETRY_AI_RCA` | `ai.rca` |
 | `FLAKEMETRY_AI_DAILY_TOKEN_BUDGET` | `ai.dailyTokenBudget` |
+| `FLAKEMETRY_CI_MINUTE_COST` | `cost.ciMinute` |
+| `FLAKEMETRY_DEVELOPER_HOUR_COST` | `cost.developerHour` |
+| `FLAKEMETRY_INVESTIGATION_MINUTES` | `cost.investigationMinutes` |
 
 ### Reporter transport (Playwright)
 
