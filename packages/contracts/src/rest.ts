@@ -150,6 +150,14 @@ export const REST_ENDPOINTS: readonly RestEndpoint[] = [
     auth: 'read-token',
     response: 'Health metrics',
   },
+  {
+    method: 'GET',
+    path: '/v1/export',
+    summary:
+      'Every row this project holds, streamed as a gzipped NDJSON archive: a manifest line, one line per row, an artifact inventory and a closing summary. Ingest token hashes and webhook signing secrets are left out.',
+    auth: 'read-token',
+    response: '`application/gzip`, saved as `flakemetry-<project>-<date>.ndjson.gz`',
+  },
 ]
 
 export interface TrpcProcedure {

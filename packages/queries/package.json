@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@flakemetry/eslint-config": "workspace:*",
+    "@flakemetry/storage": "workspace:*",
     "@flakemetry/tsconfig": "workspace:*",
     "@flakemetry/tsup-config": "workspace:*",
     "@types/node": "^22.10.5",

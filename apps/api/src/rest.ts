@@ -1,3 +1,6 @@
+import { Readable } from 'node:stream'
+import { createGzip } from 'node:zlib'
+
 import {
   flakyBoardInputSchema,
   runsListInputSchema,
@@ -6,13 +9,18 @@ import {
 } from '@flakemetry/contracts'
 import type { PrismaClient } from '@flakemetry/db'
 import {
+  completeRequest,
+  exportFilename,
   flakyBoard,
   getRca,
   getRun,
   getTest,
   getTestHealthMetrics,
   listRuns,
+  startExportRecord,
+  streamProjectExport,
 } from '@flakemetry/queries'
+import { type ObjectStore, projectArtifactPrefix } from '@flakemetry/storage'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 import { type AuthenticatedProject, authenticateProject, hasScope } from './auth'
@@ -21,6 +29,15 @@ import type { RateLimiter } from './rate-limit'
 export interface ReadApiDeps {
   prisma: PrismaClient
   limiter: RateLimiter
+  store?: ObjectStore | null
+}
+
+export interface ReadContext {
+  project: AuthenticatedProject
+  request: FastifyRequest
+  reply: FastifyReply
+  prisma: PrismaClient
+  store: ObjectStore | null
 }
 
 export interface ReadRoute {
@@ -29,11 +46,8 @@ export interface ReadRoute {
   summary: string
   query?: { name: string; description: string }[]
   params?: { name: string; description: string }[]
-  handler: (context: {
-    project: AuthenticatedProject
-    request: FastifyRequest
-    prisma: PrismaClient
-  }) => Promise<unknown>
+  produces?: string
+  handler: (context: ReadContext) => Promise<unknown>
 }
 
 /**
@@ -139,6 +153,58 @@ export const READ_ROUTES: ReadRoute[] = [
   },
   {
     method: 'GET',
+    path: '/v1/export',
+    summary: 'Every row this project holds, as a gzipped NDJSON archive',
+    produces: 'application/gzip',
+    handler: async ({ project, reply, prisma, store }) => {
+      const record = await prisma.project.findUnique({
+        where: { id: project.projectId },
+        select: { slug: true, name: true },
+      })
+      if (!record) throw new NotFound('project not found')
+
+      const exportedAt = new Date()
+      const requestId = await startExportRecord(prisma, {
+        orgId: project.orgId,
+        projectId: project.projectId,
+        subject: `project "${record.name}" (${record.slug})`,
+        actor: `token:${project.tokenId}`,
+        artifactPrefix: projectArtifactPrefix(project.orgId, project.projectId),
+      })
+
+      const lines = streamProjectExport(prisma, {
+        projectId: project.projectId,
+        exportedAt,
+        artifacts: store
+          ? { prefix: projectArtifactPrefix(project.orgId, project.projectId), store }
+          : null,
+        // Swallowed rather than propagated: the archive on the wire is already correct,
+        // and failing a download because the bookkeeping update did not land would be the
+        // audit trail taking the data with it.
+        onComplete: (summary) =>
+          completeRequest(prisma, requestId, {
+            rowCount: summary.rows,
+            artifactCount: summary.artifacts,
+          }).catch(() => undefined),
+      })
+
+      // Served as a gzip file rather than a gzip content-encoding: the archive is meant to
+      // be saved and kept, and a client that transparently inflates it hands the caller a
+      // file whose name says .gz and whose bytes do not.
+      const gzip = createGzip()
+      Readable.from(lines).pipe(gzip)
+
+      return reply
+        .header('content-type', 'application/gzip')
+        .header(
+          'content-disposition',
+          `attachment; filename="${exportFilename(record.slug, exportedAt)}"`,
+        )
+        .send(gzip)
+    },
+  },
+  {
+    method: 'GET',
     path: '/v1/health',
     summary: 'Project health metrics over a window',
     query: [
@@ -178,7 +244,9 @@ export const openApiDocument = (version: string): Record<string, unknown> => {
           })),
         ],
         responses: {
-          200: { description: 'Success' },
+          200: route.produces
+            ? { description: 'Success', content: { [route.produces]: {} } }
+            : { description: 'Success' },
           401: { description: 'Missing or invalid token' },
           403: { description: 'The token does not carry the read scope' },
           404: { description: 'Not found' },
@@ -208,6 +276,7 @@ export const openApiDocument = (version: string): Record<string, unknown> => {
 
 export const registerReadApi = (app: FastifyInstance, deps: ReadApiDeps): void => {
   const { prisma, limiter } = deps
+  const store = deps.store ?? null
 
   const authorise = async (
     request: FastifyRequest,
@@ -238,7 +307,7 @@ export const registerReadApi = (app: FastifyInstance, deps: ReadApiDeps): void =
       if (!project) return reply
 
       try {
-        return await route.handler({ project, request, prisma })
+        return await route.handler({ project, request, reply, prisma, store })
       } catch (error) {
         if (error instanceof NotFound) {
           return reply.code(404).send({ error: 'not_found', message: error.message })

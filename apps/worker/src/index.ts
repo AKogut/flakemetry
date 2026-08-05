@@ -3,6 +3,7 @@ import { resolveObjectStore } from '@flakemetry/storage'
 
 import { createProjectChannelLoader } from './channels'
 import { backfillSignatureClusters } from './clustering'
+import { startErasureSweeps } from './erasure'
 import { createEventBus } from './events'
 import { startNotifications } from './notify'
 import { startRetention } from './retention'
@@ -54,7 +55,9 @@ const shutdown = async (): Promise<void> => {
 process.on('SIGINT', () => void shutdown())
 process.on('SIGTERM', () => void shutdown())
 
-startRetention(prisma, resolveObjectStore(process.env))
+const objectStore = resolveObjectStore(process.env)
+startRetention(prisma, objectStore)
+startErasureSweeps(prisma, objectStore)
 startTrackerSync(prisma)
 
 void backfillSignatureClusters(prisma)

@@ -648,6 +648,46 @@ model IdentityMerge {
   @@map("identity_merge")
 }
 
+enum DataRequestKind {
+  export
+  erasure
+}
+
+enum DataRequestStatus {
+  pending
+  running
+  completed
+  failed
+}
+
+/// Deliberately without a relation to org or project: this row is the evidence that a
+/// tenant was erased, so a cascade from that tenant would delete the proof along with the
+/// data. `subject` and `artifactPrefix` are captured at request time for the same reason —
+/// once the erasure runs there is nothing left to join against.
+model DataRequest {
+  id             String            @id @default(uuid()) @db.Uuid
+  orgId          String            @map("org_id") @db.Uuid
+  projectId      String?           @map("project_id") @db.Uuid
+  kind           DataRequestKind
+  status         DataRequestStatus @default(pending)
+  subject        String
+  actor          String
+  actorUserId    String?           @map("actor_user_id") @db.Uuid
+  artifactPrefix String            @map("artifact_prefix")
+  rowCount       Int?              @map("row_count")
+  artifactCount  Int?              @map("artifact_count")
+  residue        Json?
+  error          String?
+  createdAt      DateTime          @default(now()) @map("created_at")
+  startedAt      DateTime?         @map("started_at")
+  completedAt    DateTime?         @map("completed_at")
+
+  @@index([status, createdAt])
+  @@index([orgId, createdAt(sort: Desc)])
+  @@index([projectId, createdAt(sort: Desc)])
+  @@map("data_request")
+}
+
 model TrackerIssue {
   id             String    @id @default(uuid()) @db.Uuid
   orgId          String    @map("org_id") @db.Uuid
