@@ -45,6 +45,7 @@ model Org {
   createdAt   DateTime     @default(now()) @map("created_at")
   projects    Project[]
   memberships Membership[]
+  invitations Invitation[]
 
   @@map("org")
 }
@@ -113,6 +114,28 @@ model VerificationToken {
 
   @@unique([identifier, token])
   @@map("verification_token")
+}
+
+/// The token is stored hashed and shown once, like an ingest token, because it is the same
+/// kind of thing: whoever holds the link joins the workspace and can read every run, error
+/// message and artifact in it. Short-lived and revocable for the same reason.
+model Invitation {
+  id         String         @id @default(uuid()) @db.Uuid
+  orgId      String         @map("org_id") @db.Uuid
+  email      String
+  role       MembershipRole @default(member)
+  tokenHash  String         @unique @map("token_hash")
+  invitedBy  String?        @map("invited_by") @db.Uuid
+  expiresAt  DateTime       @map("expires_at")
+  acceptedAt DateTime?      @map("accepted_at")
+  acceptedBy String?        @map("accepted_by") @db.Uuid
+  revokedAt  DateTime?      @map("revoked_at")
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt(sort: Desc)])
+  @@map("invitation")
 }
 
 model Membership {

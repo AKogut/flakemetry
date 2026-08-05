@@ -40,6 +40,7 @@ export default async function ProjectLayout({
           <a href={`/projects/${projectId}/settings/tokens`}>Ingest tokens</a>
           <a href={`/projects/${projectId}/settings/notifications`}>Notifications</a>
           <a href={`/projects/${projectId}/settings/badges`}>Badges</a>
+          <a href={`/projects/${projectId}/settings/members`}>Members</a>
           <a href={`/projects/${projectId}/settings/data`}>Data</a>
         </nav>
 

@@ -1,10 +1,18 @@
 import { redirect } from 'next/navigation'
 
 import { auth, signIn } from '@/lib/auth'
+import { safeNextPath } from '@/lib/next-path'
 
-export default async function SignInPage() {
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>
+}) {
+  const { next } = await searchParams
+  const destination = safeNextPath(next)
+
   const session = await auth()
-  if (session?.user) redirect('/')
+  if (session?.user) redirect(destination)
 
   return (
     <div className="center">
@@ -18,7 +26,7 @@ export default async function SignInPage() {
         <form
           action={async () => {
             'use server'
-            await signIn('github', { redirectTo: '/' })
+            await signIn('github', { redirectTo: destination })
           }}
         >
           <button className="btn" type="submit" style={{ width: '100%', justifyContent: 'center' }}>
