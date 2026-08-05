@@ -5,6 +5,7 @@ import { doctorCommand } from './commands/doctor'
 import { flakyCommand } from './commands/flaky'
 import { importCommand } from './commands/import'
 import { junitCommand } from './commands/junit'
+import { quarantineCommand } from './commands/quarantine'
 import { runCommand } from './commands/run'
 import { uploadCommand } from './commands/upload'
 import { resolveConfig, resolveToken } from './config-loader'
@@ -15,6 +16,7 @@ export * from './commands/doctor'
 export * from './commands/flaky'
 export * from './commands/import'
 export * from './commands/junit'
+export * from './commands/quarantine'
 export * from './commands/run'
 export * from './commands/upload'
 export * from './config-loader'
@@ -31,6 +33,7 @@ export const createDefaultRegistry = (): CommandRegistry =>
     .add(junitCommand)
     .add(importCommand)
     .add(flakyCommand)
+    .add(quarantineCommand)
     .add(doctorCommand)
 
 export const buildProgram = (

@@ -17,6 +17,7 @@ import { ReasonCodes, ScoreBadge } from '@/components/score'
 import { Sparkline } from '@/components/sparkline'
 import {
   mergeTestIdentity,
+  setTestQuarantine,
   splitTestIdentity,
   unmergeTestIdentity,
   updateClusterKnownIssue,
@@ -127,6 +128,11 @@ export default async function TestDetailPage({
             <ScoreBadge score={test.score} />
           </div>
           {test.quarantined ? <span className="pill pill-quarantined">quarantined</span> : null}
+          {test.quarantineOverride ? (
+            <div className="muted" style={{ marginTop: '0.3rem', fontSize: '0.78rem' }}>
+              set by hand
+            </div>
+          ) : null}
           {tracker ? (
             <div style={{ marginTop: '0.4rem', fontSize: '0.82rem' }}>
               <a href={tracker.url} target="_blank" rel="noreferrer">
@@ -259,6 +265,71 @@ export default async function TestDetailPage({
               ))}
             </tbody>
           </table>
+        </div>
+      ) : null}
+
+      {canSplit ? (
+        <div className="card" style={{ marginBottom: '1.25rem' }}>
+          <div className="rca-label" style={{ marginBottom: '0.6rem' }}>
+            Quarantine
+          </div>
+
+          <p className="muted" style={{ marginTop: 0 }}>
+            {test.quarantineOverride === 'quarantined'
+              ? 'Quarantined by hand. The scorer will not release it, however green it gets, until you hand it back.'
+              : test.quarantineOverride === 'released'
+                ? 'Released by hand. The scorer will not quarantine it again, however flaky it gets, until you hand it back.'
+                : test.quarantined
+                  ? 'Quarantined by the scorer. It stops failing the build while its score stays above the threshold.'
+                  : 'The scorer decides. It quarantines this test if the score crosses the threshold.'}
+            {test.quarantineReason ? (
+              <>
+                {' '}
+                <span className="mono">{test.quarantineReason}</span>
+              </>
+            ) : null}
+          </p>
+
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            {test.quarantined ? (
+              <form action={setTestQuarantine} style={{ display: 'flex', gap: '0.5rem' }}>
+                <input type="hidden" name="projectId" value={projectId} />
+                <input type="hidden" name="testId" value={testId} />
+                <input type="hidden" name="decision" value="released" />
+                <button className="btn" type="submit">
+                  Release
+                </button>
+              </form>
+            ) : (
+              <form action={setTestQuarantine} style={{ display: 'flex', gap: '0.5rem' }}>
+                <input type="hidden" name="projectId" value={projectId} />
+                <input type="hidden" name="testId" value={testId} />
+                <input type="hidden" name="decision" value="quarantined" />
+                <input name="reason" placeholder="Why (optional)" />
+                <button className="btn btn-danger" type="submit" style={{ whiteSpace: 'nowrap' }}>
+                  Quarantine
+                </button>
+              </form>
+            )}
+
+            {test.quarantineOverride ? (
+              <form action={setTestQuarantine}>
+                <input type="hidden" name="projectId" value={projectId} />
+                <input type="hidden" name="testId" value={testId} />
+                <input type="hidden" name="decision" value="auto" />
+                <button className="btn" type="submit">
+                  Hand back to the scorer
+                </button>
+              </form>
+            ) : null}
+          </div>
+
+          {test.quarantineOverride ? (
+            <p className="muted" style={{ fontSize: '0.82rem', marginBottom: 0 }}>
+              Handing it back leaves the current state alone; the scorer takes over from the next
+              run.
+            </p>
+          ) : null}
         </div>
       ) : null}
 

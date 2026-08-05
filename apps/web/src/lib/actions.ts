@@ -11,10 +11,12 @@ import {
   isValidRepository,
 } from '@flakemetry/notify'
 import {
+  isQuarantineDecision,
   mergeIdentities,
   recordRcaFeedback,
   requestErasure,
   setClusterKnownIssue,
+  setQuarantine,
   splitIdentity,
   unmergeIdentity,
   updateProjectPolicy as persistProjectPolicy,
@@ -449,6 +451,29 @@ export const requestWorkspaceErasure = async (formData: FormData): Promise<void>
   })
 
   redirect('/projects')
+}
+
+export const setTestQuarantine = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const testId = String(formData.get('testId') ?? '')
+  const decision = String(formData.get('decision') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.role))
+    throw new Error('only owners and admins can change quarantine state')
+  if (!isQuarantineDecision(decision)) throw new Error('unknown quarantine decision')
+
+  await setQuarantine(prisma, {
+    orgId: project.orgId,
+    projectId,
+    testIdentityId: testId,
+    decision,
+    reason: String(formData.get('reason') ?? ''),
+    userId: user.id,
+  })
+
+  revalidatePath(`/projects/${projectId}/tests/${testId}`)
+  redirect(`/projects/${projectId}/tests/${testId}`)
 }
 
 export const submitRcaFeedback = async (formData: FormData): Promise<void> => {

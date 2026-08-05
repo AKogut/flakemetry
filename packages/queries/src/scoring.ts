@@ -34,7 +34,13 @@ export interface ScoredIdentity {
     modelVersion: string
   }
   executions: ScoredExecution[]
-  identity: { title: string; suite: string; filePath: string; quarantined: boolean } | null
+  identity: {
+    title: string
+    suite: string
+    filePath: string
+    quarantined: boolean
+    quarantineOverride: string | null
+  } | null
   previousQuarantineCandidate: boolean
 }
 
@@ -62,7 +68,13 @@ export const computeIdentityScore = async (
   const [identity, previousScore] = await Promise.all([
     prisma.testIdentity.findUnique({
       where: { id: identityId },
-      select: { title: true, suite: true, filePath: true, quarantined: true },
+      select: {
+        title: true,
+        suite: true,
+        filePath: true,
+        quarantined: true,
+        quarantineOverride: true,
+      },
     }),
     prisma.flakyScore.findUnique({
       where: { testIdentityId: identityId },

@@ -41,5 +41,10 @@ a score is surfaced, are configurable per project (and instance-wide). See the
 [auto-quarantine](/guide/github-action) for how a high score can automatically stop a test
 from failing the build.
 
+You can overrule it. Quarantining or releasing a test by hand — from the test page, or with
+[`flakemetry quarantine`](/guide/cli) — takes that test out of the scorer's hands until you
+give it back. A decision the next run silently reverses would be worse than no control at
+all, so the automation steps aside rather than arguing.
+
 The full model is documented in the
 [Flaky Scoring wiki page](https://github.com/AKogut/flakemetry/wiki/Flaky-Scoring).

@@ -462,11 +462,17 @@ const QUARANTINE_REASON = 'auto: flaky score above threshold'
 const enforceQuarantine = async (
   tx: Prisma.TransactionClient,
   identityId: string,
-  identity: { quarantined: boolean },
+  identity: { quarantined: boolean; quarantineOverride: string | null },
   isCandidate: boolean,
   recent: readonly { status: string }[],
   cooldownRuns: number,
 ): Promise<QuarantineTransition> => {
+  // A person has decided about this test, so the scorer does not get a vote. Without this
+  // the next run silently reverts them: a manually quarantined test that is not a
+  // candidate gets released below, and a manually released test that still is gets
+  // quarantined again — the control would appear to work and then undo itself.
+  if (identity.quarantineOverride !== null) return null
+
   if (isCandidate && !identity.quarantined) {
     await tx.testIdentity.update({
       where: { id: identityId },

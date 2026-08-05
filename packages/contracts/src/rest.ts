@@ -5,6 +5,7 @@ import {
   codeownersUploadSchema,
   ingestRunBatchSchema,
   junitIngestSchema,
+  quarantineSetSchema,
 } from './ingestion'
 import { otlpTraceRequestSchema } from './otel'
 import {
@@ -16,7 +17,7 @@ import {
   testHealthInputSchema,
 } from './query'
 
-export type RestAuth = 'none' | 'ingest-token' | 'read-token' | 'any-token'
+export type RestAuth = 'none' | 'ingest-token' | 'read-token' | 'quarantine-token' | 'any-token'
 
 export interface RestEndpoint {
   method: 'GET' | 'POST' | 'PUT'
@@ -100,6 +101,15 @@ export const REST_ENDPOINTS: readonly RestEndpoint[] = [
       'Upload notification routing from `flakemetry.yml`, replacing the config-managed channels.',
     auth: 'ingest-token',
     response: '`{ ok: true, channels }`',
+  },
+  {
+    method: 'POST',
+    path: '/v1/tests/:testIdentityId/quarantine',
+    summary:
+      'Quarantine a test, release it, or hand it back to the scorer. A `quarantined` or `released` decision is a person overriding the automation, and the scorer stops moving that test until `auto` returns it.',
+    auth: 'quarantine-token',
+    request: { name: 'QuarantineSetRequest', schema: quarantineSetSchema },
+    response: '`{ quarantined, override, changed }`, or `404` when the test is not in this project',
   },
   {
     method: 'GET',

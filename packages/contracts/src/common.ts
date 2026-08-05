@@ -44,10 +44,12 @@ export type JsonRecord = z.infer<typeof jsonRecordSchema>
 
 /**
  * What a project token is allowed to do. `ingest` writes results; `read` serves the public
- * REST API. They are separate so a credential handed to a script or a dashboard cannot also
- * forge test data.
+ * REST API; `quarantine` may change whether a test blocks the build. They are separate so a
+ * credential handed to a script or a dashboard cannot also forge test data — and so the
+ * one scope that can silence a failing test has to be granted on purpose rather than
+ * arriving with the ability to read.
  */
-export const TOKEN_SCOPES = ['ingest', 'read'] as const
+export const TOKEN_SCOPES = ['ingest', 'read', 'quarantine'] as const
 
 export type TokenScope = (typeof TOKEN_SCOPES)[number]
 
