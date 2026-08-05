@@ -137,6 +137,7 @@ model Project {
   slug          String
   defaultBranch String   @default("main") @map("default_branch")
   repository    String?
+  badgeToken    String?  @unique @map("badge_token")
   codeowners    String?
   createdAt     DateTime @default(now()) @map("created_at")
 
