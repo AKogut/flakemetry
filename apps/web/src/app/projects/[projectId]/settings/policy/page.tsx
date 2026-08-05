@@ -2,7 +2,7 @@ import type { PolicySource } from '@flakemetry/contracts'
 import { getPrismaClient } from '@flakemetry/db'
 import { getEffectiveProjectPolicy, listPolicyChanges } from '@flakemetry/queries'
 
-import { updateProjectPolicy } from '@/lib/actions'
+import { updateProjectPolicy, updateProjectRepository } from '@/lib/actions'
 import { requireUser } from '@/lib/session'
 import { requireProjectAccess } from '@/lib/tenant'
 
@@ -19,6 +19,9 @@ const FIELD_LABELS: Record<string, string> = {
   ciMinuteCost: 'CI cost per minute',
   developerHourCost: 'Developer cost per hour',
   investigationMinutes: 'Minutes lost per interruption',
+  trackerEnabled: 'Open tracker issues for flakes',
+  trackerAfterDays: 'Days flaky before opening an issue',
+  trackerRecoveryDays: 'Days stable before closing it',
 }
 
 const formatDateTime = (date: Date): string =>
@@ -60,16 +63,20 @@ export default async function PolicyPage({
   searchParams,
 }: {
   params: Promise<{ projectId: string }>
-  searchParams: Promise<{ saved?: string }>
+  searchParams: Promise<{ saved?: string; repository?: string }>
 }) {
   const { projectId } = await params
-  const { saved } = await searchParams
+  const { saved, repository: repositorySaved } = await searchParams
   const user = await requireUser()
   const project = await requireProjectAccess(user.id, projectId)
   const canEdit = project.role === 'owner' || project.role === 'admin'
 
   const { effective, stored } = await getEffectiveProjectPolicy(prisma, projectId)
   const changes = await listPolicyChanges(prisma, projectId)
+  const repository = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { repository: true },
+  })
 
   const eff = effective
   const numberValue = (
@@ -81,9 +88,11 @@ export default async function PolicyPage({
       | 'artifactRetentionDays'
       | 'ciMinuteCost'
       | 'developerHourCost'
-      | 'investigationMinutes',
+      | 'investigationMinutes'
+      | 'trackerAfterDays'
+      | 'trackerRecoveryDays',
   ): string => (stored[key] === undefined ? '' : String(stored[key]))
-  const tristateValue = (key: 'quarantineEnabled' | 'aiRcaEnabled'): string =>
+  const tristateValue = (key: 'quarantineEnabled' | 'aiRcaEnabled' | 'trackerEnabled'): string =>
     stored[key] === undefined ? 'inherit' : stored[key] ? 'on' : 'off'
 
   return (
@@ -95,6 +104,33 @@ export default async function PolicyPage({
         built-in default, and an <span className="mono">FLAKEMETRY_*</span> environment variable
         overrides both. Leave a field blank to inherit the default.
       </p>
+
+      <div className="card" style={{ marginBottom: '1.25rem' }}>
+        <form action={updateProjectRepository}>
+          <input type="hidden" name="projectId" value={projectId} />
+          <div className="policy-field">
+            <div>
+              <label htmlFor="repository">Repository</label>
+              <input
+                id="repository"
+                name="repository"
+                placeholder="owner/name"
+                defaultValue={repository?.repository ?? ''}
+                disabled={!canEdit}
+              />
+            </div>
+            <p className="policy-help">
+              Where tracker issues are filed. Leave blank to file nowhere.
+              {repositorySaved ? ' Saved.' : ''}
+            </p>
+          </div>
+          {canEdit ? (
+            <button className="btn btn-secondary" type="submit">
+              Save repository
+            </button>
+          ) : null}
+        </form>
+      </div>
 
       {saved ? (
         <div className="notice-box">
@@ -327,6 +363,65 @@ export default async function PolicyPage({
                 How long someone loses to a red build that turns out to mean nothing. This is the
                 one assumption in the cost figure that is not measured, which is why it is yours to
                 set rather than ours to guess.
+              </p>
+            </div>
+
+            <div className="policy-field">
+              <div>
+                <label htmlFor="trackerEnabled">{FIELD_LABELS.trackerEnabled}</label>
+                <select
+                  id="trackerEnabled"
+                  name="trackerEnabled"
+                  defaultValue={tristateValue('trackerEnabled')}
+                >
+                  <option value="inherit">Inherit ({String(eff.trackerEnabled.value)})</option>
+                  <option value="on">On</option>
+                  <option value="off">Off</option>
+                </select>
+              </div>
+              <p className="policy-help">
+                Opens one issue per test that stays flaky, keeps it updated, and closes it when the
+                test recovers. Needs a repository on the project and{' '}
+                <span className="mono">FLAKEMETRY_TRACKER_TOKEN</span> on the instance — without
+                both it stays inert rather than half-filing anything.
+              </p>
+            </div>
+
+            <div className="policy-field">
+              <div>
+                <label htmlFor="trackerAfterDays">{FIELD_LABELS.trackerAfterDays}</label>
+                <input
+                  id="trackerAfterDays"
+                  name="trackerAfterDays"
+                  type="number"
+                  step="1"
+                  min="1"
+                  placeholder="inherits FLAKEMETRY_TRACKER_AFTER_DAYS"
+                  defaultValue={numberValue('trackerAfterDays')}
+                />
+              </div>
+              <p className="policy-help">
+                How long a test must stay flaky before it earns a ticket. Measured from the start of
+                the current flaky spell, so a test that recovers and flakes again starts over.
+              </p>
+            </div>
+
+            <div className="policy-field">
+              <div>
+                <label htmlFor="trackerRecoveryDays">{FIELD_LABELS.trackerRecoveryDays}</label>
+                <input
+                  id="trackerRecoveryDays"
+                  name="trackerRecoveryDays"
+                  type="number"
+                  step="1"
+                  min="1"
+                  placeholder="inherits FLAKEMETRY_TRACKER_RECOVERY_DAYS"
+                  defaultValue={numberValue('trackerRecoveryDays')}
+                />
+              </div>
+              <p className="policy-help">
+                How long it must stay stable before the issue closes. A re-flaking test reopens the
+                same issue rather than getting a new one.
               </p>
             </div>
 

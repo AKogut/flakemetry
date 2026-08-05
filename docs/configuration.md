@@ -77,6 +77,10 @@ Unknown keys are rejected with an error naming the offending path — typos fail
 | `FLAKEMETRY_CI_MINUTE_COST` | `cost.ciMinute` |
 | `FLAKEMETRY_DEVELOPER_HOUR_COST` | `cost.developerHour` |
 | `FLAKEMETRY_INVESTIGATION_MINUTES` | `cost.investigationMinutes` |
+| `FLAKEMETRY_TRACKER_TOKEN` | Tracker credentials (no default — the feature is off without it) |
+| `FLAKEMETRY_TRACKER_ENABLED` | `tracker.enabled` |
+| `FLAKEMETRY_TRACKER_AFTER_DAYS` | `tracker.afterDays` |
+| `FLAKEMETRY_TRACKER_RECOVERY_DAYS` | `tracker.recoveryDays` |
 
 ### Reporter transport (Playwright)
 

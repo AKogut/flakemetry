@@ -2,7 +2,7 @@
 
 import { projectPolicyInputSchema } from '@flakemetry/contracts'
 import { generateToken, getPrismaClient, hashToken } from '@flakemetry/db'
-import { isEmailAddress, isSafeWebhookUrl } from '@flakemetry/notify'
+import { isEmailAddress, isSafeWebhookUrl, isValidRepository } from '@flakemetry/notify'
 import {
   mergeIdentities,
   recordRcaFeedback,
@@ -283,12 +283,34 @@ export const updateProjectPolicy = async (formData: FormData): Promise<void> => 
     ciMinuteCost: numberField(formData, 'ciMinuteCost', false),
     developerHourCost: numberField(formData, 'developerHourCost', false),
     investigationMinutes: numberField(formData, 'investigationMinutes', true),
+    trackerEnabled: tristateField(formData, 'trackerEnabled'),
+    trackerAfterDays: numberField(formData, 'trackerAfterDays', true),
+    trackerRecoveryDays: numberField(formData, 'trackerRecoveryDays', true),
   })
 
   const { changed } = await persistProjectPolicy(prisma, { projectId, userId: user.id, input })
 
   revalidatePath(`/projects/${projectId}/settings/policy`)
   redirect(`/projects/${projectId}/settings/policy?saved=${changed.length}`)
+}
+
+export const updateProjectRepository = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const raw = String(formData.get('repository') ?? '').trim()
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.role)) throw new Error('only owners and admins can set the repository')
+  if (raw && !isValidRepository(raw)) {
+    throw new Error('repository must look like owner/name')
+  }
+
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { repository: raw ? raw : null },
+  })
+
+  revalidatePath(`/projects/${projectId}/settings/policy`)
+  redirect(`/projects/${projectId}/settings/policy?repository=saved`)
 }
 
 export const updateClusterKnownIssue = async (formData: FormData): Promise<void> => {
