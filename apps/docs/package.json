@@ -12,7 +12,7 @@
   "devDependencies": {
     "vitepress": "^1.6.3",
     "@flakemetry/contracts": "workspace:*",
-    "tsx": "^4.19.2",
+    "tsx": "^4.23.11",
     "zod": "^3.24.1",
     "zod-to-json-schema": "^3.24.1"
   }

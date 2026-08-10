@@ -24,7 +24,7 @@
     "tsup": "^8.3.5",
     "vitest": "^4.1.10",
     "@flakemetry/queries": "workspace:*",
-    "tsx": "^4.19.2"
+    "tsx": "^4.23.11"
   },
   "dependencies": {
     "@flakemetry/ai": "workspace:*",
