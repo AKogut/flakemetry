@@ -42,7 +42,7 @@
     "@flakemetry/tsconfig": "workspace:*",
     "@flakemetry/tsup-config": "workspace:*",
     "@types/node": "^22.10.5",
-    "prisma": "^6.2.1",
+    "prisma": "^7.9.1",
     "tsx": "^4.19.2",
     "vitest": "^4.1.10"
   }
