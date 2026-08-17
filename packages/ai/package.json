@@ -40,7 +40,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.115.0",
+    "@anthropic-ai/sdk": "^0.117.1",
     "@flakemetry/contracts": "workspace:*",
     "zod": "^3.24.1"
   },
