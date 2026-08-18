@@ -36,29 +36,29 @@ export const flakemetryConfigSchema = z
         minSamples: z.number().int().min(1).default(5),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     quarantine: z
       .object({
         enabled: z.boolean().default(false),
         cooldownRuns: z.number().int().min(1).default(20),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     ai: z
       .object({
         rca: z.boolean().default(true),
         dailyTokenBudget: z.number().int().nonnegative().default(200_000),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     ignore: z.array(z.string()).default([]),
     retention: z
       .object({
         rawDays: z.number().int().min(1).default(90),
       })
       .strict()
-      .default({}),
-    notifications: notificationRoutingSchema.default({}),
+      .prefault({}),
+    notifications: notificationRoutingSchema.prefault({}),
   })
   .strict()
 
