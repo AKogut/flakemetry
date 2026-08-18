@@ -173,6 +173,13 @@ recovered. Without that step a drill where the volume quietly survived would pas
 would one where the restore did nothing — the seeded database looks much like the backed-up
 one, which is exactly how this check was found to be necessary.
 
+### Artifact grants are bounded
+
+A presigned upload is issued for a specific key, content type and **size**. A body that does
+not match the declared `sizeBytes` is refused with `403`, so a grant meant for a screenshot
+cannot be spent on a gigabyte — read a `403` there as the limit working, not as a
+misconfiguration.
+
 ## Platform observability
 
 Flakemetry is OpenTelemetry-native and should dogfood its own telemetry: api and worker
