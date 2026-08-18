@@ -91,6 +91,9 @@ Unknown keys are rejected with an error naming the offending path — typos fail
 | `FLAKEMETRY_BUFFER_DIR` | Directory to buffer runs to when delivery fails; replayed on the next run |
 | `FLAKEMETRY_SAMPLE_RATE` | Fraction (0–1) of **passing** runs to deliver; runs containing a failure or flake are always delivered |
 | `FLAKEMETRY_COMPRESSION` | `gzip` to compress OTLP export (the ingestion API decompresses gzip request bodies) |
+| `FLAKEMETRY_COMMIT_SHA` | Commit the run belongs to, when CI detection cannot find it — a run without one lands on `0000000`, and every run on that placeholder looks like the same commit to the scorer |
+| `FLAKEMETRY_BRANCH` | Branch the run belongs to, same case; the fallback is `local` |
+| `FLAKEMETRY_SHARD_INDEX` / `FLAKEMETRY_SHARD_TOTAL` | Shard position when the runner shards in a way detection does not recognise. Both are needed; a total of 1 is treated as unsharded |
 | `FLAKEMETRY_CODEOWNERS_FILE` | Explicit path to a CODEOWNERS file to sync; otherwise the reporter looks for `CODEOWNERS`, `.github/CODEOWNERS`, or `docs/CODEOWNERS` walking up from the test root |
 | `FLAKEMETRY_IDEMPOTENCY_KEY` | Explicit idempotency key for the run; makes re-delivery safe. Defaults to the run span trace id. Sharded runs get a per-shard `-shard<index>` suffix automatically |
 
@@ -115,8 +118,26 @@ Rate-limit and backpressure state are held per API process (in-memory). Running 
 | `POLL_INTERVAL_MS` | Idle poll interval between dequeue attempts |
 | `FLAKEMETRY_SELF_OTEL_ENDPOINT` | OTLP endpoint for the worker's own metrics (processing lag, throughput, error rate, queue depth) |
 | `FLAKEMETRY_CLUSTER_THRESHOLD` | Jaccard similarity (0–1) above which a new error signature joins an existing cluster (default `0.5`) |
+| `FLAKEMETRY_QUEUE_VISIBILITY_MS` | How long a dequeued job stays invisible to other workers before it is redelivered (default `300000`). Raise it only if a single run legitimately takes longer than this to process — lowering it below the slowest job causes the same run to be processed twice |
+| `FLAKEMETRY_EXECUTION_RETENTION_DAYS` / `FLAKEMETRY_ARTIFACT_RETENTION_DAYS` | Global retention floor for projects with no per-project policy; see [Trend rollups and retention](#trend-rollups-and-retention) |
 
 The worker emits domain events (`run.processed`, `identity.created`, `identity.moved`, `score.updated`, `flaky.detected`, `quarantine.changed`, `suite.regressed`, `suite.slowed`, `rca.created`) after each job commits — the seam downstream stages such as signature clustering, AI RCA, and notifications subscribe to.
+
+### AI root-cause analysis
+
+`ai.rca` turns the feature on; these decide what it talks to. Setting `FLAKEMETRY_AI_RCA=true`
+without a provider gets you nothing — the worker has nothing to ask.
+
+| Variable | Effect |
+|---|---|
+| `FLAKEMETRY_AI_PROVIDER` | `anthropic` or `ollama`. Unset means RCA stays off however `ai.rca` is set |
+| `FLAKEMETRY_AI_API_KEY` | Provider credentials. `ANTHROPIC_API_KEY` is also read, so an existing environment works unchanged |
+| `FLAKEMETRY_AI_MODEL` | Model id; each provider has a sensible default |
+| `FLAKEMETRY_AI_ENDPOINT` | Base URL, for a self-hosted Ollama or a proxy |
+| `FLAKEMETRY_AI_TIMEOUT_MS` | Per-request ceiling. RCA is best-effort — a slow provider must not hold up processing |
+
+Spend is bounded by `ai.dailyTokenBudget` per project, and only genuinely new error
+signatures reach the model at all; the rest are answered from the cluster's cached analysis.
 
 ### Notifications
 
