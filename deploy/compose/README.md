@@ -144,13 +144,27 @@ the whole path is drilled in CI on every change: it destroys the database volume
 the instance back from a dump. See the [runbook](../RUNBOOK.md#backups--disaster-recovery)
 for RPO/RTO and the reasoning.
 
-## One thing to verify yourself
+## Verified, and what that covers
 
-Artifact upload end to end — reporter → presigned PUT → browser download — is **not covered by
-CI**, so treat it as unproven until you have watched a screenshot appear in the dashboard.
+This stack has been run end to end — not only `docker compose config`:
 
-The failure mode to expect is a `403` on the presigned URL. SigV4 signs the `Host` header, so
-a URL signed for `minio:9000` is rejected when a browser presents `artifacts.example.com`.
-That is why every service here signs against the public artifact host even for traffic that
-never leaves the machine. If you move to real S3 or R2, set `FLAKEMETRY_S3_ENDPOINT` to the
-same hostname your CI runners and browsers will actually connect to.
+| | |
+| --- | --- |
+| Only Caddy publishes | 80 and 443; Postgres and MinIO are reachable only inside the network |
+| Both apps answer `/health` | `{"service":"api"}` and `{"service":"web"}` on their own hostnames, which is why they are separate hostnames |
+| Artifacts round-trip | presign → `PUT` → presigned `GET` returns the same bytes |
+| The object store refuses unsigned requests | `403 AccessDenied` on a plain `GET` |
+
+**A presigned upload is bound to the size it was issued for.** A body larger than the
+declared `sizeBytes` is refused with `403`, so a grant for a screenshot cannot be spent on a
+gigabyte. Worth knowing before you read a `403` as a misconfiguration.
+
+The one thing local testing cannot cover is certificate issuance: Caddy uses an internal
+certificate for a `.localhost` name and only talks to Let's Encrypt for a real domain. Point
+the DNS records at the host before the first start, or the initial order fails.
+
+If you move to real S3 or R2, set `FLAKEMETRY_S3_ENDPOINT` to the hostname your CI runners
+and browsers actually connect to. SigV4 signs the `Host` header, so a URL signed for
+`minio:9000` is rejected the moment a browser presents the public name — which is why every
+service here signs against the public artifact host even for traffic that never leaves the
+machine.
