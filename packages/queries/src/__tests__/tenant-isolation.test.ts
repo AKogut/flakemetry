@@ -35,6 +35,7 @@ import {
   getSuiteHealth,
   getTestLeaderboards,
 } from '../trends'
+import { getProjectUsage } from '../usage'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
 const prisma = new PrismaClient()
@@ -307,6 +308,7 @@ describe.skipIf(!hasDb)('tenant isolation', { timeout: 180_000 }, () => {
       ['buildEvalSetFromFeedback', () => buildEvalSetFromFeedback(prisma, a.projectId)],
       ['planHistoricalRestitch', () => planHistoricalRestitch(prisma, a.projectId)],
       ['listDataRequests', () => listDataRequests(prisma, { projectId: a.projectId })],
+      ['getProjectUsage', () => getProjectUsage(prisma, a.projectId, 1000)],
       ['getRunSummaryByCommit', () => getRunSummaryByCommit(prisma, a.projectId, COMMIT)],
       ['getPrGate', () => getPrGate(prisma, a.projectId, COMMIT, { baseBranch: 'main' })],
     ]
