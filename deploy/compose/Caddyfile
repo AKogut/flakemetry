@@ -1,0 +1,28 @@
+# Three hostnames rather than one with path routing, because both apps answer on /health:
+# collapsing them would shadow the API's, and `flakemetry doctor` probes exactly that path
+# to tell "endpoint unreachable" from "token rejected".
+#
+# Caddy obtains and renews certificates automatically. Point all three A records at this
+# host before starting, or the first certificate order fails.
+
+{$WEB_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:3000
+}
+
+{$API_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy api:4000
+}
+
+# Artifacts are presigned and expire in minutes, so the object store is exposed but not
+# open: an unsigned request is refused by MinIO itself. Uploads come straight from CI
+# runners and downloads from browsers, which is why this needs a public name at all.
+{$ARTIFACTS_DOMAIN} {
+	# No compression: bodies are already-compressed screenshots, video and traces, and
+	# re-encoding them would burn CPU on the same box that runs Postgres.
+	request_body {
+		max_size 200MB
+	}
+	reverse_proxy minio:9000
+}
