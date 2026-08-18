@@ -1,5 +1,15 @@
 # @flakemetry/api
 
+## 0.0.4
+
+### Patch Changes
+
+- Updated dependencies [cd50173]
+- Updated dependencies [eae093b]
+  - @flakemetry/contracts@0.3.0
+  - @flakemetry/queries@0.0.4
+  - @flakemetry/storage@0.0.4
+
 ## 0.0.3
 
 ### Patch Changes

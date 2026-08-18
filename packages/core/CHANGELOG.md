@@ -1,5 +1,13 @@
 # @flakemetry/core
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [cd50173]
+- Updated dependencies [eae093b]
+  - @flakemetry/contracts@0.3.0
+
 ## 0.1.2
 
 ### Patch Changes

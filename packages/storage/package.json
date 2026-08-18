@@ -1,6 +1,6 @@
 {
   "name": "@flakemetry/storage",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Object storage abstraction for test artifacts",
   "license": "MIT",
   "author": "Andrii Kohut",

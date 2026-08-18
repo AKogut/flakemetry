@@ -1,5 +1,14 @@
 # @flakemetry/jest-reporter
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies [cd50173]
+- Updated dependencies [eae093b]
+  - @flakemetry/contracts@0.3.0
+  - @flakemetry/sdk@0.2.3
+
 ## 0.1.4
 
 ### Patch Changes
