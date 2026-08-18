@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "eslint-plugin-simple-import-sort": "^14.0.0",
     "typescript-eslint": "^8.65.0"
   },
   "peerDependencies": {
