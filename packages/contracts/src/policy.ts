@@ -6,6 +6,7 @@ export const POLICY_DEFAULTS = {
   quarantineEnabled: false,
   quarantineCooldownRuns: 20,
   aiRcaEnabled: true,
+  aiDailyTokenBudget: 200_000,
   // GitHub's published rate for a 2-core Linux runner. A starting point that is a real,
   // citable number rather than an invented one — every project should set its own.
   ciMinuteCost: 0.008,
@@ -24,6 +25,7 @@ export type ProjectPolicyValues = {
   quarantineEnabled: boolean
   quarantineCooldownRuns: number
   aiRcaEnabled: boolean
+  aiDailyTokenBudget: number
   executionRetentionDays: number
   artifactRetentionDays: number
   ciMinuteCost: number
@@ -40,6 +42,7 @@ export const POLICY_FIELDS = [
   'quarantineEnabled',
   'quarantineCooldownRuns',
   'aiRcaEnabled',
+  'aiDailyTokenBudget',
   'executionRetentionDays',
   'artifactRetentionDays',
   'ciMinuteCost',
@@ -59,6 +62,7 @@ export const projectPolicyInputSchema = z
     quarantineEnabled: z.boolean().nullable(),
     quarantineCooldownRuns: z.number().int().min(1).nullable(),
     aiRcaEnabled: z.boolean().nullable(),
+    aiDailyTokenBudget: z.number().int().min(0).nullable(),
     executionRetentionDays: z.number().int().min(1).nullable(),
     artifactRetentionDays: z.number().int().min(1).nullable(),
     ciMinuteCost: z.number().min(0).nullable(),
@@ -86,6 +90,7 @@ export type EffectiveProjectPolicy = {
   quarantineEnabled: ResolvedPolicyField<boolean>
   quarantineCooldownRuns: ResolvedPolicyField<number>
   aiRcaEnabled: ResolvedPolicyField<boolean>
+  aiDailyTokenBudget: ResolvedPolicyField<number>
   ciMinuteCost: ResolvedPolicyField<number>
   developerHourCost: ResolvedPolicyField<number>
   investigationMinutes: ResolvedPolicyField<number>
@@ -120,6 +125,7 @@ export const resolveProjectPolicy = (layers: PolicyLayers): EffectiveProjectPoli
   quarantineEnabled: resolveField('quarantineEnabled', layers),
   quarantineCooldownRuns: resolveField('quarantineCooldownRuns', layers),
   aiRcaEnabled: resolveField('aiRcaEnabled', layers),
+  aiDailyTokenBudget: resolveField('aiDailyTokenBudget', layers),
   ciMinuteCost: resolveField('ciMinuteCost', layers),
   developerHourCost: resolveField('developerHourCost', layers),
   investigationMinutes: resolveField('investigationMinutes', layers),
@@ -173,6 +179,11 @@ export const projectPolicyEnvOverrides = (
     overrides.quarantineCooldownRuns = Number(env.FLAKEMETRY_QUARANTINE_COOLDOWN_RUNS)
   if (env.FLAKEMETRY_AI_RCA !== undefined && env.FLAKEMETRY_AI_RCA !== '')
     overrides.aiRcaEnabled = parseBoolean(env.FLAKEMETRY_AI_RCA)
+  if (
+    env.FLAKEMETRY_AI_DAILY_TOKEN_BUDGET !== undefined &&
+    env.FLAKEMETRY_AI_DAILY_TOKEN_BUDGET !== ''
+  )
+    overrides.aiDailyTokenBudget = Number(env.FLAKEMETRY_AI_DAILY_TOKEN_BUDGET)
   if (env.FLAKEMETRY_CI_MINUTE_COST !== undefined && env.FLAKEMETRY_CI_MINUTE_COST !== '')
     overrides.ciMinuteCost = Number(env.FLAKEMETRY_CI_MINUTE_COST)
   if (env.FLAKEMETRY_DEVELOPER_HOUR_COST !== undefined && env.FLAKEMETRY_DEVELOPER_HOUR_COST !== '')
