@@ -35,6 +35,16 @@ const config: NextConfig = {
   reactStrictMode: true,
   output: 'standalone',
   outputFileTracingRoot: join(dirname(fileURLToPath(import.meta.url)), '..', '..'),
+  /**
+   * Next 16.3 emits ESM interop helpers but traces only the CJS ones into the standalone
+   * output, so the image builds, starts, and then fails every request on a missing
+   * `@swc/helpers/esm/_interop_require_default.js`. Pulling the ESM directory in by hand
+   * until the tracer resolves it — the glob covers pnpm's content-addressed layout, where
+   * more than one version of the package can be present.
+   */
+  outputFileTracingIncludes: {
+    '**/*': ['../../node_modules/.pnpm/@swc+helpers@*/node_modules/@swc/helpers/esm/**/*'],
+  },
   transpilePackages: ['@flakemetry/db', '@flakemetry/queries', '@flakemetry/contracts'],
   serverExternalPackages: ['@prisma/client'],
   async headers() {
