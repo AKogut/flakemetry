@@ -4,4 +4,5 @@ export const NOTIFY_EVENTS = [
   'rca_ready',
   'suite_regressed',
   'suite_slowed',
+  'ai_budget_spent',
 ]

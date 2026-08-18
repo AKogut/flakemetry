@@ -53,6 +53,11 @@ export interface DomainEventMap {
     baselineFailRate: number
     total: number
   }
+  'ai.budget.spent': {
+    projectId: string
+    spent: number
+    budget: number
+  }
   'suite.slowed': {
     projectId: string
     suite: string

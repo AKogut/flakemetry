@@ -158,6 +158,52 @@ describe.skipIf(!hasDb)('processFailures', () => {
     expect(seen).toHaveLength(1)
   })
 
+  it('announces that the budget is spent rather than only counting it', async () => {
+    const ctx = await seed()
+    const events = createEventBus()
+    const announced: DomainEventMap['ai.budget.spent'][] = []
+    events.on('ai.budget.spent', (payload) => announced.push(payload))
+
+    // A budget of one token is already spent by the first report, so the second failure
+    // hits the ceiling.
+    await processFailures(
+      prisma,
+      {
+        orgId: ctx.orgId,
+        projectId: ctx.projectId,
+        now: NOW,
+        provider: fakeProvider(),
+        aiEnabled: true,
+        dailyTokenBudget: 1,
+        events,
+      },
+      [failure(ctx.executionId)],
+    )
+    await processFailures(
+      prisma,
+      {
+        orgId: ctx.orgId,
+        projectId: ctx.projectId,
+        now: NOW,
+        provider: fakeProvider(),
+        aiEnabled: true,
+        dailyTokenBudget: 1,
+        events,
+      },
+      [
+        failure(
+          await seedExecution(ctx, 'AssertionError: expected cart to contain 3 items'),
+          'AssertionError: expected cart to contain 3 items',
+        ),
+      ],
+    )
+
+    // Without this the only trace is a metric counter, and a self-hosted instance whose
+    // explanations stopped at noon has nothing to tell anyone why.
+    expect(announced).toHaveLength(1)
+    expect(announced[0]).toMatchObject({ projectId: ctx.projectId, budget: 1 })
+  })
+
   it('does not call the model when AI is disabled', async () => {
     const ctx = await seed()
     const provider = fakeProvider()

@@ -83,6 +83,22 @@ export const startNotifications = (
     })
   })
 
+  events.on('ai.budget.spent', (payload) => {
+    void dispatcher.dispatch({
+      type: 'ai_budget_spent',
+      projectId: payload.projectId,
+      heading: 'AI budget spent for today',
+      summary: `Root-cause analysis is paused until tomorrow — ${payload.spent.toLocaleString()} of ${payload.budget.toLocaleString()} tokens used today.`,
+      fields: [
+        { label: 'Spent', value: payload.spent.toLocaleString() },
+        { label: 'Budget', value: payload.budget.toLocaleString() },
+      ],
+      // Once per project per day. The budget is checked on every run, and a suite that
+      // keeps failing would otherwise send one of these for each of them.
+      dedupeKey: `ai_budget_spent:${payload.projectId}:${new Date().toISOString().slice(0, 10)}`,
+    })
+  })
+
   events.on('quarantine.changed', (payload) => {
     void dispatcher.dispatch({
       type: 'quarantine_changed',
