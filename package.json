@@ -44,8 +44,8 @@
       "ajv>fast-uri": "^3.1.4",
       "brace-expansion": "^2.0.2",
       "@fastify/ajv-compiler>fast-uri": "^3.1.4",
-    "@istanbuljs/load-nyc-config>js-yaml": "^3.15.1",
-    "@prisma/config>deepmerge-ts": "^8.0.0"
+      "@istanbuljs/load-nyc-config>js-yaml": "^3.15.1",
+      "@prisma/config>deepmerge-ts": "^8.0.0"
     }
   }
 }
