@@ -132,11 +132,17 @@ upgrade is a rebuild.
 Artifacts are regenerable; the database is not.
 
 ```bash
-docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env \
-  exec -T postgres pg_dump -U flakemetry flakemetry | gzip > flakemetry-$(date +%F).sql.gz
+FLAKEMETRY_COMPOSE="docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env" \
+  sh deploy/backup/backup.sh /var/backups/flakemetry
 ```
 
-Put that on a timer and send it off the box. Nothing in this stack does it for you.
+Put it on a timer and **ship the result off the box** — a backup on the machine that dies
+is not one. Nothing in this stack copies it for you.
+
+Restoring is `deploy/backup/restore.sh <dump>` followed by `deploy/backup/verify.sh`, and
+the whole path is drilled in CI on every change: it destroys the database volume and brings
+the instance back from a dump. See the [runbook](../RUNBOOK.md#backups--disaster-recovery)
+for RPO/RTO and the reasoning.
 
 ## One thing to verify yourself
 
