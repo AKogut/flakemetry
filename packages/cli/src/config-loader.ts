@@ -37,6 +37,28 @@ export const resolveConfig = (
   return { config, configPath }
 }
 
+export interface ConfigAttempt {
+  resolved: ResolvedConfig | null
+  error: string | null
+}
+
+/**
+ * Config resolution that reports a problem instead of raising one. `flakemetry run` wraps a
+ * test suite, and a typo in flakemetry.yml must not be the reason a suite never runs — the
+ * whole point of the wrapper is that Flakemetry cannot fail a build. Commands that genuinely
+ * need the config still check `error` and refuse; the wrapper carries on without it.
+ */
+export const tryResolveConfig = (
+  cwd: string,
+  env: Record<string, string | undefined>,
+): ConfigAttempt => {
+  try {
+    return { resolved: resolveConfig(cwd, env), error: null }
+  } catch (error) {
+    return { resolved: null, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 export const resolveToken = (env: Record<string, string | undefined>): string | null =>
   env.FLAKEMETRY_TOKEN ?? null
 
