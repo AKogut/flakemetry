@@ -32,6 +32,27 @@ The ingestion SLO is the important one: the `202` contract means a CI pipeline m
 wait on Flakemetry. Everything downstream (scoring, RCA) is allowed to lag under load and
 catch up.
 
+### Measured throughput
+
+One worker against a local Postgres, a run of previously unseen tests — the worst case,
+since every one needs an identity created and a first score:
+
+| executions in one run | processed in | queries issued |
+| --- | --- | --- |
+| 1000 | 0.6s | 28 |
+| 3000 | 3.3s | 28 |
+| 5000 | 8.4s | 28 |
+
+The query count is the number to watch. It is flat because nothing in the pipeline does
+work per test any more, and `apps/worker/src/__tests__/throughput.test.ts` fails if that
+changes — it ingests at two sizes and asserts the count does not grow with them.
+
+**It counts round trips, not milliseconds, on purpose.** A wall-clock threshold on a shared
+CI runner is itself a flaky test, which would be a poor thing to ship from a product about
+flaky tests, and it would measure the runner rather than the code. Query count is
+deterministic on any hardware and catches the regression that matters: work that scales
+with the size of the suite.
+
 ## Error budget policy
 
 - Ingestion availability burns from a **0.1%** monthly budget. If a rolling 1-hour burn
