@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
+import { REST_ENDPOINTS } from '@flakemetry/contracts'
 import { generateToken, hashToken, PrismaClient } from '@flakemetry/db'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
@@ -27,10 +28,23 @@ describe('openapi document', () => {
   it('describes every route that is registered', () => {
     const document = openApiDocument('0.1.0') as { paths: Record<string, unknown> }
 
-    // Generated from the same table that registers the routes, so a spec that disagrees with
-    // the implementation is not expressible.
-    expect(Object.keys(document.paths)).toHaveLength(READ_ROUTES.length)
+    // Generated from REST_ENDPOINTS — the same table the human reference is built from —
+    // so a spec that disagrees with the implementation is not expressible. It covers the
+    // whole surface, not only the read routes, which is why the count is checked against
+    // the documented endpoints rather than against READ_ROUTES.
+    const documented = new Set(
+      REST_ENDPOINTS.map((endpoint) => endpoint.path.replace(/:(\w+)/g, '{$1}')),
+    )
+    expect(Object.keys(document.paths).sort()).toEqual([...documented].sort())
     expect(document.paths['/v1/runs/{runId}']).toBeDefined()
+    expect(document.paths['/v1/ingest']).toBeDefined()
+  })
+
+  it('still registers every read route it describes', () => {
+    expect(READ_ROUTES.length).toBeGreaterThan(0)
+    for (const route of READ_ROUTES) {
+      expect(REST_ENDPOINTS.some((endpoint) => endpoint.path === route.path)).toBe(true)
+    }
   })
 })
 
