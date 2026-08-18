@@ -3,6 +3,9 @@ import { createGzip } from 'node:zlib'
 
 import {
   flakyBoardInputSchema,
+  REST_ENDPOINTS,
+  type RestAuth,
+  type RestEndpoint,
   runsListInputSchema,
   testGetInputSchema,
   testHealthInputSchema,
@@ -22,6 +25,7 @@ import {
 } from '@flakemetry/queries'
 import { type ObjectStore, projectArtifactPrefix } from '@flakemetry/storage'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import { zodToJsonSchema } from 'zod-to-json-schema'
 
 import { type AuthenticatedProject, authenticateProject, hasScope } from './auth'
 import type { RateLimiter } from './rate-limit'
@@ -218,40 +222,98 @@ export const READ_ROUTES: ReadRoute[] = [
   },
 ]
 
-export const openApiDocument = (version: string): Record<string, unknown> => {
-  const paths: Record<string, unknown> = {}
+const SCOPE_NOTE: Record<RestAuth, string | null> = {
+  none: null,
+  'ingest-token': 'Needs a token carrying the "ingest" scope.',
+  'read-token': 'Needs a token carrying the "read" scope.',
+  'quarantine-token': 'Needs a token carrying the "quarantine" scope.',
+  'any-token': 'Needs a project token carrying either the "ingest" or the "read" scope.',
+}
 
-  for (const route of READ_ROUTES) {
-    const path = route.path.replace(/:(\w+)/g, '{$1}')
+const LEADING_STATUS = /^`(\d{3})`/
+
+const successStatus = (response: string): number => {
+  const match = LEADING_STATUS.exec(response.trim())
+  return match ? Number(match[1]) : 200
+}
+
+const readRouteByPath = new Map(READ_ROUTES.map((route) => [route.path, route]))
+
+const parametersFor = (endpoint: RestEndpoint): unknown[] => {
+  const route = readRouteByPath.get(endpoint.path)
+  const declared = [
+    ...(route?.params ?? []).map((param) => ({ ...param, in: 'path', required: true })),
+    ...(route?.query ?? []).map((param) => ({ ...param, in: 'query', required: false })),
+  ]
+  if (declared.length > 0) {
+    return declared.map((param) => ({
+      name: param.name,
+      in: param.in,
+      required: param.required,
+      description: param.description,
+      schema: { type: 'string' },
+    }))
+  }
+
+  // Paths carrying a segment that no route table describes still have to declare it, or
+  // the document is not a valid description of a URL a client can build.
+  return [...endpoint.path.matchAll(/:(\w+)/g)].map((match) => ({
+    name: match[1],
+    in: 'path',
+    required: true,
+    schema: { type: 'string' },
+  }))
+}
+
+/**
+ * Generated from `REST_ENDPOINTS` — the same table the human reference is built from — so
+ * the machine-readable description covers the whole surface rather than the read half.
+ * It previously came from `READ_ROUTES`, which meant ingestion, the quality gate and
+ * quarantine were invisible to anything generating a client, with nothing to say so.
+ */
+export const openApiDocument = (version: string): Record<string, unknown> => {
+  const paths: Record<string, Record<string, unknown>> = {}
+
+  for (const endpoint of REST_ENDPOINTS) {
+    const path = endpoint.path.replace(/:(\w+)/g, '{$1}')
+    const route = readRouteByPath.get(endpoint.path)
+    const scopeNote = SCOPE_NOTE[endpoint.auth]
+
+    const responses: Record<string, unknown> = {
+      [successStatus(endpoint.response)]: {
+        description: endpoint.response,
+        ...(route?.produces ? { content: { [route.produces]: {} } } : {}),
+      },
+    }
+    if (endpoint.auth !== 'none') {
+      responses[401] = { description: 'Missing or invalid token' }
+      responses[403] = { description: 'The token does not carry the required scope' }
+      responses[429] = { description: 'Rate limited' }
+    }
+
     paths[path] = {
-      get: {
-        summary: route.summary,
-        security: [{ bearerAuth: [] }],
-        parameters: [
-          ...(route.params ?? []).map((param) => ({
-            name: param.name,
-            in: 'path',
-            required: true,
-            description: param.description,
-            schema: { type: 'string' },
-          })),
-          ...(route.query ?? []).map((param) => ({
-            name: param.name,
-            in: 'query',
-            required: false,
-            description: param.description,
-            schema: { type: 'string' },
-          })),
-        ],
-        responses: {
-          200: route.produces
-            ? { description: 'Success', content: { [route.produces]: {} } }
-            : { description: 'Success' },
-          401: { description: 'Missing or invalid token' },
-          403: { description: 'The token does not carry the read scope' },
-          404: { description: 'Not found' },
-          429: { description: 'Rate limited' },
-        },
+      ...paths[path],
+      [endpoint.method.toLowerCase()]: {
+        summary: endpoint.summary,
+        ...(scopeNote ? { description: scopeNote } : {}),
+        security: endpoint.auth === 'none' ? [] : [{ bearerAuth: [] }],
+        parameters: parametersFor(endpoint),
+        ...(endpoint.request
+          ? {
+              requestBody: {
+                required: true,
+                content: {
+                  'application/json': {
+                    // Inlined rather than named: a `name` puts the schema under
+                    // `definitions` and leaves a $ref pointing where OpenAPI does not
+                    // look, so a generated client cannot resolve it.
+                    schema: zodToJsonSchema(endpoint.request.schema, { $refStrategy: 'none' }),
+                  },
+                },
+              },
+            }
+          : {}),
+        responses,
       },
     }
   }
@@ -259,17 +321,16 @@ export const openApiDocument = (version: string): Record<string, unknown> => {
   return {
     openapi: '3.1.0',
     info: {
-      title: 'Flakemetry read API',
+      title: 'Flakemetry API',
       version,
       description:
-        'Read-only access to a single project. Authorise with a token carrying the "read" scope; an ingest token will not do, so a credential handed to a script cannot forge test data.',
+        'Ingestion, read and quarantine for a single project. Scopes are separate on purpose: a credential handed to a script cannot forge test data, one that reads cannot silence a failing test, and the one in every CI job carries neither.',
     },
     components: {
       securitySchemes: {
         bearerAuth: { type: 'http', scheme: 'bearer', description: 'A project token' },
       },
     },
-    security: [{ bearerAuth: [] }],
     paths,
   }
 }
