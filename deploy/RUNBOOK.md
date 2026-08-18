@@ -95,11 +95,62 @@ job in Postgres, and confirm workers are running and not crash-looping
 
 ## Backups & disaster recovery
 
-Postgres is the system of record — the queue, all history, identities, and scores live
-there. Object storage holds only artifacts (screenshots, video, traces), which are
-regenerable. Back up Postgres with your managed provider's point-in-time recovery; artifact
-loss degrades the UI but never the intelligence. Full backup/DR automation is tracked on
-the [roadmap](https://github.com/users/AKogut/projects/14).
+Postgres is the system of record — the queue, all history, identities, and scores. Object
+storage holds only artifacts, which degrade the UI when lost but never the intelligence.
+
+### Targets
+
+| | | |
+| --- | --- | --- |
+| **RPO** | one backup interval | Hourly `backup.sh` loses at most an hour of runs; a managed provider's point-in-time recovery brings this to seconds and is the better answer where it is available |
+| **RTO** | minutes | `pg_restore` of a single-digit-gigabyte dump, plus the time to start three stateless services |
+
+Both assume the dump is somewhere other than the machine that died. Nothing here copies it
+off the box for you.
+
+### Taking one
+
+```bash
+sh deploy/backup/backup.sh /var/backups/flakemetry
+```
+
+Custom format, not plain SQL: it restores selectively and refuses to load into a schema it
+does not match, where a plain dump half-applies and looks like it worked. The script
+refuses to keep a dump under a kilobyte, because that is what `pg_dump` writes when it
+reaches nothing, and rotates to the last 14 (`FLAKEMETRY_BACKUP_KEEP`).
+
+Put it on a timer and ship the result off the host:
+
+```
+0 * * * * cd /opt/flakemetry && sh deploy/backup/backup.sh /var/backups/flakemetry
+```
+
+### Restoring
+
+```bash
+sh deploy/backup/restore.sh /var/backups/flakemetry/flakemetry-20260818T101500Z.dump
+sh deploy/backup/verify.sh
+```
+
+This **replaces** the database. `restore.sh` stops the services that write first, loads in a
+single transaction so a failure leaves the old state rather than half the new one, and
+starts them again. Restoring over a freshly migrated database is fine — the drop is part of
+the same transaction.
+
+`verify.sh` prints row counts per table. Run it before the backup and after the restore and
+compare: a dump that loaded without error and a dump that carried the data are different
+claims, and only counts tell them apart.
+
+### The drill
+
+`.github/workflows/backup.yml` runs the whole path on every change: boot, write a marker
+row, back up, **destroy the volume**, bring the stack back, restore, and check the marker
+returned and every table count matches.
+
+It asserts the marker is *gone* after the volume is destroyed before claiming it was
+recovered. Without that step a drill where the volume quietly survived would pass, and so
+would one where the restore did nothing — the seeded database looks much like the backed-up
+one, which is exactly how this check was found to be necessary.
 
 ## Platform observability
 

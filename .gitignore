@@ -34,3 +34,7 @@ apps/docs/reference/api.md
 __pycache__/
 *.egg-info/
 .pytest_cache/
+
+# Local backup dumps — never commit a database
+backups/
+*.dump

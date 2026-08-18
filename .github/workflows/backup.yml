@@ -1,0 +1,107 @@
+name: backup
+
+# A backup nobody has restored is not a backup. This destroys the database volume outright
+# and brings the instance back from a dump, then checks for data the seed could not have
+# produced — because restoring into a freshly seeded database looks identical to a restore
+# that silently did nothing.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: backup-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drill:
+    name: restore from backup after losing the database
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Configure the environment
+        run: |
+          cp .env.example .env
+          echo "AUTH_SECRET=$(openssl rand -base64 32)" >> .env
+
+      - name: Bring the stack up
+        run: docker compose up -d --build
+
+      - name: Wait for the API
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -sf http://localhost:4000/health >/dev/null; then exit 0; fi
+            sleep 5
+          done
+          docker compose logs --tail 60
+          exit 1
+
+      - name: Write a marker the seed cannot produce
+        run: |
+          docker compose exec -T postgres psql -U flakemetry -d flakemetry -q -c \
+            "INSERT INTO org (id, name, slug, created_at)
+             VALUES (gen_random_uuid(), 'DR Drill Marker', 'dr-drill-${{ github.run_id }}', now());"
+          docker compose exec -T postgres psql -U flakemetry -d flakemetry -t -A -c \
+            "SELECT count(*) FROM org WHERE name = 'DR Drill Marker'" | grep -qx 1
+
+      - name: Back up
+        run: sh deploy/backup/backup.sh ./backups
+
+      - name: Record what the database held
+        run: sh deploy/backup/verify.sh | tee before.txt
+
+      - name: Destroy the database volume
+        run: |
+          docker compose down -v
+          docker compose up -d
+          for attempt in $(seq 1 60); do
+            if docker compose exec -T postgres pg_isready -U flakemetry >/dev/null 2>&1; then break; fi
+            sleep 5
+          done
+          sleep 20
+
+      - name: Confirm the loss is real before claiming a recovery
+        run: |
+          # Guard the guard. If the volume survived, everything below passes without
+          # restoring anything at all.
+          count=$(docker compose exec -T postgres psql -U flakemetry -d flakemetry -t -A -c \
+            "SELECT count(*) FROM org WHERE name = 'DR Drill Marker'")
+          if [ "$count" != "0" ]; then
+            echo "the marker survived the volume being destroyed — this drill proves nothing"
+            exit 1
+          fi
+
+      - name: Restore
+        run: |
+          dump=$(find ./backups -name '*.dump' | head -1)
+          test -n "$dump" || { echo "no dump was produced"; exit 1; }
+          sh deploy/backup/restore.sh "$dump"
+
+      - name: The marker is back
+        run: |
+          docker compose exec -T postgres psql -U flakemetry -d flakemetry -t -A -c \
+            "SELECT count(*) FROM org WHERE name = 'DR Drill Marker'" | grep -qx 1
+
+      - name: Every table holds what it held before
+        run: |
+          sh deploy/backup/verify.sh > after.txt
+          diff before.txt after.txt || {
+            echo "counts differ across the restore"
+            exit 1
+          }
+
+      - name: The platform serves again
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -sf http://localhost:4000/health >/dev/null; then exit 0; fi
+            sleep 5
+          done
+          docker compose logs --tail 60 api worker
+          exit 1
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail 200
