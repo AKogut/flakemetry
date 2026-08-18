@@ -123,3 +123,31 @@ describe('the machine-readable description covers the whole surface', () => {
     expect(undeclared).toEqual([])
   })
 })
+
+describe('every reference in the document resolves', () => {
+  it('leaves no $ref pointing at nothing', () => {
+    const document = openApiDocument('0.0.0') as Record<string, unknown>
+    const text = JSON.stringify(document)
+    const refs = [...text.matchAll(/"\$ref":"#\/([^"]+)"/g)].map((match) => match[1] ?? '')
+
+    // zod emits $defs beside a recursive schema while anchoring the $ref at the document
+    // root. Left alone every one of these dangles, and a generated client stops there.
+    const unresolved = refs.filter((pointer) => {
+      let node: unknown = document
+      for (const segment of pointer.split('/')) {
+        if (typeof node !== 'object' || node === null) return true
+        node = (node as Record<string, unknown>)[segment.replaceAll('~1', '/')]
+      }
+      return node === undefined
+    })
+
+    expect(unresolved, 'these $refs point where the document has nothing').toEqual([])
+  })
+
+  it('actually has references to check', () => {
+    // Guard the guard: the recursive attribute schema is what produces them, so if the
+    // count ever reaches zero this test has stopped meaning anything.
+    const text = JSON.stringify(openApiDocument('0.0.0'))
+    expect(text).toContain('"$ref"')
+  })
+})

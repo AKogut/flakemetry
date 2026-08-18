@@ -25,7 +25,7 @@ import {
 } from '@flakemetry/queries'
 import { type ObjectStore, projectArtifactPrefix } from '@flakemetry/storage'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-import { zodToJsonSchema } from 'zod-to-json-schema'
+import { z } from 'zod'
 
 import { type AuthenticatedProject, authenticateProject, hasScope } from './auth'
 import type { RateLimiter } from './rate-limit'
@@ -222,6 +222,32 @@ export const READ_ROUTES: ReadRoute[] = [
   },
 ]
 
+type JsonSchema = Record<string, unknown>
+
+/**
+ * zod emits `$defs` beside the schema for anything recursive, but the `$ref` it writes is
+ * anchored at the document root. Left where they are, every reference dangles and a
+ * generated client cannot resolve it — so the definitions are hoisted to the root and
+ * namespaced, since two endpoints would otherwise both call theirs `__schema0`.
+ */
+const hoistDefs = (schema: JsonSchema, prefix: string, into: JsonSchema): JsonSchema => {
+  const defs = schema.$defs as Record<string, unknown> | undefined
+  if (!defs) return schema
+
+  const rest = Object.fromEntries(Object.entries(schema).filter(([key]) => key !== '$defs'))
+  const namespaced = (value: unknown): unknown =>
+    JSON.parse(JSON.stringify(value).replaceAll('"#/$defs/', `"#/$defs/${prefix}_`)) as unknown
+
+  // The definitions are rewritten too, not only the schema quoting them: a recursive one
+  // refers to itself, and copying it verbatim leaves that self-reference pointing at the
+  // old name — which is a dangling ref inside the thing meant to resolve them.
+  for (const [name, definition] of Object.entries(defs)) {
+    into[`${prefix}_${name}`] = namespaced(definition)
+  }
+
+  return namespaced(rest) as JsonSchema
+}
+
 const SCOPE_NOTE: Record<RestAuth, string | null> = {
   none: null,
   'ingest-token': 'Needs a token carrying the "ingest" scope.',
@@ -273,6 +299,7 @@ const parametersFor = (endpoint: RestEndpoint): unknown[] => {
  */
 export const openApiDocument = (version: string): Record<string, unknown> => {
   const paths: Record<string, Record<string, unknown>> = {}
+  const definitions: JsonSchema = {}
 
   for (const endpoint of REST_ENDPOINTS) {
     const path = endpoint.path.replace(/:(\w+)/g, '{$1}')
@@ -304,10 +331,16 @@ export const openApiDocument = (version: string): Record<string, unknown> => {
                 required: true,
                 content: {
                   'application/json': {
-                    // Inlined rather than named: a `name` puts the schema under
-                    // `definitions` and leaves a $ref pointing where OpenAPI does not
-                    // look, so a generated client cannot resolve it.
-                    schema: zodToJsonSchema(endpoint.request.schema, { $refStrategy: 'none' }),
+                    // Inlined rather than referenced: a $ref would point where OpenAPI
+                    // does not look, and a generated client cannot resolve it.
+                    schema: hoistDefs(
+                      z.toJSONSchema(endpoint.request.schema, {
+                        io: 'input',
+                        unrepresentable: 'any',
+                      }) as JsonSchema,
+                      endpoint.request.name,
+                      definitions,
+                    ),
                   },
                 },
               },
@@ -331,6 +364,7 @@ export const openApiDocument = (version: string): Record<string, unknown> => {
         bearerAuth: { type: 'http', scheme: 'bearer', description: 'A project token' },
       },
     },
+    ...(Object.keys(definitions).length > 0 ? { $defs: definitions } : {}),
     paths,
   }
 }

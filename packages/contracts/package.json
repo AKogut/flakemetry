@@ -36,8 +36,8 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "zod": "^3.24.1",
-    "fast-xml-parser": "^5.7.0"
+    "fast-xml-parser": "^5.7.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@flakemetry/eslint-config": "workspace:*",

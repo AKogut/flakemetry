@@ -10,10 +10,9 @@
     "generate:api": "tsx scripts/generate-api-reference.ts"
   },
   "devDependencies": {
-    "vitepress": "^1.6.3",
     "@flakemetry/contracts": "workspace:*",
     "tsx": "^4.23.12",
-    "zod": "^3.24.1",
-    "zod-to-json-schema": "^3.24.1"
+    "vitepress": "^1.6.3",
+    "zod": "^4.4.3"
   }
 }

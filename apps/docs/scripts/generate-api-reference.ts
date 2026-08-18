@@ -12,7 +12,7 @@ const AUTH_LABELS: Record<string, string> = {
 
 import { REST_ENDPOINTS, type RestEndpoint, TRPC_PROCEDURES } from '@flakemetry/contracts'
 import type { ZodTypeAny } from 'zod'
-import { zodToJsonSchema } from 'zod-to-json-schema'
+import { z } from 'zod'
 
 interface JsonSchemaNode {
   type?: string | string[]
@@ -47,7 +47,10 @@ const describeType = (node: JsonSchemaNode | undefined): string => {
 }
 
 const fieldTable = (name: string, schema: ZodTypeAny): string => {
-  const json = zodToJsonSchema(schema, { $refStrategy: 'none' }) as JsonSchemaNode
+  const json = z.toJSONSchema(schema, {
+    io: 'input',
+    unrepresentable: 'any',
+  }) as JsonSchemaNode
   const properties = json.properties
   if (!properties) return ''
 
