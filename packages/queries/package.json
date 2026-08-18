@@ -1,6 +1,6 @@
 {
   "name": "@flakemetry/queries",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Tenant-scoped read queries shared by the api and the dashboard",
   "type": "module",

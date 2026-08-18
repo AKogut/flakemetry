@@ -1,6 +1,6 @@
 {
   "name": "@flakemetry/playwright-reporter",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Playwright reporter emitting OpenTelemetry test spans",
   "license": "MIT",
   "author": "Andrii Kohut",

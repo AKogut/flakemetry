@@ -1,6 +1,6 @@
 {
   "name": "@flakemetry/worker",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Processing workers: identity, scoring, clustering, RCA",
   "type": "module",
