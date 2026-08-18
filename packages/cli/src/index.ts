@@ -8,7 +8,7 @@ import { junitCommand } from './commands/junit'
 import { quarantineCommand } from './commands/quarantine'
 import { runCommand } from './commands/run'
 import { uploadCommand } from './commands/upload'
-import { resolveConfig, resolveToken } from './config-loader'
+import { resolveConfig, resolveToken, tryResolveConfig } from './config-loader'
 import type { CommandContext } from './registry'
 import { CommandRegistry } from './registry'
 
@@ -47,6 +47,7 @@ export const buildProgram = (
     cwd,
     env,
     resolveConfig: () => resolveConfig(cwd, env),
+    tryResolveConfig: () => tryResolveConfig(cwd, env),
     token: resolveToken(env),
   }
   registry.applyTo(program, context)

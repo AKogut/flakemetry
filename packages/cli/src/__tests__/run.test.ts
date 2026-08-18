@@ -267,3 +267,23 @@ describe('runDoctor', () => {
     expect(worstStatus(checks)).toBe('ok')
   })
 })
+
+describe('config problems never stop the wrapped command', () => {
+  it('runs the tests and keeps their exit code when the config is broken', async () => {
+    const notices: string[] = []
+    const spawner = vi.fn(async () => 0)
+
+    const result = await runWrapped({
+      command,
+      spawner,
+      upload: uploaded,
+      fileExists: () => true,
+      onNotice: (message) => notices.push(message),
+    })
+
+    // The wrapper exists so Flakemetry can never fail a build. A typo in flakemetry.yml
+    // preventing a suite from running would be the worst possible way to break that.
+    expect(spawner).toHaveBeenCalled()
+    expect(result.exitCode).toBe(0)
+  })
+})

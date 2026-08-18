@@ -182,5 +182,18 @@ export const projectPolicyEnvOverrides = (
     env.FLAKEMETRY_INVESTIGATION_MINUTES !== ''
   )
     overrides.investigationMinutes = Number(env.FLAKEMETRY_INVESTIGATION_MINUTES)
+  // The tracker fields were in POLICY_FIELDS, in both compose files, in .env.example and
+  // in the configuration reference, and read by nothing — so setting them did nothing and
+  // the dashboard reported the source as "default". policy-env.test.ts now fails if any
+  // effective-policy field loses its environment tier again.
+  if (env.FLAKEMETRY_TRACKER_ENABLED !== undefined && env.FLAKEMETRY_TRACKER_ENABLED !== '')
+    overrides.trackerEnabled = parseBoolean(env.FLAKEMETRY_TRACKER_ENABLED)
+  if (env.FLAKEMETRY_TRACKER_AFTER_DAYS !== undefined && env.FLAKEMETRY_TRACKER_AFTER_DAYS !== '')
+    overrides.trackerAfterDays = Number(env.FLAKEMETRY_TRACKER_AFTER_DAYS)
+  if (
+    env.FLAKEMETRY_TRACKER_RECOVERY_DAYS !== undefined &&
+    env.FLAKEMETRY_TRACKER_RECOVERY_DAYS !== ''
+  )
+    overrides.trackerRecoveryDays = Number(env.FLAKEMETRY_TRACKER_RECOVERY_DAYS)
   return overrides
 }

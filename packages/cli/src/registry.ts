@@ -1,11 +1,12 @@
 import type { Command } from 'commander'
 
-import type { ResolvedConfig } from './config-loader'
+import type { ConfigAttempt, ResolvedConfig } from './config-loader'
 
 export interface CommandContext {
   cwd: string
   env: Record<string, string | undefined>
   resolveConfig: () => ResolvedConfig
+  tryResolveConfig: () => ConfigAttempt
   token: string | null
 }
 

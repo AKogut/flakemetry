@@ -111,13 +111,21 @@ export const runCommand: CommandModule = {
             return
           }
 
+          // Resolved without raising. A typo in flakemetry.yml must not be the reason a
+          // test suite never runs: the wrapper exists so that Flakemetry can never fail a
+          // build, and refusing to start the command would be the worst way to break that.
+          const attempt = context.tryResolveConfig()
+          if (attempt.error) {
+            process.stderr.write(`flakemetry: ignoring the config — ${attempt.error}\n`)
+          }
+
           const result = await runWrapped({
             command,
             file: options.file,
             endpoint:
               options.endpoint ??
               context.env.FLAKEMETRY_ENDPOINT ??
-              context.resolveConfig().config.endpoint,
+              attempt.resolved?.config.endpoint,
             token: options.token ?? context.token,
             onNotice: (message) => process.stderr.write(`${message}\n`),
           })
