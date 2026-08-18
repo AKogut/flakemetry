@@ -1,5 +1,14 @@
 # @flakemetry/contracts
 
+## 0.3.0
+
+### Minor Changes
+
+- cd50173: The daily LLM token budget is now a per-project policy field. It was read only from the environment, so `ai.dailyTokenBudget` in a project's `flakemetry.yml` was documented, validated and ignored — one instance could have exactly one budget.
+- eae093b: Move to zod 4. The validation shape on the wire is unchanged — `{ error, issues: [{ path, message }] }` — but the messages are more specific: an invalid commit sha now reports the pattern it had to match instead of a bare "Invalid".
+
+  `zod-to-json-schema` is gone; zod 4 generates JSON Schema itself, which the OpenAPI document and the API reference now use.
+
 ## 0.2.1
 
 ### Patch Changes

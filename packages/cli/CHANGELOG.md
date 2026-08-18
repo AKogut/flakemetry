@@ -1,5 +1,15 @@
 # @flakemetry/cli
 
+## 0.2.2
+
+### Patch Changes
+
+- 9ea296a: `flakemetry --version` reported `0.0.0` regardless of the installed version. It now reports the real one, baked in at build time — the version is the first thing anyone is asked for in a bug report, and `0.0.0` identified nothing.
+- Updated dependencies [cd50173]
+- Updated dependencies [eae093b]
+  - @flakemetry/contracts@0.3.0
+  - @flakemetry/sdk@0.2.3
+
 ## 0.2.1
 
 ### Patch Changes
