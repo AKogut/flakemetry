@@ -101,9 +101,12 @@ Wiring an existing project into its own instance? The
 whole path — OAuth app, stack, token, reporter, and seeding history from CI artifacts so
 the board is useful the same day.
 
-For a horizontally scaled hosted environment, [`deploy/`](deploy) ships a Helm chart
-(stateless `api`/`worker`/`web` with autoscaling, a migration hook, and ingress) plus an
-operations [runbook](deploy/RUNBOOK.md) with SLOs — see the [deploy guide](deploy/README.md).
+Putting it on a real host? [`deploy/compose`](deploy/compose) is a single-VPS stack: TLS
+from Caddy, automatic certificates, and nothing published but the proxy — the quickstart
+above binds its ports to loopback precisely because it is not that. For a horizontally
+scaled environment, [`deploy/`](deploy) ships a Helm chart (stateless `api`/`worker`/`web`
+with autoscaling, a migration hook, and ingress) plus an operations
+[runbook](deploy/RUNBOOK.md) with SLOs — see the [deploy guide](deploy/README.md).
 
 ## See it in 60 seconds
 
