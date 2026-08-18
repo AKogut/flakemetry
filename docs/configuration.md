@@ -139,6 +139,10 @@ without a provider gets you nothing — the worker has nothing to ask.
 Spend is bounded by `ai.dailyTokenBudget` per project, and only genuinely new error
 signatures reach the model at all; the rest are answered from the cluster's cached analysis.
 
+When the budget runs out, the worker emits `ai_budget_spent` — subscribe to it on any
+notification channel, including email, and the day analysis stops is a day someone hears
+about. It is deduplicated per project per day, since the budget is re-checked on every run.
+
 ### Notifications
 
 The worker pushes intelligence to Slack, Discord and email. Webhook delivery is best-effort and de-duplicated per channel so a flapping test can't spam a channel. Channels come from two places, applied together: **global env channels** (below) and **per-project channels** configured in **Settings → Notifications** (add a Slack/Discord webhook or an email address with an event filter). Events: `flaky_detected`, `quarantine_changed`, `rca_ready`, `suite_regressed` (a suite's fail-rate crossing its trailing baseline), and `suite_slowed` (a suite's average duration rising well above its trailing baseline).

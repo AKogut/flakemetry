@@ -218,6 +218,10 @@ export const processFailures = async (
     if (!group.isNew) continue
     if (spent >= budget) {
       workerMetrics.rcaBudgetExhausted.add(1)
+      // Said out loud, not only counted. A metric nobody self-hosting is scraping is the
+      // difference between "analysis is off today" and nobody ever finding out why the
+      // explanations stopped.
+      ctx.events?.emit('ai.budget.spent', { projectId: ctx.projectId, spent, budget })
       break
     }
 

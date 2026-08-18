@@ -11,6 +11,7 @@ const COLOR: Record<NotificationType, number> = {
   rca_ready: 0x5319e7,
   suite_regressed: 0xdc2626,
   suite_slowed: 0xd97706,
+  ai_budget_spent: 0x6b7280,
 }
 
 export const formatDiscord = (event: NotificationEvent): DiscordPayload => ({
