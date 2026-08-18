@@ -1,3 +1,7 @@
+# Published ports bind to loopback by default. Docker publishes straight past the host
+# firewall, so `${POSTGRES_PORT}:5432` on a machine with a public address puts Postgres —
+# with the development password below — on the internet. Set BIND_ADDRESS=0.0.0.0 only if
+# you mean it; for a real deployment use deploy/compose, which publishes nothing but Caddy.
 services:
   postgres:
     image: postgres:16-alpine
@@ -6,7 +10,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flakemetry}
       POSTGRES_DB: ${POSTGRES_DB:-flakemetry}
     ports:
-      - '${POSTGRES_PORT:-5432}:5432'
+      - '${BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,8 +27,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-flakemetry}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-flakemetry123}
     ports:
-      - '${MINIO_PORT:-9000}:9000'
-      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+      - '${BIND_ADDRESS:-127.0.0.1}:${MINIO_PORT:-9000}:9000'
+      - '${BIND_ADDRESS:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9001}:9001'
     volumes:
       - miniodata:/data
     healthcheck:
@@ -79,7 +83,7 @@ services:
       FLAKEMETRY_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-flakemetry123}
       FLAKEMETRY_S3_FORCE_PATH_STYLE: 'true'
     ports:
-      - '${API_PORT:-4000}:4000'
+      - '${BIND_ADDRESS:-127.0.0.1}:${API_PORT:-4000}:4000'
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:4000/health']
       interval: 10s
@@ -166,7 +170,7 @@ services:
       FLAKEMETRY_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-flakemetry123}
       FLAKEMETRY_S3_FORCE_PATH_STYLE: 'true'
     ports:
-      - '${WEB_PORT:-3000}:3000'
+      - '${BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-3000}:3000'
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/health']
       interval: 10s

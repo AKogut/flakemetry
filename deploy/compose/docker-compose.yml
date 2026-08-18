@@ -1,0 +1,189 @@
+# A single-host production stack: everything on an internal network, nothing published
+# except Caddy, which terminates TLS and gets certificates automatically.
+#
+# Run it from the repository root:
+#   docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env up -d --build
+#
+# The root docker-compose.yml is the quickstart: it publishes ports and ships development
+# passwords. This file is what you point a domain at.
+
+x-database-url: &database_url
+  DATABASE_URL: postgresql://${POSTGRES_USER:-flakemetry}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-flakemetry}?schema=public
+
+# Everything that signs an S3 request uses the PUBLIC artifact host, not `minio:9000`.
+# SigV4 signs the Host header, so a URL signed for the internal name is rejected when a
+# browser or a CI runner presents the public one — presigned links would 403 for everyone
+# outside this network. The extra hop back through Caddy is the price of correctness.
+x-s3: &s3
+  FLAKEMETRY_S3_BUCKET: ${S3_BUCKET:-flakemetry-artifacts}
+  FLAKEMETRY_S3_ENDPOINT: https://${ARTIFACTS_DOMAIN:?set ARTIFACTS_DOMAIN}
+  FLAKEMETRY_S3_REGION: ${FLAKEMETRY_S3_REGION:-us-east-1}
+  FLAKEMETRY_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+  FLAKEMETRY_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+  FLAKEMETRY_S3_FORCE_PATH_STYLE: 'true'
+
+x-policy: &policy
+  FLAKEMETRY_PUBLIC_API_URL: https://${API_DOMAIN:?set API_DOMAIN}
+  FLAKEMETRY_EXECUTION_RETENTION_DAYS: ${FLAKEMETRY_EXECUTION_RETENTION_DAYS:-90}
+  FLAKEMETRY_ARTIFACT_RETENTION_DAYS: ${FLAKEMETRY_ARTIFACT_RETENTION_DAYS:-30}
+  FLAKEMETRY_FLAKY_THRESHOLD: ${FLAKEMETRY_FLAKY_THRESHOLD:-}
+  FLAKEMETRY_FLAKY_MIN_SAMPLES: ${FLAKEMETRY_FLAKY_MIN_SAMPLES:-}
+  FLAKEMETRY_QUARANTINE_ENABLED: ${FLAKEMETRY_QUARANTINE_ENABLED:-}
+  FLAKEMETRY_QUARANTINE_COOLDOWN_RUNS: ${FLAKEMETRY_QUARANTINE_COOLDOWN_RUNS:-}
+  FLAKEMETRY_CI_MINUTE_COST: ${FLAKEMETRY_CI_MINUTE_COST:-}
+  FLAKEMETRY_DEVELOPER_HOUR_COST: ${FLAKEMETRY_DEVELOPER_HOUR_COST:-}
+  FLAKEMETRY_INVESTIGATION_MINUTES: ${FLAKEMETRY_INVESTIGATION_MINUTES:-}
+  FLAKEMETRY_AI_RCA: ${FLAKEMETRY_AI_RCA:-}
+  FLAKEMETRY_TRACKER_ENABLED: ${FLAKEMETRY_TRACKER_ENABLED:-}
+  FLAKEMETRY_TRACKER_AFTER_DAYS: ${FLAKEMETRY_TRACKER_AFTER_DAYS:-}
+  FLAKEMETRY_TRACKER_RECOVERY_DAYS: ${FLAKEMETRY_TRACKER_RECOVERY_DAYS:-}
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    # The only service that touches the outside world.
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      WEB_DOMAIN: ${WEB_DOMAIN:?set WEB_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+      ARTIFACTS_DOMAIN: ${ARTIFACTS_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      - web
+      - api
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-flakemetry}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-flakemetry}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-flakemetry} -d ${POSTGRES_DB:-flakemetry}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:9000/minio/health/live']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  createbuckets:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
+      mc mb --ignore-existing local/$${S3_BUCKET:-flakemetry-artifacts}
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET:-flakemetry-artifacts}
+    restart: 'no'
+
+  migrate:
+    build:
+      context: ../..
+      target: migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment: *database_url
+    restart: 'no'
+
+  api:
+    restart: unless-stopped
+    build:
+      context: ../..
+      target: api
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      createbuckets:
+        condition: service_completed_successfully
+    environment:
+      <<: [*database_url, *s3]
+      PORT: 4000
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:4000/health']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  worker:
+    restart: unless-stopped
+    build:
+      context: ../..
+      target: worker
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: [*database_url, *s3, *policy]
+      POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-1000}
+      FLAKEMETRY_AI_PROVIDER: ${FLAKEMETRY_AI_PROVIDER:-}
+      FLAKEMETRY_AI_MODEL: ${FLAKEMETRY_AI_MODEL:-}
+      FLAKEMETRY_AI_API_KEY: ${FLAKEMETRY_AI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      FLAKEMETRY_AI_ENDPOINT: ${FLAKEMETRY_AI_ENDPOINT:-}
+      FLAKEMETRY_AI_DAILY_TOKEN_BUDGET: ${FLAKEMETRY_AI_DAILY_TOKEN_BUDGET:-}
+      FLAKEMETRY_AI_TIMEOUT_MS: ${FLAKEMETRY_AI_TIMEOUT_MS:-}
+      FLAKEMETRY_TRACKER_TOKEN: ${FLAKEMETRY_TRACKER_TOKEN:-}
+
+  web:
+    restart: unless-stopped
+    build:
+      context: ../..
+      target: web
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      createbuckets:
+        condition: service_completed_successfully
+    environment:
+      <<: [*database_url, *s3, *policy]
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET, generate with openssl rand -base64 32}
+      AUTH_GITHUB_ID: ${AUTH_GITHUB_ID:?set AUTH_GITHUB_ID}
+      AUTH_GITHUB_SECRET: ${AUTH_GITHUB_SECRET:?set AUTH_GITHUB_SECRET}
+      AUTH_URL: https://${WEB_DOMAIN}
+      # Caddy terminates TLS, so Auth.js sees a plain HTTP request and has to be told the
+      # forwarded host is the real one. Without this every OAuth callback redirects to the
+      # container's own hostname.
+      AUTH_TRUST_HOST: 'true'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/health']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+volumes:
+  pgdata:
+  miniodata:
+  caddydata:
+  caddyconfig:
