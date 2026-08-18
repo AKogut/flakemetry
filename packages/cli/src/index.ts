@@ -23,7 +23,9 @@ export * from './config-loader'
 export * from './registry'
 export { configCommand, importCommand, junitCommand, uploadCommand }
 
-export const CLI_VERSION = '0.0.0'
+declare const __CLI_VERSION__: string | undefined
+
+export const CLI_VERSION = typeof __CLI_VERSION__ === 'string' ? __CLI_VERSION__ : '0.0.0-dev'
 
 export const createDefaultRegistry = (): CommandRegistry =>
   new CommandRegistry()
