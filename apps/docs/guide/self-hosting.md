@@ -56,8 +56,24 @@ hardening story.
 
 ## Production deployment
 
-The compose stack is aimed at local and small self-hosted use. For a horizontally scaled
-hosted environment there is a **Helm chart** in
+### One host
+
+The compose stack above is the quickstart: it publishes ports and ships development
+passwords, and its ports bind to loopback for that reason — Docker publishes straight past
+the host firewall, so on a machine with a public address the quickstart would put Postgres
+on the internet.
+
+[`deploy/compose`](https://github.com/AKogut/flakemetry/tree/main/deploy/compose) is the
+version you point a domain at: Caddy terminating TLS with automatic certificates, nothing
+published but the proxy, and a refusal to start when a secret is missing rather than a
+fallback to the development password. Its
+[README](https://github.com/AKogut/flakemetry/blob/main/deploy/compose/README.md) covers DNS,
+the OAuth app, backups, and why the object store needs a public hostname even for traffic
+that never leaves the machine.
+
+### Many hosts
+
+For a horizontally scaled hosted environment there is a **Helm chart** in
 [`deploy/helm/flakemetry`](https://github.com/AKogut/flakemetry/tree/main/deploy/helm/flakemetry):
 stateless `api`/`worker`/`web` with HorizontalPodAutoscalers, a pre-install migration hook,
 and ingress — running against a managed Postgres and object store. The
