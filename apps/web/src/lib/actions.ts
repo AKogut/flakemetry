@@ -315,6 +315,7 @@ export const updateProjectPolicy = async (formData: FormData): Promise<void> => 
     quarantineEnabled: tristateField(formData, 'quarantineEnabled'),
     quarantineCooldownRuns: numberField(formData, 'quarantineCooldownRuns', true),
     aiRcaEnabled: tristateField(formData, 'aiRcaEnabled'),
+    aiDailyTokenBudget: numberField(formData, 'aiDailyTokenBudget', true),
     executionRetentionDays: numberField(formData, 'executionRetentionDays', true),
     artifactRetentionDays: numberField(formData, 'artifactRetentionDays', true),
     ciMinuteCost: numberField(formData, 'ciMinuteCost', false),

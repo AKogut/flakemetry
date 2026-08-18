@@ -46,6 +46,7 @@ export const EXPORT_DATASETS: readonly ExportDataset[] = [
     table: 'project_policy',
     filterColumn: 'project_id',
     keys: [uuid('project_id')],
+    cleared: ['ai_daily_token_budget'],
   },
   { name: 'policy_change', table: 'policy_change', filterColumn: 'project_id', keys: byId },
   {

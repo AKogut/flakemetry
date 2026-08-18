@@ -219,6 +219,7 @@ model ProjectPolicy {
   quarantineEnabled      Boolean? @map("quarantine_enabled")
   quarantineCooldownRuns Int?     @map("quarantine_cooldown_runs")
   aiRcaEnabled           Boolean? @map("ai_rca_enabled")
+  aiDailyTokenBudget     Int?     @map("ai_daily_token_budget")
   executionRetentionDays Int?     @map("execution_retention_days")
   artifactRetentionDays  Int?     @map("artifact_retention_days")
   ciMinuteCost           Float?   @map("ci_minute_cost")

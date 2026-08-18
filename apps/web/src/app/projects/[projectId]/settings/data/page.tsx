@@ -1,5 +1,11 @@
 import { getPrismaClient } from '@flakemetry/db'
-import { listDataRequests } from '@flakemetry/queries'
+import {
+  formatBytes,
+  getEffectiveProjectPolicy,
+  getProjectUsage,
+  listDataRequests,
+} from '@flakemetry/queries'
+import { projectArtifactPrefix, resolveObjectStore } from '@flakemetry/storage'
 
 import { requestProjectErasure, requestWorkspaceErasure } from '@/lib/actions'
 import { requireUser } from '@/lib/session'
@@ -34,6 +40,17 @@ export default async function DataPage({
   const { requested } = await searchParams
   const user = await requireUser()
   const project = await requireProjectAccess(user.id, projectId)
+
+  const effective = await getEffectiveProjectPolicy(prisma, projectId)
+  const store = resolveObjectStore(process.env)
+  const usage = await getProjectUsage(
+    prisma,
+    projectId,
+    effective.effective.aiDailyTokenBudget.value,
+    {
+      artifacts: store ? { prefix: projectArtifactPrefix(project.orgId, project.id), store } : null,
+    },
+  )
 
   const [policy, requests] = await Promise.all([
     prisma.projectPolicy.findUnique({
@@ -78,6 +95,55 @@ export default async function DataPage({
           The same archive is available to automation at{' '}
           <span className="mono">GET /v1/export</span> with a token carrying the{' '}
           <span className="mono">read</span> scope.
+        </p>
+      </div>
+
+      <div className="card" style={{ marginBottom: '1.25rem' }}>
+        <h2 style={{ marginTop: 0 }}>What this project is using</h2>
+        <table>
+          <tbody>
+            <tr>
+              <td>AI tokens today</td>
+              <td className="muted">
+                {usage.ai.budget > 0
+                  ? `${usage.ai.spentToday.toLocaleString()} of ${usage.ai.budget.toLocaleString()}`
+                  : `${usage.ai.spentToday.toLocaleString()} (no daily cap set)`}
+                {usage.ai.exhausted ? (
+                  <strong> — budget spent, root-cause analysis is paused until tomorrow</strong>
+                ) : null}
+              </td>
+            </tr>
+            <tr>
+              <td>Root-cause reports today</td>
+              <td className="muted">{usage.ai.reportsToday}</td>
+            </tr>
+            <tr>
+              <td>Executions stored</td>
+              <td className="muted">
+                {usage.rows.executions.toLocaleString()} across {usage.rows.runs.toLocaleString()}{' '}
+                runs and {usage.rows.identities.toLocaleString()} tests
+              </td>
+            </tr>
+            <tr>
+              <td>Artifacts</td>
+              <td className="muted">
+                {usage.artifacts
+                  ? `${usage.artifacts.objects.toLocaleString()} objects, ${formatBytes(usage.artifacts.bytes)}`
+                  : 'object storage is not configured'}
+              </td>
+            </tr>
+            <tr>
+              <td>Oldest execution</td>
+              <td className="muted">
+                {usage.oldestExecution ? formatDate(usage.oldestExecution) : '—'}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p className="muted" style={{ fontSize: '0.85rem', marginBottom: 0 }}>
+          The token budget stops root-cause analysis for the day when it runs out. Without this line
+          a project that quietly stopped analysing looks exactly like one that had nothing to
+          analyse.
         </p>
       </div>
 

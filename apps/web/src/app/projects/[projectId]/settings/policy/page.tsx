@@ -14,6 +14,7 @@ const FIELD_LABELS: Record<string, string> = {
   quarantineEnabled: 'Auto-quarantine',
   quarantineCooldownRuns: 'Quarantine cooldown (runs)',
   aiRcaEnabled: 'AI root-cause analysis',
+  aiDailyTokenBudget: 'Daily LLM token budget',
   executionRetentionDays: 'Execution retention (days)',
   artifactRetentionDays: 'Artifact retention (days)',
   ciMinuteCost: 'CI cost per minute',

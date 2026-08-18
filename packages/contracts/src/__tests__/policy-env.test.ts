@@ -14,6 +14,7 @@ const ENV_FOR_FIELD: Readonly<Record<string, [string, string]>> = {
   quarantineEnabled: ['FLAKEMETRY_QUARANTINE_ENABLED', 'true'],
   quarantineCooldownRuns: ['FLAKEMETRY_QUARANTINE_COOLDOWN_RUNS', '7'],
   aiRcaEnabled: ['FLAKEMETRY_AI_RCA', 'true'],
+  aiDailyTokenBudget: ['FLAKEMETRY_AI_DAILY_TOKEN_BUDGET', '50000'],
   ciMinuteCost: ['FLAKEMETRY_CI_MINUTE_COST', '0.02'],
   developerHourCost: ['FLAKEMETRY_DEVELOPER_HOUR_COST', '80'],
   investigationMinutes: ['FLAKEMETRY_INVESTIGATION_MINUTES', '25'],
