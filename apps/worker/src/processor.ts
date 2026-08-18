@@ -10,7 +10,7 @@ import {
   resolveIdentity,
 } from '@flakemetry/core'
 import type { Prisma, PrismaClient } from '@flakemetry/db'
-import { computeIdentityScore } from '@flakemetry/queries'
+import { computeIdentityScores, type ScoredIdentity } from '@flakemetry/queries'
 
 import type { EventBus } from './events'
 import { type FailureRecord, processFailures } from './rca'
@@ -50,36 +50,6 @@ const PENDING_IDENTITY = 'pending:'
  * loaded database, not a licence to go back to a statement per test.
  */
 const TRANSACTION_LIMITS = { timeout: 120_000, maxWait: 15_000 }
-
-const parsedScoringConcurrency = Number(process.env.FLAKEMETRY_SCORING_CONCURRENCY)
-const SCORING_CONCURRENCY =
-  Number.isFinite(parsedScoringConcurrency) && parsedScoringConcurrency > 0
-    ? Math.floor(parsedScoringConcurrency)
-    : 4
-
-/**
- * Scoring an identity costs five reads and a transaction, and identities do not depend on
- * one another, so running them one after another spent almost all of a large run's wall
- * clock waiting on round trips. The cap is deliberately low: each task holds a connection,
- * briefly two, and overrunning Prisma's pool trades latency for pool timeouts.
- */
-const scoreConcurrently = async (
-  identityIds: readonly string[],
-  score: (identityId: string) => Promise<void>,
-): Promise<void> => {
-  const pending = [...identityIds]
-  const workers = Array.from(
-    { length: Math.min(SCORING_CONCURRENCY, pending.length) },
-    async () => {
-      for (;;) {
-        const identityId = pending.shift()
-        if (identityId === undefined) return
-        await score(identityId)
-      }
-    },
-  )
-  await Promise.all(workers)
-}
 
 export const processJob = async (
   prisma: PrismaClient,
@@ -401,7 +371,16 @@ export const processJob = async (
   for (const event of createdEvents) ctx.events?.emit('identity.created', event)
   for (const event of movedEvents) ctx.events?.emit('identity.moved', event)
 
-  await scoreConcurrently([...affected], (identityId) => scoreIdentity(prisma, identityId, ctx))
+  // Read once, decide in memory, write once. Scoring used to cost five queries and a
+  // transaction per test, which is what made a full suite take half a minute of round
+  // trips rather than work.
+  const identityIds = [...affected]
+  const scores = await computeIdentityScores(prisma, ctx.orgId, ctx.projectId, identityIds, {
+    now: ctx.now,
+    threshold: ctx.threshold,
+    minSamples: ctx.minSamples,
+  })
+  await applyScores(prisma, planScoreWrites(identityIds, scores, ctx), ctx)
 
   await updateRollups(
     prisma,
@@ -459,27 +438,24 @@ type QuarantineTransition = 'quarantined' | 'unquarantined' | null
 
 const QUARANTINE_REASON = 'auto: flaky score above threshold'
 
-const enforceQuarantine = async (
-  tx: Prisma.TransactionClient,
-  identityId: string,
+/**
+ * A decision, not a write. Keeping it pure is what lets a whole run's transitions be
+ * applied in one statement each instead of a transaction per test — and it stays readable
+ * as the rule it is.
+ */
+export const decideQuarantine = (
   identity: { quarantined: boolean; quarantineOverride: string | null },
   isCandidate: boolean,
   recent: readonly { status: string }[],
   cooldownRuns: number,
-): Promise<QuarantineTransition> => {
+): QuarantineTransition => {
   // A person has decided about this test, so the scorer does not get a vote. Without this
   // the next run silently reverts them: a manually quarantined test that is not a
   // candidate gets released below, and a manually released test that still is gets
   // quarantined again — the control would appear to work and then undo itself.
   if (identity.quarantineOverride !== null) return null
 
-  if (isCandidate && !identity.quarantined) {
-    await tx.testIdentity.update({
-      where: { id: identityId },
-      data: { quarantined: true, quarantineReason: QUARANTINE_REASON },
-    })
-    return 'quarantined'
-  }
+  if (isCandidate && !identity.quarantined) return 'quarantined'
 
   if (!isCandidate && identity.quarantined) {
     const window = recent.slice(-Math.max(cooldownRuns, 1))
@@ -487,99 +463,197 @@ const enforceQuarantine = async (
       cooldownRuns <= 0 ||
       (window.length >= cooldownRuns &&
         window.every((execution) => execution.status === 'pass' || execution.status === 'skip'))
-    if (stable) {
-      await tx.testIdentity.update({
-        where: { id: identityId },
-        data: { quarantined: false, quarantineReason: null },
-      })
-      return 'unquarantined'
-    }
+    if (stable) return 'unquarantined'
   }
 
   return null
 }
 
-const scoreIdentity = async (
-  prisma: PrismaClient,
-  identityId: string,
+interface PlannedWrite {
+  identityId: string
+  scored: ScoredIdentity
+  transition: QuarantineTransition
+  healthEvents: HealthEventKind[]
+  becameFlaky: boolean
+}
+
+/**
+ * Every decision for the run, taken in memory from what the batched read already loaded.
+ * Nothing here touches the database, so the whole plan can then be written with a handful
+ * of statements rather than a transaction per test.
+ */
+const planScoreWrites = (
+  identityIds: readonly string[],
+  scores: Map<string, ScoredIdentity>,
   ctx: ProcessContext,
-): Promise<void> => {
-  const { result, data, executions, identity, previousQuarantineCandidate } =
-    await computeIdentityScore(prisma, ctx.orgId, ctx.projectId, identityId, {
-      now: ctx.now,
-      threshold: ctx.threshold,
-      minSamples: ctx.minSamples,
-    })
+): PlannedWrite[] => {
+  const planned: PlannedWrite[] = []
 
-  const becameFlaky = result.quarantineCandidate && !previousQuarantineCandidate
-  const stabilized = !result.quarantineCandidate && previousQuarantineCandidate
+  for (const identityId of identityIds) {
+    const scored = scores.get(identityId)
+    if (!scored) continue
 
-  const transition = await prisma.$transaction(async (tx) => {
-    await tx.flakyScore.upsert({
-      where: { testIdentityId: identityId },
-      create: { testIdentityId: identityId, ...data },
-      update: data,
-    })
+    const { result, executions, identity, previousQuarantineCandidate } = scored
+    const becameFlaky = result.quarantineCandidate && !previousQuarantineCandidate
+    const stabilized = !result.quarantineCandidate && previousQuarantineCandidate
 
     const healthEvents: HealthEventKind[] = []
     if (becameFlaky) healthEvents.push('flaked')
     if (stabilized) healthEvents.push('stabilized')
 
-    let quarantineTransition: QuarantineTransition = null
-    if (ctx.quarantineEnabled && identity) {
-      quarantineTransition = await enforceQuarantine(
-        tx,
-        identityId,
-        identity,
-        result.quarantineCandidate,
-        executions,
-        ctx.quarantineCooldownRuns ?? 0,
-      )
-      if (quarantineTransition) healthEvents.push(quarantineTransition)
-    }
+    const transition =
+      ctx.quarantineEnabled && identity
+        ? decideQuarantine(
+            identity,
+            result.quarantineCandidate,
+            executions,
+            ctx.quarantineCooldownRuns ?? 0,
+          )
+        : null
+    if (transition) healthEvents.push(transition)
 
-    if (healthEvents.length > 0) {
-      await tx.testHealthEvent.createMany({
-        data: healthEvents.map((kind) => ({
-          orgId: ctx.orgId,
-          projectId: ctx.projectId,
-          testIdentityId: identityId,
-          kind,
-          score: result.score,
-          createdAt: ctx.now,
-        })),
+    planned.push({ identityId, scored, transition, healthEvents, becameFlaky })
+  }
+
+  return planned
+}
+
+/**
+ * One statement for every score instead of one upsert each. The rows travel as a single
+ * json parameter rather than fourteen placeholders per test, which keeps a five-thousand
+ * test suite well inside Postgres's parameter ceiling.
+ */
+const writeScores = async (
+  tx: Prisma.TransactionClient,
+  planned: readonly PlannedWrite[],
+  now: Date,
+): Promise<void> => {
+  const rows = planned.map(({ identityId, scored }) => ({
+    testIdentityId: identityId,
+    orgId: scored.data.orgId,
+    projectId: scored.data.projectId,
+    score: scored.data.score,
+    flipRate: scored.data.flipRate,
+    passOnRerunRate: scored.data.passOnRerunRate,
+    sameShaVariance: scored.data.sameShaVariance,
+    entropy: scored.data.entropy,
+    failIsolation: scored.data.failIsolation,
+    reasonCodes: scored.data.reasonCodes,
+    quarantineCandidate: scored.data.quarantineCandidate,
+    lastFlakedAt: scored.data.lastFlakedAt?.toISOString() ?? null,
+    modelVersion: scored.data.modelVersion,
+  }))
+
+  await tx.$executeRaw`
+    INSERT INTO flaky_score (
+      test_identity_id, org_id, project_id, score, flip_rate, pass_on_rerun_rate,
+      same_sha_variance, entropy, fail_isolation, reason_codes, quarantine_candidate,
+      last_flaked_at, model_version, updated_at
+    )
+    SELECT
+      (row->>'testIdentityId')::uuid,
+      (row->>'orgId')::uuid,
+      (row->>'projectId')::uuid,
+      (row->>'score')::double precision,
+      (row->>'flipRate')::double precision,
+      (row->>'passOnRerunRate')::double precision,
+      (row->>'sameShaVariance')::double precision,
+      (row->>'entropy')::double precision,
+      (row->>'failIsolation')::double precision,
+      row->'reasonCodes',
+      (row->>'quarantineCandidate')::boolean,
+      (row->>'lastFlakedAt')::timestamp(3),
+      row->>'modelVersion',
+      ${now}::timestamp(3)
+    FROM jsonb_array_elements(${JSON.stringify(rows)}::jsonb) AS row
+    ON CONFLICT (test_identity_id) DO UPDATE SET
+      score = EXCLUDED.score,
+      flip_rate = EXCLUDED.flip_rate,
+      pass_on_rerun_rate = EXCLUDED.pass_on_rerun_rate,
+      same_sha_variance = EXCLUDED.same_sha_variance,
+      entropy = EXCLUDED.entropy,
+      fail_isolation = EXCLUDED.fail_isolation,
+      reason_codes = EXCLUDED.reason_codes,
+      quarantine_candidate = EXCLUDED.quarantine_candidate,
+      last_flaked_at = EXCLUDED.last_flaked_at,
+      model_version = EXCLUDED.model_version,
+      updated_at = EXCLUDED.updated_at
+  `
+}
+
+const applyScores = async (
+  prisma: PrismaClient,
+  planned: readonly PlannedWrite[],
+  ctx: ProcessContext,
+): Promise<void> => {
+  if (planned.length === 0) return
+
+  const quarantining = planned
+    .filter((p) => p.transition === 'quarantined')
+    .map((p) => p.identityId)
+  const releasing = planned.filter((p) => p.transition === 'unquarantined').map((p) => p.identityId)
+  const healthEvents = planned.flatMap(({ identityId, scored, healthEvents: kinds }) =>
+    kinds.map((kind) => ({
+      orgId: ctx.orgId,
+      projectId: ctx.projectId,
+      testIdentityId: identityId,
+      kind,
+      score: scored.result.score,
+      createdAt: ctx.now,
+    })),
+  )
+
+  // One transaction for the run rather than one per test. That is stronger than what it
+  // replaces, not weaker: a quarantine transition and the health event recording it could
+  // previously land for some tests and not others if the process died mid-loop.
+  await prisma.$transaction(async (tx) => {
+    await writeScores(tx, planned, ctx.now)
+
+    if (quarantining.length > 0) {
+      await tx.testIdentity.updateMany({
+        where: { id: { in: quarantining } },
+        data: { quarantined: true, quarantineReason: QUARANTINE_REASON },
+      })
+    }
+    if (releasing.length > 0) {
+      await tx.testIdentity.updateMany({
+        where: { id: { in: releasing } },
+        data: { quarantined: false, quarantineReason: null },
+      })
+    }
+    if (healthEvents.length > 0) await tx.testHealthEvent.createMany({ data: healthEvents })
+  }, TRANSACTION_LIMITS)
+
+  for (const { identityId, scored, transition, becameFlaky } of planned) {
+    const { identity, result } = scored
+
+    if (identity && becameFlaky) {
+      ctx.events?.emit('flaky.detected', {
+        testIdentityId: identityId,
+        projectId: ctx.projectId,
+        title: identity.title,
+        suite: identity.suite,
+        filePath: identity.filePath,
+        score: result.score,
       })
     }
 
-    return quarantineTransition
-  })
+    if (identity && transition) {
+      ctx.events?.emit('quarantine.changed', {
+        testIdentityId: identityId,
+        projectId: ctx.projectId,
+        title: identity.title,
+        suite: identity.suite,
+        quarantined: transition === 'quarantined',
+        reason: transition === 'quarantined' ? QUARANTINE_REASON : null,
+      })
+    }
 
-  if (identity && becameFlaky) {
-    ctx.events?.emit('flaky.detected', {
+    ctx.events?.emit('score.updated', {
       testIdentityId: identityId,
       projectId: ctx.projectId,
-      title: identity.title,
-      suite: identity.suite,
-      filePath: identity.filePath,
       score: result.score,
+      quarantineCandidate: result.quarantineCandidate,
     })
   }
-
-  if (identity && transition) {
-    ctx.events?.emit('quarantine.changed', {
-      testIdentityId: identityId,
-      projectId: ctx.projectId,
-      title: identity.title,
-      suite: identity.suite,
-      quarantined: transition === 'quarantined',
-      reason: transition === 'quarantined' ? QUARANTINE_REASON : null,
-    })
-  }
-
-  ctx.events?.emit('score.updated', {
-    testIdentityId: identityId,
-    projectId: ctx.projectId,
-    score: result.score,
-    quarantineCandidate: result.quarantineCandidate,
-  })
 }
