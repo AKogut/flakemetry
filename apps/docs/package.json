@@ -13,6 +13,6 @@
     "@flakemetry/contracts": "workspace:*",
     "tsx": "^4.23.12",
     "vitepress": "^1.6.3",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   }
 }
