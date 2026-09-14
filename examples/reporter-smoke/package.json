@@ -16,8 +16,8 @@
     "@flakemetry/jest-reporter": "workspace:*",
     "@flakemetry/playwright-reporter": "workspace:*",
     "@flakemetry/vitest-reporter": "workspace:*",
-    "@playwright/test": "^1.62.1",
-    "jest": "^30.2.0",
+    "@playwright/test": "^1.63.0",
+    "jest": "^30.5.1",
     "vitest": "^4.1.10"
   }
 }
