@@ -39,7 +39,7 @@
     "@flakemetry/eslint-config": "workspace:*",
     "@flakemetry/tsconfig": "workspace:*",
     "@flakemetry/tsup-config": "workspace:*",
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22.10.5",
     "vitest": "^4.1.10"
   },
@@ -48,6 +48,6 @@
     "@flakemetry/sdk": "workspace:*"
   },
   "peerDependencies": {
-    "@playwright/test": "^1.62.1"
+    "@playwright/test": "^1.63.0"
   }
 }
