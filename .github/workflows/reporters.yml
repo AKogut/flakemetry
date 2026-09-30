@@ -106,6 +106,22 @@ jobs:
           FLAKEMETRY_TOKEN: ${{ env.JEST_TOKEN }}
         run: pnpm smoke:jest || true
 
+      - name: Jest, two shards of one CI run
+        working-directory: examples/reporter-smoke
+        env:
+          FLAKEMETRY_TOKEN: ${{ env.JESTSHARDS_TOKEN }}
+        run: |
+          pnpm smoke:jest-shards --shard=1/2 || true
+          pnpm smoke:jest-shards --shard=2/2 || true
+
+      - name: Vitest, two shards of one CI run
+        working-directory: examples/reporter-smoke
+        env:
+          FLAKEMETRY_TOKEN: ${{ env.VITESTSHARDS_TOKEN }}
+        run: |
+          pnpm smoke:vitest-shards --shard=1/2 || true
+          pnpm smoke:vitest-shards --shard=2/2 || true
+
       - name: Every reporter's run must have landed
         working-directory: examples/reporter-smoke
         run: pnpm verify

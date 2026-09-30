@@ -3,6 +3,7 @@ import {
   deliverRun,
   type FlakemetryDeliveryOptions,
   resolveRunContext,
+  type ShardInfo,
   TestRunRecorder,
 } from '@flakemetry/sdk'
 
@@ -14,16 +15,23 @@ export default class FlakemetryJestReporter {
   private readonly options: FlakemetryJestReporterOptions
   private readonly env: Record<string, string | undefined>
   private readonly rootDir: string
+  private readonly shard: ShardInfo | null
 
-  constructor(globalConfig?: { rootDir?: string }, options: FlakemetryJestReporterOptions = {}) {
+  constructor(
+    globalConfig?: { rootDir?: string; shard?: { shardIndex: number; shardCount: number } },
+    options: FlakemetryJestReporterOptions = {},
+  ) {
     this.options = options
     this.env = process.env
     this.rootDir = globalConfig?.rootDir ?? process.cwd()
+    this.shard = globalConfig?.shard
+      ? { current: globalConfig.shard.shardIndex, total: globalConfig.shard.shardCount }
+      : null
   }
 
   async onRunComplete(_contexts: unknown, results: JestAggregatedResult): Promise<void> {
     const startedAt = results.startTime != null ? new Date(results.startTime) : new Date()
-    const context = resolveRunContext(this.env)
+    const context = resolveRunContext(this.env, this.shard)
     const recorder = new TestRunRecorder(context)
     recorder.startRun(startedAt)
 

@@ -119,3 +119,28 @@ describe('a Vitest that calls both hooks', () => {
     expect(delivered()).toBe(false)
   })
 })
+
+describe('a sharded Vitest run', () => {
+  const keyForShard = async (index: number): Promise<string> => {
+    const outputFile = join(tmpdir(), `flakemetry-${randomUUID()}.json`)
+    const reporter = new FlakemetryVitestReporter({ outputFile })
+    Object.assign(reporter as unknown as Record<string, unknown>, {
+      env: { GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '9000001', GITHUB_RUN_ATTEMPT: '1' },
+    })
+    const hooks = reporter as unknown as {
+      onInit: (context: {
+        config: { root: string; shard: { index: number; count: number } }
+      }) => void
+      onTestRunEnd: (modules: unknown[]) => Promise<void>
+    }
+    hooks.onInit({ config: { root: '/repo', shard: { index, count: 2 } } })
+    await hooks.onTestRunEnd([{ task: sampleFile() }])
+    return (JSON.parse(readFileSync(outputFile, 'utf8')) as { idempotencyKey: string })
+      .idempotencyKey
+  }
+
+  it('gives each shard its own idempotency key, so the second is not dropped as a re-delivery', async () => {
+    expect(await keyForShard(1)).toBe('github_actions-9000001-1-shard1')
+    expect(await keyForShard(2)).toBe('github_actions-9000001-1-shard2')
+  })
+})
