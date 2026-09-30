@@ -23,7 +23,8 @@ request for an advisory that sits behind a transitive pin — those are cleared
 with a resolution override in the root `package.json`, and only a periodic audit
 surfaces them.
 
-One advisory is knowingly accepted: `esbuild` **GHSA-67mh-4wv8-2f99** (low). It
-concerns esbuild's development server rather than anything shipped, reaches the
-repository only through `tsup` at build time, and forcing the patched version
-breaks the documentation build. It will be picked up when `tsup` moves.
+The advisories left in the full dependency tree all come from the documentation
+site's toolchain. VitePress 1.6.4, the latest stable release, is built on Vite 5,
+which carries advisories against its development server and brings esbuild 0.21
+(**GHSA-67mh-4wv8-2f99**). None of it ships in a package or an image, and it clears
+when VitePress 2 leaves pre-release.

@@ -77,6 +77,23 @@ jobs:
         working-directory: examples/reporter-smoke
         run: pnpm provision
 
+      - name: Vitest 5
+        working-directory: examples/reporter-smoke/vitest5
+        env:
+          FLAKEMETRY_TOKEN: ${{ env.VITEST5_TOKEN }}
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund
+          node -e "const v = require('vitest/package.json').version; if (!v.startsWith('5.')) { console.error('expected Vitest 5, resolved ' + v); process.exit(1) }"
+          npm run smoke || true
+
+      - name: Run the rest on the oldest Node the reporters support
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+
+      - name: Confirm the runtime
+        run: node --version | grep -q '^v20\.' || { node --version; exit 1; }
+
       - name: Playwright
         working-directory: examples/reporter-smoke
         env:
@@ -90,15 +107,6 @@ jobs:
         env:
           FLAKEMETRY_TOKEN: ${{ env.VITEST_TOKEN }}
         run: pnpm smoke:vitest || true
-
-      - name: Vitest 5
-        working-directory: examples/reporter-smoke/vitest5
-        env:
-          FLAKEMETRY_TOKEN: ${{ env.VITEST5_TOKEN }}
-        run: |
-          npm install --no-save --no-package-lock --no-audit --no-fund
-          node -e "const v = require('vitest/package.json').version; if (!v.startsWith('5.')) { console.error('expected Vitest 5, resolved ' + v); process.exit(1) }"
-          npm run smoke || true
 
       - name: Jest
         working-directory: examples/reporter-smoke

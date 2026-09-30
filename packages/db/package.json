@@ -20,7 +20,7 @@
     "prisma.config.ts"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsdown --config-loader native",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "db:generate": "prisma generate",
@@ -37,9 +37,9 @@
     "@prisma/client": "^7.10.0"
   },
   "devDependencies": {
+    "@flakemetry/build-config": "workspace:*",
     "@flakemetry/eslint-config": "workspace:*",
     "@flakemetry/tsconfig": "workspace:*",
-    "@flakemetry/tsup-config": "workspace:*",
     "@types/node": "^22.10.5",
     "prisma": "^7.10.0",
     "tsx": "^4.23.13",
