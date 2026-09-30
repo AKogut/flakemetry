@@ -1,4 +1,4 @@
-import { type Prisma, PrismaClient } from '@flakemetry/db'
+import { createPrismaClient, type Prisma } from '@flakemetry/db'
 import { createMemoryObjectStore } from '@flakemetry/storage'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
@@ -6,7 +6,7 @@ import { claimErasures, requestErasure } from '../data-request'
 import { countByColumn, eraseTarget, tablesWithColumn } from '../erasure'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const START = new Date('2026-08-01T10:00:00Z')
 const DAY = new Date('2026-08-01T00:00:00Z')

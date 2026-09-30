@@ -1,13 +1,13 @@
 import { gzipSync } from 'node:zlib'
 
 import { RESOURCE_ATTR, SPAN_ATTR, SPAN_NAMES } from '@flakemetry/contracts'
-import { generateToken, hashToken, IngestionQueue, PrismaClient } from '@flakemetry/db'
+import { createPrismaClient, generateToken, hashToken, IngestionQueue } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { buildApp } from '../app'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const validBatch = (idempotencyKey: string) => ({
   contractVersion: '0.1.0',

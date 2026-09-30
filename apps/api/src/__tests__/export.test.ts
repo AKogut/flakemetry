@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { gunzipSync } from 'node:zlib'
 
-import { generateToken, hashToken, PrismaClient } from '@flakemetry/db'
+import { createPrismaClient, generateToken, hashToken } from '@flakemetry/db'
 import { createMemoryObjectStore, projectArtifactPrefix } from '@flakemetry/storage'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
@@ -9,7 +9,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { buildApp } from '../app'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const WEBHOOK_SECRET = 'whsec_do_not_export_me'
 

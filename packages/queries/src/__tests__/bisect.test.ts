@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import { PrismaClient } from '@flakemetry/db'
+import { createPrismaClient } from '@flakemetry/db'
 import { afterAll, describe, expect, it } from 'vitest'
 
 import {
@@ -13,7 +13,7 @@ import {
 } from '../bisect'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const START = new Date('2026-07-01T00:00:00Z')
 const HOUR = 60 * 60 * 1000

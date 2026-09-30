@@ -1,10 +1,10 @@
-import { PrismaClient } from '@prisma/client'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
+import { createPrismaClient } from '../index'
 import { IngestionQueue } from '../queue'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const seedProject = async () => {
   const org = await prisma.org.create({ data: { name: 'Acme', slug: `acme-${Date.now()}` } })

@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto'
 
 import type { IngestRunBatch } from '@flakemetry/contracts'
-import { PrismaClient } from '@flakemetry/db'
+import { createPrismaClient } from '@flakemetry/db'
 import { afterAll, describe, expect, it } from 'vitest'
 
 import { processJob } from '../processor'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const NOW = new Date('2026-08-04T12:00:00Z')
 const STARTED_AT = new Date('2026-08-04T10:00:00Z')

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import type { IngestRunBatch } from '@flakemetry/contracts'
-import { PrismaClient } from '@flakemetry/db'
+import { createPrismaAdapter, PrismaClient } from '@flakemetry/db'
 import { afterAll, describe, expect, it } from 'vitest'
 
 import { processJob } from '../processor'
@@ -15,7 +15,10 @@ const hasDb = Boolean(process.env.DATABASE_URL)
  * hardware and catches the regression that actually matters here: work that scales with the
  * number of tests instead of staying constant.
  */
-const prisma = new PrismaClient({ log: [{ emit: 'event', level: 'query' }] })
+const prisma = new PrismaClient({
+  adapter: createPrismaAdapter(),
+  log: [{ emit: 'event', level: 'query' }],
+})
 
 const countQueries = async <T>(work: () => Promise<T>): Promise<{ result: T; queries: number }> => {
   let queries = 0

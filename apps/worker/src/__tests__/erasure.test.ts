@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import { PrismaClient } from '@flakemetry/db'
+import { createPrismaClient } from '@flakemetry/db'
 import { requestErasure } from '@flakemetry/queries'
 import { createMemoryObjectStore, projectArtifactPrefix } from '@flakemetry/storage'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
@@ -8,7 +8,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { runErasureSweep } from '../erasure'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const seed = async () => {
   const slug = `erase-${randomUUID().slice(0, 8)}`

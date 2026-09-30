@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto'
 
-import { generateToken, hashToken, PrismaClient } from '@flakemetry/db'
+import { createPrismaClient, generateToken, hashToken } from '@flakemetry/db'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { buildApp } from '../app'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const seed = async (scopes: string[]) => {
   const slug = `quar-${randomUUID().slice(0, 8)}`

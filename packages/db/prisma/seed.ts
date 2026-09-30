@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto'
 
 import type { Prisma, RunStatus, TestStatus } from '@prisma/client'
-import { PrismaClient } from '@prisma/client'
 
-const prisma = new PrismaClient()
+import { createPrismaClient } from '../src/index'
+
+const prisma = createPrismaClient()
 
 const createRandom = (initial: number) => {
   let state = initial

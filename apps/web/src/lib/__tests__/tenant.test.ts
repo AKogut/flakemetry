@@ -1,10 +1,10 @@
-import { PrismaClient } from '@flakemetry/db'
+import { createPrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { listAccessibleProjects, requireProjectAccess } from '../tenant'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const seedWorkspace = async (label: string) => {
   const user = await prisma.user.create({

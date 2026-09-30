@@ -1,10 +1,10 @@
-import { type Prisma, PrismaClient } from '@flakemetry/db'
+import { createPrismaClient, type Prisma } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { flakyBoard } from '../flaky'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const CODEOWNERS = `
 *.spec.ts        @org/qa

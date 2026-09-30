@@ -1,10 +1,10 @@
-import { type Prisma, PrismaClient } from '@flakemetry/db'
+import { createPrismaClient, type Prisma } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { getTeamHealthLeaderboard, getTestHealthMetrics } from '../health'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const ago = (days: number): Date => new Date(Date.now() - days * DAY_MS)

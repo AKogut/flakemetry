@@ -1,5 +1,5 @@
 import { buildApp } from '@flakemetry/api/app'
-import { generateToken, hashToken, IngestionQueue, PrismaClient } from '@flakemetry/db'
+import { createPrismaClient, generateToken, hashToken, IngestionQueue } from '@flakemetry/db'
 import { exportRunOverOtlp, TestRunRecorder } from '@flakemetry/sdk'
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -7,7 +7,7 @@ import { createEventBus, type DomainEventMap } from '../events'
 import { createWorker, type Worker } from '../runner'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 

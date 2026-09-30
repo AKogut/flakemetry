@@ -46,7 +46,8 @@
       "@fastify/ajv-compiler>fast-uri": "^3.1.8",
       "js-yaml@>=3.0.0 <3.15.2": "^3.15.2",
       "js-yaml@>=4.0.0 <4.3.2": "^4.3.2",
-      "@prisma/config>deepmerge-ts": "^8.0.0"
+      "@prisma/config>deepmerge-ts": "^8.0.0",
+      "mysql2@<3.22.0": "^3.22.0"
     }
   }
 }

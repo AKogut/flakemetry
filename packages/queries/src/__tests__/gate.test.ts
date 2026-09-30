@@ -1,10 +1,10 @@
-import { type Prisma, PrismaClient } from '@flakemetry/db'
+import { createPrismaClient, type Prisma } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { getPrGate, type PrGate, renderGateComment } from '../gate'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const NOW = new Date('2026-07-16T12:00:00Z')
 const PR_COMMIT = 'deadbee'

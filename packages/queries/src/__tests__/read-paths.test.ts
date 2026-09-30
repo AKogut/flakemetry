@@ -1,5 +1,5 @@
 import type { IngestSpan } from '@flakemetry/contracts'
-import { type Prisma, PrismaClient } from '@flakemetry/db'
+import { createPrismaClient, type Prisma } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { flakyBoard } from '../flaky'
@@ -9,7 +9,7 @@ import { getTest } from '../tests'
 import { getExecutionTrace } from '../trace'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const COMMIT = 'abc1234'
 const START = new Date('2026-07-16T10:00:00Z')

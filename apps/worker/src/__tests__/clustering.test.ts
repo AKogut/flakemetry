@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto'
 
 import { errorTokens } from '@flakemetry/core'
-import { PrismaClient } from '@flakemetry/db'
+import { createPrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { backfillSignatureClusters, findClusterCandidates } from '../clustering'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 const NOW = new Date('2026-07-27T12:00:00Z')
 
 const seed = async () => {

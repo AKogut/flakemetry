@@ -1,11 +1,11 @@
-import { generateToken, hashToken, PrismaClient } from '@flakemetry/db'
+import { createPrismaClient, generateToken, hashToken } from '@flakemetry/db'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { buildApp } from '../app'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const JUNIT = `<testsuites>
   <testsuite name="pytest" timestamp="2026-07-16T10:00:00" tests="2">

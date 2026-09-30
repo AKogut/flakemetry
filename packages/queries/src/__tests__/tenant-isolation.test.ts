@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { type Prisma, PrismaClient } from '@flakemetry/db'
+import { createPrismaClient, type Prisma } from '@flakemetry/db'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { getBadgeMetrics } from '../badge'
@@ -38,7 +38,7 @@ import {
 import { getProjectUsage } from '../usage'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 const NOW = new Date('2026-08-18T12:00:00Z')
 const COMMIT = 'abc1234'
 

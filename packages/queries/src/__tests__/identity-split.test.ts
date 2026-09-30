@@ -1,10 +1,10 @@
-import { PrismaClient } from '@flakemetry/db'
+import { createPrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { findMergeCandidates, mergeIdentities, splitIdentity, unmergeIdentity } from '../identity'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const BEFORE = new Date('2026-07-10T10:00:00Z')
 const AFTER = new Date('2026-07-20T10:00:00Z')
