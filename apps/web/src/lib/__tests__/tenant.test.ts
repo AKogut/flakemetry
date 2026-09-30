@@ -120,6 +120,65 @@ describe.skipIf(!hasDb)('tenant isolation', () => {
       expect(project.orgRole).toBe('viewer')
     })
 
+    const teamWith = async (orgId: string, userIds: string[]) => {
+      const team = await prisma.team.create({
+        data: { orgId, name: `team-${Math.random()}`, slug: `team-${Math.random()}` },
+      })
+      for (const userId of userIds) {
+        await prisma.teamMember.create({ data: { teamId: team.id, orgId, userId } })
+      }
+      return team.id
+    }
+
+    it('opens a restricted project to everyone in a granted team, with the team role', async () => {
+      const alice = await seedWorkspace('alice')
+      await prisma.project.update({ where: { id: alice.projectId }, data: { restricted: true } })
+      const inTeam = await joinAs(alice.orgId, 'viewer')
+      const outside = await joinAs(alice.orgId, 'member')
+      const teamId = await teamWith(alice.orgId, [inTeam])
+      await prisma.projectGrant.create({
+        data: { orgId: alice.orgId, projectId: alice.projectId, teamId, role: 'member' },
+      })
+
+      expect((await requireProjectAccess(inTeam, alice.projectId)).role).toBe('member')
+      expect((await listAccessibleProjects(inTeam)).map((project) => project.id)).toEqual([
+        alice.projectId,
+      ])
+      await expect(requireProjectAccess(outside, alice.projectId)).rejects.toThrow(/NEXT_REDIRECT/)
+    })
+
+    it('gives the strongest grant that reaches someone, from them or a team', async () => {
+      const alice = await seedWorkspace('alice')
+      await prisma.project.update({ where: { id: alice.projectId }, data: { restricted: true } })
+      const person = await joinAs(alice.orgId, 'member')
+      const teamId = await teamWith(alice.orgId, [person])
+      await prisma.projectGrant.create({
+        data: { orgId: alice.orgId, projectId: alice.projectId, userId: person, role: 'viewer' },
+      })
+      await prisma.projectGrant.create({
+        data: { orgId: alice.orgId, projectId: alice.projectId, teamId, role: 'member' },
+      })
+
+      expect((await requireProjectAccess(person, alice.projectId)).role).toBe('member')
+      expect((await listAccessibleProjects(person))[0]?.role).toBe('member')
+    })
+
+    it('takes team access away when someone leaves the team', async () => {
+      const alice = await seedWorkspace('alice')
+      await prisma.project.update({ where: { id: alice.projectId }, data: { restricted: true } })
+      const person = await joinAs(alice.orgId, 'member')
+      const teamId = await teamWith(alice.orgId, [person])
+      await prisma.projectGrant.create({
+        data: { orgId: alice.orgId, projectId: alice.projectId, teamId, role: 'viewer' },
+      })
+      expect((await requireProjectAccess(person, alice.projectId)).role).toBe('viewer')
+
+      await prisma.teamMember.deleteMany({ where: { teamId, userId: person } })
+
+      await expect(requireProjectAccess(person, alice.projectId)).rejects.toThrow(/NEXT_REDIRECT/)
+      expect(await listAccessibleProjects(person)).toEqual([])
+    })
+
     it('ignores a grant on a project in another workspace', async () => {
       const alice = await seedWorkspace('alice')
       const bob = await seedWorkspace('bob')

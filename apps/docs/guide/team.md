@@ -53,17 +53,41 @@ These rules are enforced on the server, not in the form:
 
 A project that not everyone should see can be **restricted**: **Members → Access to this
 project**. A restricted project is visible only to owners, admins and the members or viewers
-granted access to it, each as a member or as a viewer of that project. Everyone else stops
+granted access to it, directly or through a [team](#teams), each as a member or as a viewer of
+that project. Everyone else stops
 seeing it: it disappears from their project list, and its pages send them away. A grant can
 never make someone more than a member, and owners and admins need no grant. They can already
 open everything.
 
 Removing someone from the workspace removes their grants with them.
 
+## Teams
+
+A team is a named group of people in the workspace: **Teams**, in any project's settings.
+Owners and admins create teams, add and remove people, and delete them; everyone else can see
+who is in which team.
+
+Grant a team access to a restricted project on the same **Access to this project** card as a
+person. From then on, joining the team gives access and leaving it takes access away, with no
+change to the project. When several grants reach one person (their own and one or more
+teams'), the strongest applies: member beats viewer. The access table shows people who get in
+through a team as **through QA (member)**.
+
+A team can carry the handle it goes by in CODEOWNERS, such as `@acme/qa` or GitLab's
+`@group/subgroup`. Handles are case-insensitive, as they are on GitHub. Owners on a test page
+then read `@acme/qa (QA)`, naming the Flakemetry team behind the CODEOWNERS entry. A handle maps
+to one team per workspace.
+
+The database holds these rules too, not only the forms: a team member must be a member of the
+team's workspace, and a grant names exactly one person or one team. Leaving the workspace
+drops someone from all its teams, and deleting a team drops its grants.
+
+Syncing teams from an identity provider (SCIM) is not supported yet.
+
 ## Audit log
 
-**Audit log** (owners and admins) lists every change to access, tokens, policy, notifications,
-quarantine, identities and data in the workspace: who did it, when, to what. Entries have no
+**Audit log** (owners and admins) lists every change to access, teams, tokens, policy,
+notifications, quarantine, identities and data in the workspace: who did it, when, to what. Entries have no
 foreign keys, so they outlive the people and projects they mention. Erasing a project keeps
 the workspace's record that it happened. Erasing the whole workspace removes its audit log
 with it, and the erasure request itself stays on record as described in
@@ -93,8 +117,8 @@ either provider take over the other account. They keep using the provider they s
 
 ## Removing someone
 
-**Members → Remove.** Their membership and their project grants go; the workspace's data does
-not. Anything they created (policy changes, RCA feedback, identity merges) stays attributed to
+**Members → Remove.** Their membership, team memberships and project grants go; the
+workspace's data does not. Anything they created (policy changes, RCA feedback, identity merges) stays attributed to
 them, because an audit trail that forgets who did what is not one.
 
 Removing a person does not delete their account: they may belong to other workspaces, and

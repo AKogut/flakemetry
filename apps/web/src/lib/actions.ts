@@ -12,28 +12,38 @@ import {
 } from '@flakemetry/notify'
 import {
   acceptInvitation,
+  addTeamMember,
   canContribute,
   changeMemberRole,
   checkGrant,
   checkInvite,
   checkRemoval,
   checkRoleChange,
+  checkTeam,
+  checkTeamGrant,
   countOwners,
   createInvitation,
+  createTeam,
+  deleteTeam,
+  findTeam,
   isQuarantineDecision,
   type MemberRefusal,
   type MemberRole,
   mergeIdentities,
+  normalizeTeamHandle,
   recordAudit,
   recordRcaFeedback,
   removeMember,
+  removeTeamMember,
   requestErasure,
   revokeInvitation,
   setClusterKnownIssue,
   setQuarantine,
   splitIdentity,
+  type TeamRefusal,
   unmergeIdentity,
   updateProjectPolicy as persistProjectPolicy,
+  updateTeam,
 } from '@flakemetry/queries'
 import { orgArtifactPrefix, projectArtifactPrefix } from '@flakemetry/storage'
 import { revalidatePath } from 'next/cache'
@@ -838,45 +848,82 @@ const GRANT_REFUSAL: Record<string, string> = {
   'unknown-role': 'a project grant is member or viewer',
   'not-a-member': 'that person is not in this workspace',
   'already-has-access': 'owners and admins can already open every project',
+  'unknown-team': 'that team is not in this workspace',
+}
+
+const grantTarget = (formData: FormData): { userId: string } | { teamId: string } => {
+  const teamId = String(formData.get('teamId') ?? '')
+  if (teamId !== '') return { teamId }
+  return { userId: String(formData.get('userId') ?? '') }
 }
 
 export const grantProjectAccess = async (formData: FormData): Promise<void> => {
   const user = await requireUser()
   const projectId = String(formData.get('projectId') ?? '')
-  const userId = String(formData.get('userId') ?? '')
   const role = String(formData.get('role') ?? 'viewer')
+  const target = grantTarget(formData)
   const project = await requireProjectAccess(user.id, projectId)
 
-  const target = await prisma.membership.findFirst({
-    where: { orgId: project.orgId, userId },
-    select: { role: true },
-  })
-  const refusal = checkGrant({
-    actorRole: project.orgRole,
-    targetOrgRole: target?.role ?? null,
-    grantRole: role,
-  })
-  if (refusal) throw new Error(GRANT_REFUSAL[refusal])
+  if ('teamId' in target) {
+    const team = await findTeam(prisma, project.orgId, target.teamId)
+    const refusal = checkTeamGrant({
+      actorRole: project.orgRole,
+      teamExists: team !== null,
+      grantRole: role,
+    })
+    if (refusal) throw new Error(GRANT_REFUSAL[refusal])
 
-  await prisma.projectGrant.upsert({
-    where: { projectId_userId: { projectId, userId } },
-    create: {
+    await prisma.projectGrant.upsert({
+      where: { projectId_teamId: { projectId, teamId: target.teamId } },
+      create: {
+        orgId: project.orgId,
+        projectId,
+        teamId: target.teamId,
+        role: role as MemberRole,
+        grantedBy: user.id,
+      },
+      update: { role: role as MemberRole, grantedBy: user.id },
+    })
+    await recordAudit(prisma, {
       orgId: project.orgId,
       projectId,
-      userId,
-      role: role as MemberRole,
-      grantedBy: user.id,
-    },
-    update: { role: role as MemberRole, grantedBy: user.id },
-  })
-  await recordAudit(prisma, {
-    orgId: project.orgId,
-    projectId,
-    actorId: user.id,
-    action: 'project.access_granted',
-    target: userId,
-    details: { role },
-  })
+      actorId: user.id,
+      action: 'project.access_granted',
+      target: target.teamId,
+      details: { role, team: team?.name },
+    })
+  } else {
+    const member = await prisma.membership.findFirst({
+      where: { orgId: project.orgId, userId: target.userId },
+      select: { role: true },
+    })
+    const refusal = checkGrant({
+      actorRole: project.orgRole,
+      targetOrgRole: member?.role ?? null,
+      grantRole: role,
+    })
+    if (refusal) throw new Error(GRANT_REFUSAL[refusal])
+
+    await prisma.projectGrant.upsert({
+      where: { projectId_userId: { projectId, userId: target.userId } },
+      create: {
+        orgId: project.orgId,
+        projectId,
+        userId: target.userId,
+        role: role as MemberRole,
+        grantedBy: user.id,
+      },
+      update: { role: role as MemberRole, grantedBy: user.id },
+    })
+    await recordAudit(prisma, {
+      orgId: project.orgId,
+      projectId,
+      actorId: user.id,
+      action: 'project.access_granted',
+      target: target.userId,
+      details: { role },
+    })
+  }
 
   revalidatePath(`/projects/${projectId}/settings/members`)
 }
@@ -884,20 +931,156 @@ export const grantProjectAccess = async (formData: FormData): Promise<void> => {
 export const revokeProjectAccess = async (formData: FormData): Promise<void> => {
   const user = await requireUser()
   const projectId = String(formData.get('projectId') ?? '')
-  const userId = String(formData.get('userId') ?? '')
+  const target = grantTarget(formData)
   const project = await requireProjectAccess(user.id, projectId)
   if (!canManage(project.orgRole)) throw new Error(GRANT_REFUSAL['not-a-manager'])
 
-  const { count } = await prisma.projectGrant.deleteMany({ where: { projectId, userId } })
+  const { count } = await prisma.projectGrant.deleteMany({
+    where: { projectId, orgId: project.orgId, ...target },
+  })
   if (count > 0) {
     await recordAudit(prisma, {
       orgId: project.orgId,
       projectId,
       actorId: user.id,
       action: 'project.access_revoked',
-      target: userId,
+      target: 'teamId' in target ? target.teamId : target.userId,
     })
   }
 
   revalidatePath(`/projects/${projectId}/settings/members`)
+}
+
+const TEAM_REFUSAL: Record<TeamRefusal, string> = {
+  'not-a-manager': 'only owners and admins can manage teams',
+  'empty-name': 'a team needs a name',
+  'name-too-long': 'that team name is too long',
+  'invalid-handle': 'a CODEOWNERS team looks like @org/team',
+  'name-taken': 'a team with that name already exists',
+  'handle-taken': 'another team already maps to that CODEOWNERS team',
+}
+
+const teamsPath = (projectId: string): string => `/projects/${projectId}/settings/teams`
+
+export const createWorkspaceTeam = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const name = String(formData.get('name') ?? '')
+  const handle = String(formData.get('handle') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+
+  const refusal = checkTeam({ actorRole: project.orgRole, name, handle })
+  if (refusal) throw new Error(TEAM_REFUSAL[refusal])
+
+  const outcome = await createTeam(prisma, { orgId: project.orgId, name, handle })
+  if (outcome.status === 'rejected') throw new Error(TEAM_REFUSAL[outcome.reason])
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    actorId: user.id,
+    action: 'team.created',
+    target: outcome.id,
+    details: { name: name.trim(), handle: normalizeTeamHandle(handle) },
+  })
+
+  revalidatePath(teamsPath(projectId))
+}
+
+export const updateWorkspaceTeam = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const teamId = String(formData.get('teamId') ?? '')
+  const name = String(formData.get('name') ?? '')
+  const handle = String(formData.get('handle') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+
+  const refusal = checkTeam({ actorRole: project.orgRole, name, handle })
+  if (refusal) throw new Error(TEAM_REFUSAL[refusal])
+
+  const outcome = await updateTeam(prisma, { orgId: project.orgId, teamId, name, handle })
+  if (!outcome) throw new Error(GRANT_REFUSAL['unknown-team'])
+  if (outcome.status === 'rejected') throw new Error(TEAM_REFUSAL[outcome.reason])
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    actorId: user.id,
+    action: 'team.updated',
+    target: teamId,
+    details: { name: name.trim(), handle: normalizeTeamHandle(handle) },
+  })
+
+  revalidatePath(teamsPath(projectId))
+}
+
+export const deleteWorkspaceTeam = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const teamId = String(formData.get('teamId') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.orgRole)) throw new Error(TEAM_REFUSAL['not-a-manager'])
+
+  const team = await findTeam(prisma, project.orgId, teamId)
+  if (team && (await deleteTeam(prisma, project.orgId, teamId))) {
+    await recordAudit(prisma, {
+      orgId: project.orgId,
+      actorId: user.id,
+      action: 'team.deleted',
+      target: teamId,
+      details: { name: team.name },
+    })
+  }
+
+  revalidatePath(teamsPath(projectId))
+}
+
+const TEAM_MEMBER_REFUSAL: Record<string, string> = {
+  'unknown-team': 'that team is not in this workspace',
+  'not-a-member': 'that person is not in this workspace',
+}
+
+export const addWorkspaceTeamMember = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const teamId = String(formData.get('teamId') ?? '')
+  const userId = String(formData.get('userId') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.orgRole)) throw new Error(TEAM_REFUSAL['not-a-manager'])
+
+  const team = await findTeam(prisma, project.orgId, teamId)
+  const outcome = team
+    ? await addTeamMember(prisma, { orgId: project.orgId, teamId, userId })
+    : 'unknown-team'
+  const refusal = TEAM_MEMBER_REFUSAL[outcome]
+  if (refusal) throw new Error(refusal)
+  if (outcome === 'added') {
+    await recordAudit(prisma, {
+      orgId: project.orgId,
+      actorId: user.id,
+      action: 'team.member_added',
+      target: userId,
+      details: { teamId, team: team?.name },
+    })
+  }
+
+  revalidatePath(teamsPath(projectId))
+}
+
+export const removeWorkspaceTeamMember = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const teamId = String(formData.get('teamId') ?? '')
+  const userId = String(formData.get('userId') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.orgRole)) throw new Error(TEAM_REFUSAL['not-a-manager'])
+
+  const team = await findTeam(prisma, project.orgId, teamId)
+  if (team && (await removeTeamMember(prisma, { orgId: project.orgId, teamId, userId }))) {
+    await recordAudit(prisma, {
+      orgId: project.orgId,
+      actorId: user.id,
+      action: 'team.member_removed',
+      target: userId,
+      details: { teamId, team: team.name },
+    })
+  }
+
+  revalidatePath(teamsPath(projectId))
 }

@@ -1,5 +1,5 @@
 import { getPrismaClient } from '@flakemetry/db'
-import { listInvitations, listMembers, MEMBER_ROLES } from '@flakemetry/queries'
+import { listInvitations, listMembers, listTeams, MEMBER_ROLES } from '@flakemetry/queries'
 import { cookies, headers } from 'next/headers'
 
 import {
@@ -31,19 +31,35 @@ export default async function MembersPage({ params }: { params: Promise<{ projec
   const user = await requireUser()
   const project = await requireProjectAccess(user.id, projectId)
 
-  const [members, invitations, grants] = await Promise.all([
+  const [members, invitations, grants, teams] = await Promise.all([
     listMembers(prisma, project.orgId),
     listInvitations(prisma, project.orgId),
     prisma.projectGrant.findMany({
       where: { projectId: project.id },
-      select: { userId: true, role: true },
+      select: { userId: true, teamId: true, role: true },
     }),
+    listTeams(prisma, project.orgId),
   ])
 
   const created = (await cookies()).get(NEW_INVITE_COOKIE)?.value ?? null
   const canManage = project.orgRole === 'owner' || project.orgRole === 'admin'
   const isOwner = project.orgRole === 'owner'
-  const grantByUser = new Map(grants.map((grant) => [grant.userId, grant.role]))
+  const grantByUser = new Map(
+    grants.flatMap((grant) => (grant.userId ? [[grant.userId, grant.role] as const] : [])),
+  )
+  const grantByTeam = new Map(
+    grants.flatMap((grant) => (grant.teamId ? [[grant.teamId, grant.role] as const] : [])),
+  )
+  const teamGrantsByUser = new Map<string, string[]>()
+  for (const team of teams) {
+    const role = grantByTeam.get(team.id)
+    if (!role) continue
+    for (const member of team.members) {
+      const list = teamGrantsByUser.get(member.userId) ?? []
+      list.push(`${team.name} (${role})`)
+      teamGrantsByUser.set(member.userId, list)
+    }
+  }
   const grantable = members.filter((member) => member.role === 'member' || member.role === 'viewer')
   const pending = invitations.filter((invitation) => invitation.state === 'pending')
 
@@ -53,7 +69,7 @@ export default async function MembersPage({ params }: { params: Promise<{ projec
       <p className="page-subtitle">
         Owners and admins manage the <strong>{project.orgName}</strong> workspace. Members can use
         every open project, and viewers can only read. A restricted project is visible only to
-        owners, admins and the people granted access below.
+        owners, admins and the people or teams granted access below.
       </p>
 
       {created ? (
@@ -155,12 +171,67 @@ export default async function MembersPage({ params }: { params: Promise<{ projec
             <input type="hidden" name="projectId" value={projectId} />
             <label style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
               <input type="checkbox" name="restricted" defaultChecked={project.restricted} />
-              Restricted: only owners, admins and the people granted access can open it
+              Restricted: only owners, admins and the people or teams granted access can open it
             </label>
             <button className="btn" type="submit">
               Save
             </button>
           </form>
+          {project.restricted && teams.length > 0 ? (
+            <table style={{ marginTop: '1rem' }}>
+              <thead>
+                <tr>
+                  <th>Team</th>
+                  <th>People</th>
+                  <th>Access to this project</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {teams.map((team) => {
+                  const granted = grantByTeam.get(team.id)
+                  return (
+                    <tr key={team.id}>
+                      <td>
+                        {team.name}
+                        {team.handle ? <span className="muted mono"> {team.handle}</span> : null}
+                      </td>
+                      <td className="muted">{team.members.length}</td>
+                      <td>
+                        <form
+                          action={grantProjectAccess}
+                          style={{ display: 'flex', gap: '0.4rem' }}
+                        >
+                          <input type="hidden" name="projectId" value={projectId} />
+                          <input type="hidden" name="teamId" value={team.id} />
+                          <select name="role" defaultValue={granted ?? 'viewer'}>
+                            <option value="viewer">viewer</option>
+                            <option value="member">member</option>
+                          </select>
+                          <button className="btn" type="submit">
+                            {granted ? 'Change' : 'Grant'}
+                          </button>
+                        </form>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        {granted ? (
+                          <form action={revokeProjectAccess}>
+                            <input type="hidden" name="projectId" value={projectId} />
+                            <input type="hidden" name="teamId" value={team.id} />
+                            <button className="btn btn-danger" type="submit">
+                              Revoke
+                            </button>
+                          </form>
+                        ) : (
+                          <span className="muted">no access</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          ) : null}
           {project.restricted ? (
             <table style={{ marginTop: '1rem' }}>
               <thead>
@@ -203,6 +274,10 @@ export default async function MembersPage({ params }: { params: Promise<{ projec
                               Revoke
                             </button>
                           </form>
+                        ) : teamGrantsByUser.has(member.userId) ? (
+                          <span className="muted">
+                            through {teamGrantsByUser.get(member.userId)?.join(', ')}
+                          </span>
                         ) : (
                           <span className="muted">no access</span>
                         )}
