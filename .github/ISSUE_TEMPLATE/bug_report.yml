@@ -2,6 +2,20 @@ name: Bug report
 description: Something is broken
 labels: ['type:bug']
 body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Reporter (Playwright, Vitest, Jest or pytest)
+        - CLI or GitHub Action
+        - Dashboard
+        - API or worker
+        - Self-hosting (compose, Helm, backups)
+        - Documentation
+        - Not sure
+    validations:
+      required: true
   - type: textarea
     id: what
     attributes:
@@ -19,10 +33,17 @@ body:
   - type: input
     id: version
     attributes:
-      label: Version
-      description: Package versions or commit sha
+      label: Versions
+      description: Flakemetry package versions or commit sha, and the test runner version if a reporter is involved
+      placeholder: '@flakemetry/playwright-reporter 0.1.4, @playwright/test 1.63.0'
   - type: textarea
     id: context
     attributes:
       label: Environment
-      description: OS, node version, CI provider, test framework
+      description: OS, Node version, CI provider, and how the instance is deployed
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Output of `flakemetry doctor`, reporter output, or service logs. Remove tokens first.
+      render: text

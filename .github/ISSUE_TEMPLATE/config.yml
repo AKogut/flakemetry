@@ -3,3 +3,6 @@ contact_links:
   - name: Questions & ideas
     url: https://github.com/AKogut/flakemetry/discussions
     about: Use Discussions for questions, ideas and design debate
+  - name: Security vulnerability
+    url: https://github.com/AKogut/flakemetry/security/advisories/new
+    about: Report privately. Please do not open a public issue for a vulnerability.

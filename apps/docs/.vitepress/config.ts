@@ -29,6 +29,7 @@ export default defineConfig({
       { text: 'Guide', link: '/guide/introduction' },
       { text: 'Concepts', link: '/concepts/test-identity' },
       { text: 'Reference', link: '/reference/configuration' },
+      { text: 'Contributing', link: '/contributing/development' },
       { text: 'Roadmap', link: 'https://github.com/users/AKogut/projects/14' },
     ],
     sidebar: {
@@ -79,6 +80,12 @@ export default defineConfig({
             { text: 'Data governance', link: '/reference/data-governance' },
             { text: 'Threat model', link: '/reference/threat-model' },
           ],
+        },
+      ],
+      '/contributing/': [
+        {
+          text: 'Contributing',
+          items: [{ text: 'Development guide', link: '/contributing/development' }],
         },
       ],
     },

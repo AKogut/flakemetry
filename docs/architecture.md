@@ -43,18 +43,9 @@ Flakemetry is a layered, event-driven platform with one governing constraint: **
 
 ## Workspace map
 
-| Workspace | Role | Published |
-|---|---|---|
-| `packages/contracts` | zod schemas: entities, ingestion payloads, query DTOs — single source of truth | yes |
-| `packages/core` | pure domain logic: test identity, flaky scoring; no I/O | yes |
-| `packages/db` | Prisma schema, migrations, seed, client singleton | no |
-| `packages/sdk` | OTel test instrumentation + ingest client | yes |
-| `packages/reporter` | `@flakemetry/playwright-reporter` | yes |
-| `packages/ai` | LLM provider abstraction + RCA pipeline | yes |
-| `packages/cli` | command line interface | yes |
-| `apps/api` | ingestion + query service | no |
-| `apps/worker` | queue consumers / processing stages | no |
-| `apps/web` | dashboard | no |
+The map of every app and package, with what each one does and which ones are published, is
+kept in one place: the [development guide](https://akogut.github.io/flakemetry/contributing/development#where-things-live).
+A test fails when it misses a workspace or marks one published that is not.
 
 Dependency direction is strictly downward: apps depend on packages, packages depend on `contracts`, nothing depends on apps.
 
