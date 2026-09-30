@@ -1,6 +1,6 @@
 import { getPrismaClient } from '@flakemetry/db'
 
-const RUNNERS = ['playwright', 'vitest', 'jest']
+const RUNNERS = ['playwright', 'vitest', 'vitest5', 'jest']
 const EXPECTED_EXECUTIONS = 3
 const TIMEOUT_MS = 120_000
 const POLL_MS = 2_000
