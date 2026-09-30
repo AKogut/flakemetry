@@ -103,11 +103,15 @@ jobs:
           cat /tmp/api.log
           exit 1
 
+      - name: Give the reporter a project and a token
+        working-directory: examples/reporter-smoke
+        run: pnpm provision
+
       - name: Send a real run through a reporter
         working-directory: examples/reporter-smoke
-        run: |
-          pnpm provision
-          FLAKEMETRY_TOKEN="$VITEST_TOKEN" pnpm smoke:vitest || true
+        env:
+          FLAKEMETRY_TOKEN: ${{ env.VITEST_TOKEN }}
+        run: pnpm smoke:vitest || true
 
       - name: Grafana loaded the dashboard
         run: |
