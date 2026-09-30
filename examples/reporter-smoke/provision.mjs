@@ -17,6 +17,7 @@ for (const runner of RUNNERS) {
     data: { orgId: org.id, name: runner, slug: `${runner}-${stamp}` },
   })
   const raw = generateToken()
+  if (process.env.GITHUB_ACTIONS === 'true') process.stdout.write(`::add-mask::${raw}\n`)
   await prisma.ingestToken.create({
     data: { orgId: org.id, projectId: project.id, name: 'smoke', tokenHash: hashToken(raw) },
   })
