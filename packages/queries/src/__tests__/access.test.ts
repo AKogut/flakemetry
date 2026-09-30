@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { canContribute, canManage, checkGrant, effectiveProjectRole } from '../access'
+import {
+  canContribute,
+  canManage,
+  checkGrant,
+  checkTeamGrant,
+  effectiveProjectRole,
+  strongestGrant,
+} from '../access'
 import { checkInvite, checkRemoval, checkRoleChange } from '../members'
 
 describe('effectiveProjectRole', () => {
@@ -17,9 +24,49 @@ describe('effectiveProjectRole', () => {
   ] as const)(
     'an org %s on a project restricted=%s with grant %s acts as %s',
     (orgRole, restricted, grantRole, expected) => {
-      expect(effectiveProjectRole({ orgRole, restricted, grantRole })).toBe(expected)
+      expect(
+        effectiveProjectRole({ orgRole, restricted, grantRoles: grantRole ? [grantRole] : [] }),
+      ).toBe(expected)
     },
   )
+
+  it('takes the strongest of the grants that reach someone, from them or their teams', () => {
+    expect(
+      effectiveProjectRole({
+        orgRole: 'viewer',
+        restricted: true,
+        grantRoles: ['viewer', 'member'],
+      }),
+    ).toBe('member')
+    expect(
+      effectiveProjectRole({
+        orgRole: 'member',
+        restricted: true,
+        grantRoles: ['viewer', 'viewer'],
+      }),
+    ).toBe('viewer')
+    expect(
+      effectiveProjectRole({ orgRole: 'member', restricted: true, grantRoles: ['admin', 'owner'] }),
+    ).toBeNull()
+  })
+
+  it('never lets a grant lower what the workspace role already gives', () => {
+    expect(
+      effectiveProjectRole({ orgRole: 'member', restricted: false, grantRoles: ['viewer'] }),
+    ).toBe('member')
+    expect(
+      effectiveProjectRole({ orgRole: 'admin', restricted: true, grantRoles: ['viewer'] }),
+    ).toBe('admin')
+  })
+})
+
+describe('strongestGrant', () => {
+  it('ranks member above viewer and ignores anything else', () => {
+    expect(strongestGrant([])).toBeNull()
+    expect(strongestGrant(['viewer'])).toBe('viewer')
+    expect(strongestGrant(['member', 'viewer'])).toBe('member')
+    expect(strongestGrant(['owner'])).toBeNull()
+  })
 })
 
 describe('what each role may do', () => {
@@ -53,6 +100,20 @@ describe('checkGrant', () => {
     [{ actorRole: 'owner', targetOrgRole: 'admin', grantRole: 'viewer' }, 'already-has-access'],
   ] as const)('refuses %o with %s', (input, refusal) => {
     expect(checkGrant(input)).toBe(refusal)
+  })
+})
+
+describe('checkTeamGrant', () => {
+  it('lets a manager grant member or viewer access to a team of the workspace', () => {
+    expect(checkTeamGrant({ actorRole: 'owner', teamExists: true, grantRole: 'member' })).toBeNull()
+  })
+
+  it.each([
+    [{ actorRole: 'member', teamExists: true, grantRole: 'viewer' }, 'not-a-manager'],
+    [{ actorRole: 'admin', teamExists: true, grantRole: 'owner' }, 'unknown-role'],
+    [{ actorRole: 'admin', teamExists: false, grantRole: 'viewer' }, 'unknown-team'],
+  ] as const)('refuses %o with %s', (input, refusal) => {
+    expect(checkTeamGrant(input)).toBe(refusal)
   })
 })
 

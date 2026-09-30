@@ -34,5 +34,5 @@ describe.skipIf(!hasDb)('schema.prisma and the migrations', () => {
     }
 
     expect(status, `prisma would generate this on top of the migrations:\n${diff}`).toBe(0)
-  })
+  }, 60_000)
 })

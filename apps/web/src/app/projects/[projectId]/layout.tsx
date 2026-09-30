@@ -41,6 +41,7 @@ export default async function ProjectLayout({
           <a href={`/projects/${projectId}/settings/notifications`}>Notifications</a>
           <a href={`/projects/${projectId}/settings/badges`}>Badges</a>
           <a href={`/projects/${projectId}/settings/members`}>Members</a>
+          <a href={`/projects/${projectId}/settings/teams`}>Teams</a>
           <a href={`/projects/${projectId}/settings/data`}>Data</a>
           {project.orgRole === 'owner' || project.orgRole === 'admin' ? (
             <a href={`/projects/${projectId}/settings/audit`}>Audit log</a>

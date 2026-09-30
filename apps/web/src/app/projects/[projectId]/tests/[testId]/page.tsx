@@ -10,6 +10,7 @@ import {
   getRcaFeedback,
   getTest,
   listPluginSignals,
+  teamsByHandle,
 } from '@flakemetry/queries'
 import { notFound } from 'next/navigation'
 
@@ -74,6 +75,7 @@ export default async function TestDetailPage({
   const owners = project?.codeowners
     ? matchCodeowners(parseCodeowners(project.codeowners), test.filePath)
     : []
+  const ownerTeams = await teamsByHandle(prisma, access.orgId, owners)
 
   const mergeCandidates = canSplit ? await findMergeCandidates(prisma, projectId, testId) : []
   const paramBuckets = await getParamBuckets(prisma, projectId, testId)
@@ -117,8 +119,16 @@ export default async function TestDetailPage({
                     href={`/projects/${projectId}/flaky?owner=${encodeURIComponent(ownerHandle)}`}
                     className="mono"
                     style={{ marginRight: '0.4rem' }}
+                    title={
+                      ownerTeams.has(ownerHandle)
+                        ? `The ${ownerTeams.get(ownerHandle)} team in Flakemetry`
+                        : undefined
+                    }
                   >
                     {ownerHandle}
+                    {ownerTeams.has(ownerHandle) ? (
+                      <span className="muted"> ({ownerTeams.get(ownerHandle)})</span>
+                    ) : null}
                   </a>
                 ))}
               </>

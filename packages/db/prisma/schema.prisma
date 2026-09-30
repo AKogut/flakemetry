@@ -45,6 +45,7 @@ model Org {
   projects    Project[]
   memberships Membership[]
   invitations Invitation[]
+  teams       Team[]
 
   @@map("org")
 }
@@ -145,8 +146,9 @@ model Membership {
   role      MembershipRole @default(member)
   createdAt DateTime       @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  org  Org  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org   Org          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  teams TeamMember[]
 
   @@unique([userId, orgId])
   @@index([orgId])
@@ -781,17 +783,54 @@ model ProjectGrant {
   id        String         @id @default(uuid()) @db.Uuid
   orgId     String         @map("org_id") @db.Uuid
   projectId String         @map("project_id") @db.Uuid
-  userId    String         @map("user_id") @db.Uuid
+  userId    String?        @map("user_id") @db.Uuid
+  teamId    String?        @map("team_id") @db.Uuid
   role      MembershipRole
   grantedBy String?        @map("granted_by") @db.Uuid
   createdAt DateTime       @default(now()) @map("created_at")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  team    Team?   @relation(fields: [teamId, orgId], references: [id, orgId], onDelete: Cascade)
 
   @@unique([projectId, userId])
+  @@unique([projectId, teamId])
   @@index([userId])
+  @@index([teamId])
   @@index([orgId])
   @@map("project_grant")
+}
+
+model Team {
+  id        String   @id @default(uuid()) @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  name      String
+  slug      String
+  handle    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  org     Org            @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  members TeamMember[]
+  grants  ProjectGrant[]
+
+  @@unique([id, orgId])
+  @@unique([orgId, slug])
+  @@unique([orgId, handle])
+  @@map("team")
+}
+
+model TeamMember {
+  teamId    String   @map("team_id") @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  team       Team       @relation(fields: [teamId, orgId], references: [id, orgId], onDelete: Cascade)
+  membership Membership @relation(fields: [userId, orgId], references: [userId, orgId], onDelete: Cascade)
+
+  @@id([teamId, userId])
+  @@index([userId, orgId])
+  @@index([orgId])
+  @@map("team_member")
 }
 
 model AuditEvent {
