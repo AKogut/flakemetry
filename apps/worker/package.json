@@ -5,7 +5,7 @@
   "description": "Processing workers: identity, scoring, clustering, RCA",
   "type": "module",
   "scripts": {
-    "build": "tsup",
+    "build": "tsdown --config-loader native",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "clean": "rm -rf dist .turbo",
@@ -16,13 +16,12 @@
   },
   "devDependencies": {
     "@flakemetry/api": "workspace:*",
+    "@flakemetry/build-config": "workspace:*",
     "@flakemetry/eslint-config": "workspace:*",
     "@flakemetry/queries": "workspace:*",
     "@flakemetry/sdk": "workspace:*",
     "@flakemetry/tsconfig": "workspace:*",
-    "@flakemetry/tsup-config": "workspace:*",
     "@types/node": "^22.10.5",
-    "tsup": "^8.3.5",
     "tsx": "^4.23.13",
     "vitest": "^4.1.11"
   },

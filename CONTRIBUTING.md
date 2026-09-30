@@ -25,7 +25,7 @@ pnpm build
 docker compose up -d postgres
 ```
 
-Node 20+ and pnpm 9+ are required (the `packageManager` pin resolves the exact pnpm version through corepack).
+Building the repository needs Node 22.18 or later and pnpm 9+ (the `packageManager` pin resolves the exact pnpm version through corepack). The published packages still support Node 20: the reporter smoke job runs every reporter on it.
 
 ## Workflow
 

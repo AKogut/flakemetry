@@ -26,16 +26,16 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsdown --config-loader native",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "clean": "rm -rf dist .turbo",
     "test": "vitest run"
   },
   "devDependencies": {
+    "@flakemetry/build-config": "workspace:*",
     "@flakemetry/eslint-config": "workspace:*",
     "@flakemetry/tsconfig": "workspace:*",
-    "@flakemetry/tsup-config": "workspace:*",
     "@types/node": "^22.10.5",
     "vitest": "^4.1.11"
   },
