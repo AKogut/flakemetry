@@ -206,6 +206,8 @@ Retention is resolved **per project**: a project can set its own execution/artif
 
 Recompute is idempotent: re-delivering a run recomputes the same day's aggregates rather than double-counting.
 
+Each run also keeps its own pass, fail, skip and flaky counts, written when the worker processes it. The runs list reads those, so a run whose raw executions retention has pruned still shows what happened in it; its detail page no longer lists the executions.
+
 ### Plugins
 
 Set on **both the API and the worker**. See the [plugins guide](https://akogut.github.io/flakemetry/guide/plugins).

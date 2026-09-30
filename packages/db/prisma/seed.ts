@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import type { Prisma, RunStatus, TestStatus } from '@prisma/client'
 
-import { createPrismaClient } from '../src/index'
+import { createPrismaClient, refreshRunCounts } from '../src/index'
 
 const prisma = createPrismaClient()
 
@@ -346,6 +346,7 @@ async function main() {
   }
 
   await prisma.testExecution.createMany({ data: executions })
+  await refreshRunCounts(prisma, project.id)
 
   await Promise.all(
     Object.entries(signatureCounts).map(([key, count]) =>

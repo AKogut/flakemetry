@@ -130,6 +130,57 @@ describe.skipIf(!hasDb)('processJob', () => {
     expect(sigAfter.occurrenceCount).toBe(sigBefore.occurrenceCount)
   })
 
+  it('stores the run counts the runs list shows, from the executions it wrote', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(prisma, batch(), ctx)
+
+    const run = await prisma.run.findFirstOrThrow()
+    const stored = await prisma.testExecution.groupBy({ by: ['status'], _count: { _all: true } })
+    const of = (status: string) => stored.find((row) => row.status === status)?._count._all ?? 0
+
+    expect({
+      passed: run.passedCount,
+      failed: run.failedCount,
+      skipped: run.skippedCount,
+      flaky: run.flakyCount,
+    }).toEqual({ passed: of('pass'), failed: of('fail'), skipped: of('skip'), flaky: of('flaky') })
+    expect(run.failedCount).toBe(1)
+    expect(run.flakyCount).toBe(1)
+  })
+
+  it('replaces the run counts when the same run is delivered again, never adds to them', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(prisma, batch(), ctx)
+    await processJob(prisma, batch(), ctx)
+    expect(await prisma.run.findFirstOrThrow()).toMatchObject({ failedCount: 1, flakyCount: 1 })
+
+    await processJob(
+      prisma,
+      batch({
+        executions: [
+          {
+            filePath: 'e2e/login.spec.ts',
+            suite: 'auth',
+            title: 'logs in',
+            status: 'pass',
+            attempt: 1,
+            startedAt: new Date('2026-07-16T10:00:01Z'),
+            durationMs: 900,
+          },
+        ],
+      }),
+      ctx,
+    )
+
+    expect(await prisma.run.findFirstOrThrow()).toMatchObject({
+      passedCount: 1,
+      failedCount: 0,
+      skippedCount: 0,
+      flakyCount: 0,
+    })
+    expect(await prisma.testExecution.count()).toBe(1)
+  })
+
   it('emits flaky.detected and quarantine.changed when a test crosses into quarantine', async () => {
     const events = createEventBus()
     const flaky: DomainEventMap['flaky.detected'][] = []
