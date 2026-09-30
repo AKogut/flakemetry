@@ -123,6 +123,27 @@ describe('createDispatcher', () => {
     expect(send).toHaveBeenCalledTimes(2)
   })
 
+  it('lets an event hold its dedupe key for longer than the default window', async () => {
+    const send: NotificationSender = vi.fn(async () => ({ ok: true, status: 200 }))
+    let clock = 1_000
+    const dispatcher = createDispatcher({
+      channels: [slackChannel],
+      send,
+      now: () => clock,
+      dedupeWindowMs: 10_000,
+    })
+    const daily = { ...flakyEvent, dedupeWindowMs: 100_000 }
+
+    await dispatcher.dispatch(daily)
+    clock += 20_000
+    await dispatcher.dispatch(daily)
+    expect(send).toHaveBeenCalledTimes(1)
+
+    clock += 100_000
+    await dispatcher.dispatch(daily)
+    expect(send).toHaveBeenCalledTimes(2)
+  })
+
   it('does not consume the dedupe slot when delivery fails, so it retries next time', async () => {
     let attempt = 0
     const send: NotificationSender = vi.fn(async () => {

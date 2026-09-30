@@ -2,8 +2,18 @@ import { createHash } from 'node:crypto'
 
 import type { JsonRecord } from '@flakemetry/contracts'
 
-export const normalizeFilePath = (filePath: string): string =>
-  filePath.replaceAll('\\', '/').replace(/^\.\//, '').replace(/^\/+/, '').toLowerCase()
+export const normalizeFilePath = (filePath: string): string => {
+  const segments: string[] = []
+  for (const segment of filePath.replaceAll('\\', '/').split('/')) {
+    if (segment === '' || segment === '.') continue
+    if (segment === '..' && segments.length > 0 && segments[segments.length - 1] !== '..') {
+      segments.pop()
+      continue
+    }
+    segments.push(segment)
+  }
+  return segments.join('/').toLowerCase()
+}
 
 export const hashParams = (params: JsonRecord | null | undefined): string | null => {
   if (!params || Object.keys(params).length === 0) return null

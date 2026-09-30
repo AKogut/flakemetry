@@ -11,6 +11,8 @@ import {
 
 import type { EventBus } from './events'
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
 const parseTypes = (raw: string | undefined): readonly NotificationType[] => {
   if (!raw) return NOTIFICATION_TYPES
   const types = raw
@@ -96,6 +98,7 @@ export const startNotifications = (
       // Once per project per day. The budget is checked on every run, and a suite that
       // keeps failing would otherwise send one of these for each of them.
       dedupeKey: `ai_budget_spent:${payload.projectId}:${new Date().toISOString().slice(0, 10)}`,
+      dedupeWindowMs: DAY_MS,
     })
   })
 

@@ -1,0 +1,13 @@
+{
+  "name": "flakemetry-reporter-smoke-vitest5",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The Vitest smoke suite under the next Vitest major. Installed with npm on its own so the workspace keeps its single Vitest version.",
+  "type": "module",
+  "scripts": {
+    "smoke": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.0"
+  }
+}

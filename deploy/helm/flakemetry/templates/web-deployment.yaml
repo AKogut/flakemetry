@@ -89,6 +89,8 @@ spec:
             {{- if .Values.ai.enabled }}
             - name: FLAKEMETRY_AI_RCA
               value: 'true'
+            - name: FLAKEMETRY_AI_DAILY_TOKEN_BUDGET
+              value: {{ .Values.ai.dailyTokenBudget | quote }}
             {{- end }}
             {{- with .Values.web.extraEnv }}
             {{- toYaml . | nindent 12 }}

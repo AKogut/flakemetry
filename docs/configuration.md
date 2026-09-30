@@ -54,7 +54,7 @@ notifications:
 | `quarantine.enabled` | boolean | `false` | Allow automatic quarantining of flaky tests |
 | `quarantine.cooldownRuns` | int ≥ 1 | `20` | Clean runs required before automatic un-quarantine |
 | `ai.rca` | boolean | `true` | Enable AI root-cause analysis |
-| `ai.dailyTokenBudget` | int ≥ 0 | `200000` | Per-project daily LLM token cap; RCA pauses when exceeded |
+| `ai.dailyTokenBudget` | int ≥ 0 | `200000` | Per-project daily LLM token cap, counted per UTC day; RCA pauses when it is spent, and `0` turns RCA off |
 | `ignore` | string[] | `[]` | Glob patterns of test files excluded from analysis |
 | `retention.rawDays` | int ≥ 1 | `90` | Days raw executions are kept; rollups live longer |
 | `notifications.channels` | array | `[]` | Notification channels declared in code. Each is `{ kind: slack \| discord \| email, target, events? }` — `target` is a webhook URL (Slack/Discord) or address (email); `events` filters by type (default: all). Synced to the project on each run and shown read-only in **Settings → Notifications** alongside dashboard-added channels. |
@@ -82,6 +82,12 @@ Unknown keys are rejected with an error naming the offending path — typos fail
 | `FLAKEMETRY_TRACKER_AFTER_DAYS` | `tracker.afterDays` |
 | `FLAKEMETRY_TRACKER_RECOVERY_DAYS` | `tracker.recoveryDays` |
 | `FLAKEMETRY_PUBLIC_API_URL` | Base URL printed in badge snippets |
+
+The policy variables above (thresholds, quarantine, AI, cost and tracker) take precedence over
+the Policy page and must reach the **web** service as well as the worker. The worker enforces
+them, and the dashboard reports the effective value and its source. A value outside what the
+Policy page accepts, such as `200k` or a threshold above 1, is ignored, and the next tier
+applies. It does not become a number the policy never allows.
 
 ### Reporter transport (Playwright)
 
@@ -141,11 +147,13 @@ signatures reach the model at all; the rest are answered from the cluster's cach
 
 When the budget runs out, the worker emits `ai_budget_spent` — subscribe to it on any
 notification channel, including email, and the day analysis stops is a day someone hears
-about. It is deduplicated per project per day, since the budget is re-checked on every run.
+about. The budget is re-checked on every run, so the alert is held to once per project per
+UTC day. That dedupe lives in the worker process, so a restart or a second worker replica can
+send it once more.
 
 ### Notifications
 
-The worker pushes intelligence to Slack, Discord and email. Webhook delivery is best-effort and de-duplicated per channel so a flapping test can't spam a channel. Channels come from two places, applied together: **global env channels** (below) and **per-project channels** configured in **Settings → Notifications** (add a Slack/Discord webhook or an email address with an event filter). Events: `flaky_detected`, `quarantine_changed`, `rca_ready`, `suite_regressed` (a suite's fail-rate crossing its trailing baseline), and `suite_slowed` (a suite's average duration rising well above its trailing baseline).
+The worker pushes intelligence to Slack, Discord and email. Webhook delivery is best-effort and de-duplicated per channel so a flapping test can't spam a channel. Channels come from two places, applied together: **global env channels** (below) and **per-project channels** configured in **Settings → Notifications** (add a Slack/Discord webhook or an email address with an event filter). Events: `flaky_detected`, `quarantine_changed`, `rca_ready`, `suite_regressed` (a suite's fail-rate crossing its trailing baseline), `suite_slowed` (a suite's average duration rising well above its trailing baseline), and `ai_budget_spent` (the project's daily AI budget is used up and root-cause analysis has paused). Every event can also be listed under `events` in `flakemetry.yml`.
 
 | Variable | Effect |
 |---|---|
