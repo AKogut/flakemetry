@@ -39,4 +39,46 @@ describe('the AI budget alert reaches a channel', () => {
 
     expect(delivered.join()).toContain('paused until tomorrow')
   })
+
+  it('alerts once a day, not again when the default dedupe window lapses', async () => {
+    const delivered: string[] = []
+    const events = createEventBus(() => undefined)
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-30T01:00:00Z'))
+
+    startNotifications(
+      events,
+      {
+        FLAKEMETRY_SLACK_WEBHOOK: 'https://hooks.slack.com/services/probe',
+        FLAKEMETRY_NOTIFY_EVENTS: 'ai_budget_spent',
+      },
+      () => Promise.resolve([]),
+    )
+
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = (async (_url: string, init: RequestInit) => {
+      delivered.push(String(init.body))
+      return new Response('ok', { status: 200 })
+    }) as unknown as typeof fetch
+    const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 50))
+
+    try {
+      events.emit('ai.budget.spent', { projectId: 'p1', spent: 200_000, budget: 200_000 })
+      await settle()
+      expect(delivered).toHaveLength(1)
+
+      vi.setSystemTime(new Date('2026-09-30T08:00:00Z'))
+      events.emit('ai.budget.spent', { projectId: 'p1', spent: 201_000, budget: 200_000 })
+      await settle()
+      expect(delivered).toHaveLength(1)
+
+      vi.setSystemTime(new Date('2026-10-01T01:00:00Z'))
+      events.emit('ai.budget.spent', { projectId: 'p1', spent: 200_000, budget: 200_000 })
+      await settle()
+      expect(delivered).toHaveLength(2)
+    } finally {
+      globalThis.fetch = originalFetch
+      vi.useRealTimers()
+    }
+  })
 })

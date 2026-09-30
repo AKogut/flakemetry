@@ -50,3 +50,38 @@ describe('projectPolicyEnvOverrides', () => {
     expect(POLICY_FIELDS.length).toBeGreaterThanOrEqual(Object.keys(ENV_FOR_FIELD).length)
   })
 })
+
+describe('an invalid environment value', () => {
+  it.each([
+    ['FLAKEMETRY_AI_DAILY_TOKEN_BUDGET', '200k'],
+    ['FLAKEMETRY_AI_DAILY_TOKEN_BUDGET', '200_000'],
+    ['FLAKEMETRY_AI_DAILY_TOKEN_BUDGET', '-1'],
+    ['FLAKEMETRY_AI_DAILY_TOKEN_BUDGET', '1000.5'],
+    ['FLAKEMETRY_FLAKY_THRESHOLD', '80%'],
+    ['FLAKEMETRY_FLAKY_THRESHOLD', '1.5'],
+    ['FLAKEMETRY_FLAKY_MIN_SAMPLES', '0'],
+    ['FLAKEMETRY_CI_MINUTE_COST', 'free'],
+    ['FLAKEMETRY_TRACKER_AFTER_DAYS', '2.5'],
+  ])('%s=%s is ignored rather than becoming a number the policy never allows', (name, value) => {
+    expect(projectPolicyEnvOverrides({ [name]: value })).toEqual({})
+  })
+
+  it('leaves the project value in charge of the budget instead of lifting the cap', () => {
+    const resolved = resolveProjectPolicy({
+      ui: { aiDailyTokenBudget: 50_000 },
+      env: projectPolicyEnvOverrides({ FLAKEMETRY_AI_DAILY_TOKEN_BUDGET: '200k' }),
+    })
+
+    expect(resolved.aiDailyTokenBudget).toEqual({ value: 50_000, source: 'ui' })
+  })
+
+  it('still accepts the values the dashboard accepts', () => {
+    expect(
+      projectPolicyEnvOverrides({
+        FLAKEMETRY_AI_DAILY_TOKEN_BUDGET: ' 0 ',
+        FLAKEMETRY_FLAKY_THRESHOLD: '1',
+        FLAKEMETRY_CI_MINUTE_COST: '0.016',
+      }),
+    ).toEqual({ aiDailyTokenBudget: 0, flakyThreshold: 1, ciMinuteCost: 0.016 })
+  })
+})

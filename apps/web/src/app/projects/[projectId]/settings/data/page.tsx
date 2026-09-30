@@ -105,9 +105,9 @@ export default async function DataPage({
             <tr>
               <td>AI tokens today</td>
               <td className="muted">
-                {usage.ai.budget > 0
-                  ? `${usage.ai.spentToday.toLocaleString()} of ${usage.ai.budget.toLocaleString()}`
-                  : `${usage.ai.spentToday.toLocaleString()} (no daily cap set)`}
+                {usage.ai.analysisOff
+                  ? `${usage.ai.spentToday.toLocaleString()} — root-cause analysis is off, the daily budget is 0`
+                  : `${usage.ai.spentToday.toLocaleString()} of ${usage.ai.budget.toLocaleString()}`}
                 {usage.ai.exhausted ? (
                   <strong> — budget spent, root-cause analysis is paused until tomorrow</strong>
                 ) : null}
