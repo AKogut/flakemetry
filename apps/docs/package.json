@@ -11,8 +11,8 @@
   },
   "devDependencies": {
     "@flakemetry/contracts": "workspace:*",
-    "tsx": "^4.23.12",
+    "tsx": "^4.23.13",
     "vitepress": "^1.6.3",
-    "zod": "^4.4.3"
+    "zod": "^4.6.5"
   }
 }
