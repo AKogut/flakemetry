@@ -1,11 +1,13 @@
-import { metrics } from '@opentelemetry/api'
+import { randomUUID } from 'node:crypto'
+
+import { type Meter, metrics } from '@opentelemetry/api'
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http'
 import { resourceFromAttributes } from '@opentelemetry/resources'
 import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics'
 
-const meter = metrics.getMeter('flakemetry-worker')
+const SCOPE = 'flakemetry-worker'
 
-export const workerMetrics = {
+const instruments = (meter: Meter) => ({
   jobsProcessed: meter.createCounter('flakemetry.worker.jobs_processed', {
     description: 'ingestion jobs processed successfully',
   }),
@@ -38,10 +40,13 @@ export const workerMetrics = {
   pluginFailures: meter.createCounter('flakemetry.worker.plugin_failures', {
     description: 'analyzer plugin runs that threw, timed out or broke the contract',
   }),
-}
+})
+
+export const workerMetrics = instruments(metrics.getMeter(SCOPE))
 
 export const observeQueueDepth = (getDepth: () => Promise<number>): void => {
-  meter
+  metrics
+    .getMeter(SCOPE)
     .createObservableGauge('flakemetry.worker.queue_depth', {
       description: 'pending ingestion jobs',
     })
@@ -65,6 +70,7 @@ export const initSelfTelemetry = (options: SelfTelemetryOptions): (() => Promise
   const provider = new MeterProvider({
     resource: resourceFromAttributes({
       'service.name': options.serviceName ?? 'flakemetry-worker',
+      'service.instance.id': process.env.HOSTNAME || randomUUID(),
     }),
     readers: [
       new PeriodicExportingMetricReader({
@@ -74,5 +80,6 @@ export const initSelfTelemetry = (options: SelfTelemetryOptions): (() => Promise
     ],
   })
   metrics.setGlobalMeterProvider(provider)
+  Object.assign(workerMetrics, instruments(provider.getMeter(SCOPE)))
   return () => provider.shutdown()
 }

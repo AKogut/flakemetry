@@ -1,16 +1,28 @@
-import { defineConfig } from 'vitepress'
+import { type DefaultTheme, defineConfigWithTheme } from 'vitepress'
+
+import { publishedSnapshots, siteUrl, snapshotVersion, versionNav } from './versions'
+
+export interface ThemeConfig extends DefaultTheme.Config {
+  docsVersion: string | null
+  latestUrl: string
+  snapshots: string[]
+}
 
 const repo = 'https://github.com/AKogut/flakemetry'
+const site = siteUrl()
+const version = snapshotVersion()
+const snapshots = version ? [] : publishedSnapshots()
+const base = `${new URL(site).pathname}${version ? `v/${version}/` : ''}`
 
-export default defineConfig({
+export default defineConfigWithTheme<ThemeConfig>({
   title: 'Flakemetry',
   description:
     'OpenTelemetry-native test intelligence — treat every test run as a trace, not a report.',
   lang: 'en-US',
-  base: '/flakemetry/',
+  base,
   cleanUrls: true,
   lastUpdated: true,
-  srcExclude: ['README.md'],
+  srcExclude: version ? ['README.md', 'versions.md'] : ['README.md'],
   ignoreDeadLinks: [/^https?:\/\/localhost/],
   head: [
     ['meta', { name: 'theme-color', content: '#5319e7' }],
@@ -23,6 +35,16 @@ export default defineConfig({
           'OpenTelemetry-native test intelligence: explainable flaky detection and AI root-cause.',
       },
     ],
+    ...(version
+      ? [
+          ['meta', { name: 'robots', content: 'noindex' }] as [string, Record<string, string>],
+          ['style', {}, ':root { --vp-layout-top-height: 40px; }'] as [
+            string,
+            Record<string, string>,
+            string,
+          ],
+        ]
+      : []),
   ],
   themeConfig: {
     nav: [
@@ -31,6 +53,7 @@ export default defineConfig({
       { text: 'Reference', link: '/reference/configuration' },
       { text: 'Contributing', link: '/contributing/development' },
       { text: 'Roadmap', link: 'https://github.com/users/AKogut/projects/14' },
+      ...versionNav(version, snapshots, site),
     ],
     sidebar: {
       '/guide/': [
@@ -92,10 +115,15 @@ export default defineConfig({
       ],
     },
     socialLinks: [{ icon: 'github', link: repo }],
-    editLink: {
-      pattern: `${repo}/edit/main/apps/docs/:path`,
-      text: 'Edit this page on GitHub',
-    },
+    editLink: version
+      ? undefined
+      : {
+          pattern: `${repo}/edit/main/apps/docs/:path`,
+          text: 'Edit this page on GitHub',
+        },
+    docsVersion: version,
+    latestUrl: site,
+    snapshots,
     search: { provider: 'local' },
     footer: {
       message: 'MIT licensed',
@@ -104,5 +132,5 @@ export default defineConfig({
     outline: 'deep',
     externalLinkIcon: true,
   },
-  sitemap: { hostname: 'https://akogut.github.io/flakemetry/' },
+  sitemap: version ? undefined : { hostname: site },
 })
