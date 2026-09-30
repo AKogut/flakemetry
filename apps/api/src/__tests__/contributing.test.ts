@@ -67,3 +67,52 @@ describe('CONTRIBUTING lists the packages that actually publish', () => {
     expect(wrongly, 'these are private and need no changeset').toEqual([])
   })
 })
+
+describe('the development guide maps every workspace', () => {
+  const guide = readFileSync(join(root, 'apps/docs/contributing/development.md'), 'utf8')
+  const rows = new Map<string, string>()
+  for (const match of guide.matchAll(/^\| `((?:apps|packages)\/[\w-]+)` \|.*\| (yes|no) \|$/gm)) {
+    rows.set(match[1] ?? '', match[2] ?? '')
+  }
+
+  const workspaces = ['apps', 'packages'].flatMap((group) =>
+    readdirSync(join(root, group))
+      .filter((entry) => {
+        try {
+          readFileSync(join(root, group, entry, 'package.json'), 'utf8')
+          return true
+        } catch {
+          return false
+        }
+      })
+      .map((entry) => `${group}/${entry}`),
+  )
+
+  const published = (workspace: string): boolean => {
+    const manifest = JSON.parse(readFileSync(join(root, workspace, 'package.json'), 'utf8')) as {
+      private?: boolean
+    }
+    return manifest.private !== true
+  }
+
+  it('reads the map it is meant to be checking', () => {
+    expect(rows.size).toBeGreaterThan(10)
+    expect(workspaces.length).toBeGreaterThan(10)
+  })
+
+  it('has a row for every app and package', () => {
+    expect(workspaces.filter((workspace) => !rows.has(workspace))).toEqual([])
+  })
+
+  it('has no row for a workspace that does not exist', () => {
+    expect([...rows.keys()].filter((workspace) => !workspaces.includes(workspace))).toEqual([])
+  })
+
+  it('marks exactly the published packages as published', () => {
+    const wrong = workspaces.filter(
+      (workspace) =>
+        rows.has(workspace) && (rows.get(workspace) === 'yes') !== published(workspace),
+    )
+    expect(wrong, 'the Published column disagrees with package.json').toEqual([])
+  })
+})
