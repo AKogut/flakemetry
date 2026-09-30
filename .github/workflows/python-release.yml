@@ -71,7 +71,7 @@ jobs:
       # no long-lived secret to leak or rotate.
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: pytest-flakemetry-dist
           path: dist/
