@@ -287,7 +287,7 @@ model IngestionJob {
   payload        Json
   status         IngestionJobStatus @default(pending)
   attempts       Int                @default(0)
-  visibleAt      DateTime           @default(dbgenerated("now()")) @map("visible_at")
+  visibleAt      DateTime           @default(dbgenerated("transaction_timestamp()")) @map("visible_at")
   lastError      String?            @map("last_error")
   createdAt      DateTime           @default(now()) @map("created_at")
   updatedAt      DateTime           @updatedAt @map("updated_at")
@@ -480,6 +480,7 @@ model ErrorSignature {
   @@index([orgId])
   @@index([projectId, lastSeenAt(sort: Desc)])
   @@index([projectId, clusterId])
+  @@index([tokens], type: Gin, map: "error_signature_tokens_idx")
   @@map("error_signature")
 }
 
@@ -725,7 +726,7 @@ model DataRequest {
 }
 
 model TrackerIssue {
-  id             String    @id @default(uuid()) @db.Uuid
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   orgId          String    @map("org_id") @db.Uuid
   projectId      String    @map("project_id") @db.Uuid
   testIdentityId String    @unique @map("test_identity_id") @db.Uuid
@@ -738,8 +739,8 @@ model TrackerIssue {
   closedAt       DateTime? @map("closed_at")
   lastSyncedAt   DateTime  @default(now()) @map("last_synced_at")
 
-  project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  identity TestIdentity @relation(fields: [testIdentityId], references: [id], onDelete: Cascade)
+  project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  identity TestIdentity @relation(fields: [testIdentityId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([projectId, state])
   @@index([orgId])
