@@ -100,6 +100,7 @@ export const processJob = async (
         durationMs: runDurationMs(startedAt, finishedAt),
         otelTraceId: batch.run.traceId ?? null,
         ...counts,
+        storedExecutions: batch.executions.length,
       },
       update: {
         status: batch.run.status,
@@ -107,6 +108,7 @@ export const processJob = async (
         durationMs: runDurationMs(startedAt, finishedAt),
         otelTraceId: batch.run.traceId ?? null,
         ...counts,
+        storedExecutions: batch.executions.length,
       },
       select: { id: true },
     })
