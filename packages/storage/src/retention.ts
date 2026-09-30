@@ -30,3 +30,42 @@ export const pruneArtifacts = async (
 
   return { scanned: objects.length, deleted: keys }
 }
+
+export interface SizeCapOptions {
+  prefix?: string
+  maxBytes: number
+  batchSize?: number
+}
+
+export interface SizeCapResult {
+  scanned: number
+  bytesBefore: number
+  bytesAfter: number
+  deleted: string[]
+}
+
+export const pruneArtifactsToSize = async (
+  store: ObjectStore,
+  options: SizeCapOptions,
+): Promise<SizeCapResult> => {
+  const batchSize = options.batchSize ?? 1000
+  const objects = await store.list(options.prefix ?? '')
+  const bytesBefore = objects.reduce((total, object) => total + object.size, 0)
+
+  let bytes = bytesBefore
+  const keys: string[] = []
+  const oldestFirst = [...objects].sort(
+    (a, b) => a.lastModified.getTime() - b.lastModified.getTime() || a.key.localeCompare(b.key),
+  )
+  for (const object of oldestFirst) {
+    if (bytes <= options.maxBytes) break
+    keys.push(object.key)
+    bytes -= object.size
+  }
+
+  for (let i = 0; i < keys.length; i += batchSize) {
+    await store.remove(keys.slice(i, i + batchSize))
+  }
+
+  return { scanned: objects.length, bytesBefore, bytesAfter: bytes, deleted: keys }
+}

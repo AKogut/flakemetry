@@ -21,6 +21,8 @@ const ENV_FOR_FIELD: Readonly<Record<string, [string, string]>> = {
   trackerEnabled: ['FLAKEMETRY_TRACKER_ENABLED', 'true'],
   trackerAfterDays: ['FLAKEMETRY_TRACKER_AFTER_DAYS', '2'],
   trackerRecoveryDays: ['FLAKEMETRY_TRACKER_RECOVERY_DAYS', '9'],
+  storageMaxExecutions: ['FLAKEMETRY_STORAGE_MAX_EXECUTIONS', '100000'],
+  storageMaxArtifactMb: ['FLAKEMETRY_STORAGE_MAX_ARTIFACT_MB', '2048'],
 }
 
 describe('projectPolicyEnvOverrides', () => {

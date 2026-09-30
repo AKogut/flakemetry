@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createMemoryObjectStore } from '../memory'
 import { resolveObjectStore } from '../resolve'
-import { pruneArtifacts } from '../retention'
+import { pruneArtifacts, pruneArtifactsToSize } from '../retention'
 import { artifactKey, projectArtifactPrefix, sanitizeSegment } from '../store'
 
 describe('artifact keys', () => {
@@ -80,5 +80,38 @@ describe('resolveObjectStore', () => {
     )
     expect(store).not.toBeNull()
     expect(seen).toMatchObject({ bucket: 'artifacts', forcePathStyle: true })
+  })
+})
+
+describe('pruneArtifactsToSize', () => {
+  const at = (day: number) => new Date(Date.UTC(2026, 8, day))
+
+  it('removes the oldest objects until the prefix fits the cap, and nothing else', async () => {
+    let clock = at(1)
+    const store = createMemoryObjectStore({ now: () => clock })
+    await store.put('org/o/project/p/a', new Uint8Array(400), 'image/png')
+    clock = at(2)
+    await store.put('org/o/project/p/b', new Uint8Array(400), 'image/png')
+    clock = at(3)
+    await store.put('org/o/project/p/c', new Uint8Array(400), 'image/png')
+    await store.put('org/o/project/other/d', new Uint8Array(400), 'image/png')
+
+    const result = await pruneArtifactsToSize(store, { prefix: 'org/o/project/p/', maxBytes: 800 })
+
+    expect(result.deleted).toEqual(['org/o/project/p/a'])
+    expect(result.bytesAfter).toBe(800)
+    expect((await store.list('org/o/project/')).map((object) => object.key).sort()).toEqual([
+      'org/o/project/other/d',
+      'org/o/project/p/b',
+      'org/o/project/p/c',
+    ])
+  })
+
+  it('leaves a prefix already under the cap alone', async () => {
+    const store = createMemoryObjectStore()
+    await store.put('org/o/project/p/a', new Uint8Array(100), 'image/png')
+    expect(
+      (await pruneArtifactsToSize(store, { prefix: 'org/o/', maxBytes: 1000 })).deleted,
+    ).toEqual([])
   })
 })

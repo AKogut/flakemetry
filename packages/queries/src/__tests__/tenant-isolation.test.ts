@@ -37,6 +37,7 @@ import {
   getTestLeaderboards,
 } from '../trends'
 import { getProjectUsage } from '../usage'
+import { getWorkspaceUsage } from '../workspace-usage'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
 const prisma = createPrismaClient()
@@ -321,6 +322,7 @@ describe.skipIf(!hasDb)('tenant isolation', { timeout: 180_000 }, () => {
       ['planHistoricalRestitch', () => planHistoricalRestitch(prisma, a.projectId)],
       ['listDataRequests', () => listDataRequests(prisma, { projectId: a.projectId })],
       ['getProjectUsage', () => getProjectUsage(prisma, a.projectId, 1000)],
+      ['getWorkspaceUsage', () => getWorkspaceUsage(prisma, [a.orgId], { env: {} })],
       ['getRunSummaryByCommit', () => getRunSummaryByCommit(prisma, a.projectId, COMMIT)],
       ['getPrGate', () => getPrGate(prisma, a.projectId, COMMIT, { baseBranch: 'main' })],
     ]

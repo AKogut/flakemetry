@@ -22,7 +22,14 @@ export default async function ProjectsPage() {
 
   return (
     <div className="container">
-      <h1 className="page-title">Projects</h1>
+      <div className="row-between">
+        <h1 className="page-title">Projects</h1>
+        {[...workspaces.values()].some((workspace) => canManage(workspace.role)) ? (
+          <a className="mono muted" style={{ fontSize: '0.85rem' }} href="/usage">
+            usage and limits
+          </a>
+        ) : null}
+      </div>
       <p className="page-subtitle">
         Each project keeps its own history, policy and ingest tokens. Add one per repository or
         suite you want tracked separately.

@@ -1,5 +1,15 @@
+import {
+  normalizePolicyOverrides,
+  projectPolicyEnvOverrides,
+  resolveProjectPolicy,
+} from '@flakemetry/contracts'
 import type { PrismaClient } from '@flakemetry/db'
-import { type ObjectStore, projectArtifactPrefix, pruneArtifacts } from '@flakemetry/storage'
+import {
+  type ObjectStore,
+  projectArtifactPrefix,
+  pruneArtifacts,
+  pruneArtifactsToSize,
+} from '@flakemetry/storage'
 
 import { pruneRawExecutions } from './rollups'
 
@@ -46,6 +56,35 @@ export const resolveRetentionPlan = (
   return { projectId: input.projectId, orgId: input.orgId, executionDays, artifactDays }
 }
 
+export const MEGABYTE = 1024 * 1024
+
+const CAP_BATCH = 10_000
+
+export const capRawExecutions = async (
+  prisma: PrismaClient,
+  projectId: string,
+  maxExecutions: number,
+): Promise<number> => {
+  if (maxExecutions <= 0) return 0
+  let pruned = 0
+  for (;;) {
+    const stored = await prisma.testExecution.count({ where: { projectId } })
+    const excess = stored - maxExecutions
+    if (excess <= 0) return pruned
+    const oldest = await prisma.testExecution.findMany({
+      where: { projectId },
+      orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
+      take: Math.min(excess, CAP_BATCH),
+      select: { id: true },
+    })
+    const { count } = await prisma.testExecution.deleteMany({
+      where: { id: { in: oldest.map((execution) => execution.id) } },
+    })
+    pruned += count
+    if (count === 0) return pruned
+  }
+}
+
 export const runRetentionSweep = async (
   prisma: PrismaClient,
   store: ObjectStore | null,
@@ -57,13 +96,18 @@ export const runRetentionSweep = async (
     select: {
       id: true,
       orgId: true,
-      policy: { select: { executionRetentionDays: true, artifactRetentionDays: true } },
+      policy: true,
     },
   })
 
+  const envOverrides = projectPolicyEnvOverrides(env)
   let executionsPruned = 0
   let artifactsPruned = 0
   for (const project of projects) {
+    const effective = resolveProjectPolicy({
+      ui: normalizePolicyOverrides(project.policy),
+      env: envOverrides,
+    })
     const plan = resolveRetentionPlan(
       {
         projectId: project.id,
@@ -87,6 +131,20 @@ export const runRetentionSweep = async (
         prefix: projectArtifactPrefix(plan.orgId, plan.projectId),
         olderThanDays: plan.artifactDays,
         now,
+      })
+      artifactsPruned += result.deleted.length
+    }
+
+    executionsPruned += await capRawExecutions(
+      prisma,
+      project.id,
+      effective.storageMaxExecutions.value,
+    )
+
+    if (store && effective.storageMaxArtifactMb.value > 0) {
+      const result = await pruneArtifactsToSize(store, {
+        prefix: projectArtifactPrefix(project.orgId, project.id),
+        maxBytes: effective.storageMaxArtifactMb.value * MEGABYTE,
       })
       artifactsPruned += result.deleted.length
     }

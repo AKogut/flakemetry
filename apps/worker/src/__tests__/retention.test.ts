@@ -1,8 +1,13 @@
 import { createPrismaClient } from '@flakemetry/db'
-import { createMemoryObjectStore } from '@flakemetry/storage'
+import { createMemoryObjectStore, projectArtifactPrefix } from '@flakemetry/storage'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { parseRetentionGlobals, resolveRetentionPlan, runRetentionSweep } from '../retention'
+import {
+  MEGABYTE,
+  parseRetentionGlobals,
+  resolveRetentionPlan,
+  runRetentionSweep,
+} from '../retention'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
 const prisma = createPrismaClient()
@@ -141,5 +146,99 @@ describe.skipIf(!hasDb)('runRetentionSweep', () => {
     expect(result.executionsPruned).toBe(1)
     expect(await prisma.testExecution.count({ where: { projectId: shortLived } })).toBe(0)
     expect(await prisma.testExecution.count({ where: { projectId: globalDefault } })).toBe(1)
+  })
+
+  const seedCappedProject = async (
+    executions: number,
+    policy: { storageMaxExecutions?: number; storageMaxArtifactMb?: number },
+  ) => {
+    const org = await prisma.org.create({ data: { name: 'Acme', slug: `acme-${Math.random()}` } })
+    const project = await prisma.project.create({
+      data: { orgId: org.id, name: 'Web', slug: `web-${Math.random()}` },
+    })
+    const tenant = { orgId: org.id, projectId: project.id }
+    await prisma.projectPolicy.create({ data: { ...tenant, ...policy } })
+    const identity = await prisma.testIdentity.create({
+      data: {
+        ...tenant,
+        fingerprint: `fp-${Math.random()}`,
+        filePath: 'a',
+        suite: 's',
+        title: 't',
+      },
+    })
+    for (let index = 0; index < executions; index += 1) {
+      const run = await prisma.run.create({
+        data: {
+          ...tenant,
+          idempotencyKey: `run-${Math.random()}`,
+          commitSha: 'abc1234',
+          branch: 'main',
+          ciProvider: 'github_actions',
+          trigger: 'push',
+          status: 'passed',
+          startedAt: daysAgo(executions - index),
+        },
+      })
+      await prisma.testExecution.create({
+        data: {
+          ...tenant,
+          runId: run.id,
+          testIdentityId: identity.id,
+          attempt: 1,
+          status: 'pass',
+          durationMs: 100,
+          startedAt: daysAgo(executions - index),
+        },
+      })
+    }
+    return tenant
+  }
+
+  it('keeps only the newest executions when a project is over its execution cap', async () => {
+    const capped = await seedCappedProject(5, { storageMaxExecutions: 3 })
+    const uncapped = await seedCappedProject(5, {})
+
+    const result = await runRetentionSweep(prisma, null, {}, NOW)
+
+    expect(result.executionsPruned).toBe(2)
+    const kept = await prisma.testExecution.findMany({
+      where: { projectId: capped.projectId },
+      orderBy: { startedAt: 'asc' },
+      select: { startedAt: true },
+    })
+    expect(kept.map((row) => row.startedAt)).toEqual([daysAgo(3), daysAgo(2), daysAgo(1)])
+    expect(await prisma.testExecution.count({ where: { projectId: uncapped.projectId } })).toBe(5)
+  })
+
+  it('applies an execution cap set in the environment to every project', async () => {
+    const project = await seedCappedProject(4, {})
+
+    await runRetentionSweep(prisma, null, { FLAKEMETRY_STORAGE_MAX_EXECUTIONS: '1' }, NOW)
+
+    expect(await prisma.testExecution.count({ where: { projectId: project.projectId } })).toBe(1)
+  })
+
+  it('trims the oldest artifacts of a project over its artifact cap', async () => {
+    const tenant = await seedCappedProject(0, { storageMaxArtifactMb: 1 })
+    let clock = daysAgo(3)
+    const store = createMemoryObjectStore({ now: () => clock })
+    const prefix = projectArtifactPrefix(tenant.orgId, tenant.projectId)
+    await store.put(`${prefix}run/a/0/old.png`, new Uint8Array(MEGABYTE / 2 + 1), 'image/png')
+    clock = daysAgo(2)
+    await store.put(`${prefix}run/b/0/new.png`, new Uint8Array(MEGABYTE / 2), 'image/png')
+    await store.put(
+      'org/elsewhere/project/x/run/c/0/other.png',
+      new Uint8Array(MEGABYTE),
+      'image/png',
+    )
+
+    const result = await runRetentionSweep(prisma, store, {}, NOW)
+
+    expect(result.artifactsPruned).toBe(1)
+    expect((await store.list(prefix)).map((object) => object.key)).toEqual([
+      `${prefix}run/b/0/new.png`,
+    ])
+    expect(await store.list('org/elsewhere/')).toHaveLength(1)
   })
 })
