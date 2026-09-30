@@ -146,6 +146,19 @@ Put it on a timer and ship the result off the host:
 0 * * * * cd /opt/flakemetry && sh deploy/backup/backup.sh /var/backups/flakemetry
 ```
 
+To copy artifacts as well, point `FLAKEMETRY_BACKUP_MIRROR` at a host directory. The script
+mirrors the bucket into it through the `createbuckets` service, which already holds the
+MinIO credentials, so nothing extra has to be installed on the host. The mirror only adds and
+overwrites: an artifact that retention has since pruned stays in the copy.
+
+```bash
+FLAKEMETRY_BACKUP_MIRROR=/var/backups/flakemetry/artifacts \
+  sh deploy/backup/backup.sh /var/backups/flakemetry
+```
+
+`FLAKEMETRY_S3_BUCKET` (default `flakemetry-artifacts`) selects the bucket and
+`FLAKEMETRY_MC_SERVICE` (default `createbuckets`) the service that runs `mc`.
+
 ### Restoring
 
 ```bash

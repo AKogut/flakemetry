@@ -47,8 +47,19 @@ jobs:
           docker compose exec -T postgres psql -U flakemetry -d flakemetry -t -A -c \
             "SELECT count(*) FROM org WHERE name = 'DR Drill Marker'" | grep -qx 1
 
+      - name: Store an artifact the mirror must carry
+        run: |
+          docker compose run --rm -T --entrypoint /bin/sh createbuckets -c \
+            'mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null &&
+             echo "drill-${{ github.run_id }}" | mc pipe "local/$S3_BUCKET/org/drill/marker.txt"'
+
       - name: Back up
+        env:
+          FLAKEMETRY_BACKUP_MIRROR: ./backups/artifacts
         run: sh deploy/backup/backup.sh ./backups
+
+      - name: The artifact mirror holds the stored artifact
+        run: grep -qx "drill-${{ github.run_id }}" ./backups/artifacts/org/drill/marker.txt
 
       - name: Record what the database held
         run: sh deploy/backup/verify.sh | tee before.txt

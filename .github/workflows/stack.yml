@@ -47,6 +47,12 @@ jobs:
             done
           done
 
+      - name: The artifact bucket exists
+        run: |
+          docker compose run --rm -T --entrypoint /bin/sh createbuckets -c \
+            'mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null &&
+             mc stat "local/$S3_BUCKET"'
+
       - name: The dashboard opens on demo data, not an empty page
         run: |
           orgs=$(docker compose exec -T postgres psql -U flakemetry -d flakemetry -tAc 'select count(*) from org')
