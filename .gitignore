@@ -39,3 +39,9 @@ __pycache__/
 backups/
 *.dump
 .vitepress/cache/
+
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+terraform-values.yaml

@@ -14,7 +14,7 @@ Three workloads, one governing constraint — **ingestion never blocks CI**:
   scoring, signature clustering, and AI RCA. Stateless; scales horizontally.
 - **web** — Next.js dashboard and query API. Stateless.
 
-Managed dependencies: **Postgres** (relational + JSONB, pgvector for RCA) and an
+Managed dependencies: **Postgres** (relational + JSONB) and an
 **object store** (artifacts). The queue is a table in Postgres, so there is no separate
 broker to run.
 
