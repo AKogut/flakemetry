@@ -4,12 +4,14 @@ import NextAuth from 'next-auth'
 import GitHub from 'next-auth/providers/github'
 
 import { adoptUnclaimedOrgs } from './bootstrap'
+import { resolveSsoProvider } from './sso'
 
 const prisma = getPrismaClient()
+const sso = resolveSsoProvider(process.env)
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
-  providers: [GitHub],
+  providers: sso ? [GitHub, sso] : [GitHub],
   session: { strategy: 'database' },
   pages: { signIn: '/sign-in' },
   events: {

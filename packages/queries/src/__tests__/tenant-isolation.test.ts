@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { createPrismaClient, type Prisma } from '@flakemetry/db'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
+import { listAuditEvents } from '../audit'
 import { getBadgeMetrics } from '../badge'
 import { getFlakeBisect } from '../bisect'
 import { getClusterImpact, getExecutionCluster, setClusterKnownIssue } from '../cluster'
@@ -237,6 +238,9 @@ const seedTenant = async (label: string): Promise<Tenant> => {
       message: 'took 4.0s',
     },
   })
+  await prisma.auditEvent.create({
+    data: { ...tenant, action: 'token.created', target: identity.id },
+  })
 
   return {
     orgId: org.id,
@@ -322,6 +326,7 @@ describe.skipIf(!hasDb)('tenant isolation', { timeout: 180_000 }, () => {
       ['planHistoricalRestitch', () => planHistoricalRestitch(prisma, a.projectId)],
       ['listDataRequests', () => listDataRequests(prisma, { projectId: a.projectId })],
       ['getProjectUsage', () => getProjectUsage(prisma, a.projectId, 1000)],
+      ['listAuditEvents', () => listAuditEvents(prisma, a.orgId)],
       ['getWorkspaceUsage', () => getWorkspaceUsage(prisma, [a.orgId], { env: {} })],
       ['getRunSummaryByCommit', () => getRunSummaryByCommit(prisma, a.projectId, COMMIT)],
       ['getPrGate', () => getPrGate(prisma, a.projectId, COMMIT, { baseBranch: 'main' })],

@@ -12,7 +12,9 @@ import {
 } from '@flakemetry/notify'
 import {
   acceptInvitation,
+  canContribute,
   changeMemberRole,
+  checkGrant,
   checkInvite,
   checkRemoval,
   checkRoleChange,
@@ -22,6 +24,7 @@ import {
   type MemberRefusal,
   type MemberRole,
   mergeIdentities,
+  recordAudit,
   recordRcaFeedback,
   removeMember,
   requestErasure,
@@ -112,6 +115,13 @@ export const createProject = async (formData: FormData): Promise<void> => {
     data: { orgId, name, slug: await uniqueProjectSlug(orgId, slugify(name)) },
     select: { id: true },
   })
+  await recordAudit(prisma, {
+    orgId,
+    projectId: project.id,
+    actorId: user.id,
+    action: 'project.created',
+    target: name,
+  })
 
   revalidatePath('/projects')
   redirect(`/projects/${project.id}/settings/tokens`)
@@ -134,8 +144,15 @@ export const createWorkspace = async (formData: FormData): Promise<void> => {
     })
     return tx.project.create({
       data: { orgId: org.id, name: projectName, slug: slugify(projectName) || 'default' },
-      select: { id: true },
+      select: { id: true, orgId: true },
     })
+  })
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    projectId: project.id,
+    actorId: user.id,
+    action: 'workspace.created',
+    target: orgName,
   })
 
   redirect(`/projects/${project.id}/settings/tokens`)
@@ -154,7 +171,7 @@ export const createIngestToken = async (formData: FormData): Promise<void> => {
   const scopes = TOKEN_SCOPES.filter((scope) => requested.includes(scope))
 
   const raw = generateToken()
-  await prisma.ingestToken.create({
+  const token = await prisma.ingestToken.create({
     data: {
       orgId: project.orgId,
       projectId: project.id,
@@ -162,6 +179,15 @@ export const createIngestToken = async (formData: FormData): Promise<void> => {
       tokenHash: hashToken(raw),
       scopes: scopes.length > 0 ? scopes : ['ingest'],
     },
+    select: { id: true, scopes: true },
+  })
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    projectId: project.id,
+    actorId: user.id,
+    action: 'token.created',
+    target: token.id,
+    details: { name, scopes: token.scopes },
   })
 
   const store = await cookies()
@@ -184,10 +210,19 @@ export const revokeIngestToken = async (formData: FormData): Promise<void> => {
   const project = await requireProjectAccess(user.id, projectId)
   if (!canManage(project.role)) throw new Error('only owners and admins can manage ingest tokens')
 
-  await prisma.ingestToken.updateMany({
+  const { count } = await prisma.ingestToken.updateMany({
     where: { id: tokenId, projectId, revokedAt: null },
     data: { revokedAt: new Date() },
   })
+  if (count > 0) {
+    await recordAudit(prisma, {
+      orgId: project.orgId,
+      projectId,
+      actorId: user.id,
+      action: 'token.revoked',
+      target: tokenId,
+    })
+  }
 
   revalidatePath(`/projects/${projectId}/settings/tokens`)
 }
@@ -222,6 +257,14 @@ export const createNotificationChannel = async (formData: FormData): Promise<voi
       events: events.length > 0 ? events : NOTIFY_EVENTS,
     },
   })
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    projectId,
+    actorId: user.id,
+    action: 'channel.created',
+    target: kind,
+    details: { events: events.length > 0 ? events : NOTIFY_EVENTS },
+  })
 
   revalidatePath(`/projects/${projectId}/settings/notifications`)
 }
@@ -233,9 +276,18 @@ export const deleteNotificationChannel = async (formData: FormData): Promise<voi
   const project = await requireProjectAccess(user.id, projectId)
   if (!canManage(project.role)) throw new Error('only owners and admins can manage notifications')
 
-  await prisma.notificationChannel.deleteMany({
+  const { count } = await prisma.notificationChannel.deleteMany({
     where: { id: channelId, projectId, source: 'dashboard' },
   })
+  if (count > 0) {
+    await recordAudit(prisma, {
+      orgId: project.orgId,
+      projectId,
+      actorId: user.id,
+      action: 'channel.deleted',
+      target: channelId,
+    })
+  }
   revalidatePath(`/projects/${projectId}/settings/notifications`)
 }
 
@@ -254,6 +306,16 @@ export const splitTestIdentity = async (formData: FormData): Promise<void> => {
     fingerprint,
     userId: user.id,
   })
+
+  if (outcome.status !== 'rejected') {
+    await recordAudit(prisma, {
+      orgId: project.orgId,
+      projectId,
+      actorId: user.id,
+      action: 'identity.split',
+      target: testId,
+    })
+  }
 
   revalidatePath(`/projects/${projectId}/tests/${testId}`)
   if (outcome.status === 'rejected')
@@ -277,6 +339,16 @@ export const mergeTestIdentity = async (formData: FormData): Promise<void> => {
     userId: user.id,
   })
 
+  if (outcome.status !== 'rejected') {
+    await recordAudit(prisma, {
+      orgId: project.orgId,
+      projectId,
+      actorId: user.id,
+      action: 'identity.merged',
+      target: testId,
+    })
+  }
+
   revalidatePath(`/projects/${projectId}/tests/${testId}`)
   if (outcome.status === 'rejected')
     redirect(`/projects/${projectId}/tests/${testId}?split=${encodeURIComponent(outcome.reason)}`)
@@ -296,6 +368,16 @@ export const unmergeTestIdentity = async (formData: FormData): Promise<void> => 
     targetIdentityId: testId,
     userId: user.id,
   })
+
+  if (outcome.status !== 'rejected') {
+    await recordAudit(prisma, {
+      orgId: project.orgId,
+      projectId,
+      actorId: user.id,
+      action: 'identity.unmerged',
+      target: testId,
+    })
+  }
 
   revalidatePath(`/projects/${projectId}/tests/${testId}`)
   if (outcome.status === 'rejected')
@@ -329,6 +411,15 @@ export const updateProjectPolicy = async (formData: FormData): Promise<void> => 
   })
 
   const { changed } = await persistProjectPolicy(prisma, { projectId, userId: user.id, input })
+  if (changed.length > 0) {
+    await recordAudit(prisma, {
+      orgId: project.orgId,
+      projectId,
+      actorId: user.id,
+      action: 'policy.updated',
+      details: { fields: changed },
+    })
+  }
 
   revalidatePath(`/projects/${projectId}/settings/policy`)
   redirect(`/projects/${projectId}/settings/policy?saved=${changed.length}`)
@@ -348,6 +439,13 @@ export const updateProjectRepository = async (formData: FormData): Promise<void>
     where: { id: projectId },
     data: { repository: raw ? raw : null },
   })
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    projectId,
+    actorId: user.id,
+    action: 'project.repository_set',
+    target: raw || null,
+  })
 
   revalidatePath(`/projects/${projectId}/settings/policy`)
   redirect(`/projects/${projectId}/settings/policy?repository=saved`)
@@ -365,6 +463,12 @@ export const rotateBadgeToken = async (formData: FormData): Promise<void> => {
     where: { id: projectId },
     data: { badgeToken: `bdg_${randomUUID()}` },
   })
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    projectId,
+    actorId: user.id,
+    action: 'badges.rotated',
+  })
 
   revalidatePath(`/projects/${projectId}/settings/badges`)
   redirect(`/projects/${projectId}/settings/badges`)
@@ -377,6 +481,12 @@ export const disableBadges = async (formData: FormData): Promise<void> => {
   if (!canManage(project.role)) throw new Error('only owners and admins can manage badges')
 
   await prisma.project.update({ where: { id: projectId }, data: { badgeToken: null } })
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    projectId,
+    actorId: user.id,
+    action: 'badges.disabled',
+  })
 
   revalidatePath(`/projects/${projectId}/settings/badges`)
   redirect(`/projects/${projectId}/settings/badges`)
@@ -393,6 +503,14 @@ export const updateClusterKnownIssue = async (formData: FormData): Promise<void>
     throw new Error('only owners and admins can mark a cluster as a known issue')
 
   await setClusterKnownIssue(prisma, projectId, clusterId, knownIssueRef)
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    projectId,
+    actorId: user.id,
+    action: 'cluster.known_issue_set',
+    target: clusterId,
+    details: { knownIssueRef },
+  })
 
   revalidatePath(`/projects/${projectId}/tests/${testId}`)
 }
@@ -432,6 +550,13 @@ export const requestProjectErasure = async (formData: FormData): Promise<void> =
     actor: user.email ?? user.id,
     actorUserId: user.id,
   })
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    projectId: project.id,
+    actorId: user.id,
+    action: 'project.erasure_requested',
+    target: project.slug,
+  })
 
   revalidatePath(`/projects/${projectId}/settings/data`)
   redirect(`/projects/${projectId}/settings/data?requested=project`)
@@ -463,6 +588,12 @@ export const requestWorkspaceErasure = async (formData: FormData): Promise<void>
     actor: user.email ?? user.id,
     actorUserId: user.id,
   })
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    actorId: user.id,
+    action: 'workspace.erasure_requested',
+    target: project.orgSlug,
+  })
 
   redirect('/projects')
 }
@@ -487,7 +618,7 @@ export const inviteMember = async (formData: FormData): Promise<void> => {
   const role = String(formData.get('role') ?? 'member')
   const project = await requireProjectAccess(user.id, projectId)
 
-  refuse(checkInvite({ actorRole: project.role, invitedRole: role }))
+  refuse(checkInvite({ actorRole: project.orgRole, invitedRole: role }))
   if (!isEmailAddress(email)) throw new Error('an invitation needs an email address')
 
   const raw = generateToken()
@@ -497,6 +628,13 @@ export const inviteMember = async (formData: FormData): Promise<void> => {
     role: role as MemberRole,
     invitedBy: user.id,
     tokenHash: hashToken(raw),
+  })
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    actorId: user.id,
+    action: 'member.invited',
+    target: email,
+    details: { role },
   })
 
   // Same handling as a new ingest token: shown once, over a short-lived httpOnly cookie, so
@@ -519,9 +657,15 @@ export const cancelInvitation = async (formData: FormData): Promise<void> => {
   const projectId = String(formData.get('projectId') ?? '')
   const invitationId = String(formData.get('invitationId') ?? '')
   const project = await requireProjectAccess(user.id, projectId)
-  if (!canManage(project.role)) throw new Error('only owners and admins can manage members')
+  if (!canManage(project.orgRole)) throw new Error('only owners and admins can manage members')
 
   await revokeInvitation(prisma, project.orgId, invitationId)
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    actorId: user.id,
+    action: 'member.invitation_cancelled',
+    target: invitationId,
+  })
 
   revalidatePath(`/projects/${projectId}/settings/members`)
 }
@@ -541,7 +685,7 @@ export const updateMemberRole = async (formData: FormData): Promise<void> => {
 
   refuse(
     checkRoleChange({
-      actorRole: project.role,
+      actorRole: project.orgRole,
       targetRole: target.role,
       newRole,
       ownerCount: await countOwners(prisma, project.orgId),
@@ -549,6 +693,13 @@ export const updateMemberRole = async (formData: FormData): Promise<void> => {
   )
 
   await changeMemberRole(prisma, project.orgId, userId, newRole as MemberRole)
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    actorId: user.id,
+    action: 'member.role_changed',
+    target: userId,
+    details: { from: target.role, to: newRole },
+  })
 
   revalidatePath(`/projects/${projectId}/settings/members`)
 }
@@ -567,13 +718,21 @@ export const removeMemberFromWorkspace = async (formData: FormData): Promise<voi
 
   refuse(
     checkRemoval({
-      actorRole: project.role,
+      actorRole: project.orgRole,
       targetRole: target.role,
       ownerCount: await countOwners(prisma, project.orgId),
     }),
   )
 
   await removeMember(prisma, project.orgId, userId)
+  await prisma.projectGrant.deleteMany({ where: { orgId: project.orgId, userId } })
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    actorId: user.id,
+    action: 'member.removed',
+    target: userId,
+    details: { role: target.role },
+  })
 
   // Removing themselves means they can no longer read this page.
   if (userId === user.id) redirect('/projects')
@@ -587,6 +746,15 @@ export const acceptInvite = async (formData: FormData): Promise<void> => {
   const outcome = await acceptInvitation(prisma, { tokenHash: hashToken(token), userId: user.id })
   if (outcome.status === 'rejected') {
     redirect(`/invite/${encodeURIComponent(token)}?error=${outcome.reason}`)
+  }
+  if (outcome.status === 'joined') {
+    await recordAudit(prisma, {
+      orgId: outcome.orgId,
+      actorId: user.id,
+      action: 'member.joined',
+      target: user.id,
+      details: { role: outcome.role },
+    })
   }
 
   redirect('/projects')
@@ -610,6 +778,14 @@ export const setTestQuarantine = async (formData: FormData): Promise<void> => {
     reason: String(formData.get('reason') ?? ''),
     userId: user.id,
   })
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    projectId,
+    actorId: user.id,
+    action: 'test.quarantine_set',
+    target: testId,
+    details: { decision },
+  })
 
   revalidatePath(`/projects/${projectId}/tests/${testId}`)
   redirect(`/projects/${projectId}/tests/${testId}`)
@@ -625,6 +801,7 @@ export const submitRcaFeedback = async (formData: FormData): Promise<void> => {
   if (verdict !== 'helpful' && verdict !== 'unhelpful') throw new Error('unknown verdict')
 
   const project = await requireProjectAccess(user.id, projectId)
+  if (!canContribute(project.role)) throw new Error('viewers cannot leave feedback')
 
   await recordRcaFeedback(prisma, {
     orgId: project.orgId,
@@ -636,4 +813,91 @@ export const submitRcaFeedback = async (formData: FormData): Promise<void> => {
   })
 
   revalidatePath(`/projects/${projectId}/tests/${testId}`)
+}
+
+export const setProjectRestricted = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const restricted = formData.get('restricted') === 'on'
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.orgRole)) throw new Error('only owners and admins can restrict a project')
+
+  await prisma.project.update({ where: { id: projectId }, data: { restricted } })
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    projectId,
+    actorId: user.id,
+    action: restricted ? 'project.restricted' : 'project.opened',
+  })
+
+  revalidatePath(`/projects/${projectId}/settings/members`)
+}
+
+const GRANT_REFUSAL: Record<string, string> = {
+  'not-a-manager': 'only owners and admins can grant access to a project',
+  'unknown-role': 'a project grant is member or viewer',
+  'not-a-member': 'that person is not in this workspace',
+  'already-has-access': 'owners and admins can already open every project',
+}
+
+export const grantProjectAccess = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const userId = String(formData.get('userId') ?? '')
+  const role = String(formData.get('role') ?? 'viewer')
+  const project = await requireProjectAccess(user.id, projectId)
+
+  const target = await prisma.membership.findFirst({
+    where: { orgId: project.orgId, userId },
+    select: { role: true },
+  })
+  const refusal = checkGrant({
+    actorRole: project.orgRole,
+    targetOrgRole: target?.role ?? null,
+    grantRole: role,
+  })
+  if (refusal) throw new Error(GRANT_REFUSAL[refusal])
+
+  await prisma.projectGrant.upsert({
+    where: { projectId_userId: { projectId, userId } },
+    create: {
+      orgId: project.orgId,
+      projectId,
+      userId,
+      role: role as MemberRole,
+      grantedBy: user.id,
+    },
+    update: { role: role as MemberRole, grantedBy: user.id },
+  })
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    projectId,
+    actorId: user.id,
+    action: 'project.access_granted',
+    target: userId,
+    details: { role },
+  })
+
+  revalidatePath(`/projects/${projectId}/settings/members`)
+}
+
+export const revokeProjectAccess = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const userId = String(formData.get('userId') ?? '')
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.orgRole)) throw new Error(GRANT_REFUSAL['not-a-manager'])
+
+  const { count } = await prisma.projectGrant.deleteMany({ where: { projectId, userId } })
+  if (count > 0) {
+    await recordAudit(prisma, {
+      orgId: project.orgId,
+      projectId,
+      actorId: user.id,
+      action: 'project.access_revoked',
+      target: userId,
+    })
+  }
+
+  revalidatePath(`/projects/${projectId}/settings/members`)
 }

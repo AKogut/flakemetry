@@ -15,7 +15,7 @@ export default async function ProjectsPage() {
     else
       workspaces.set(project.orgId, {
         name: project.orgName,
-        role: project.role,
+        role: project.orgRole,
         projects: [project],
       })
   }

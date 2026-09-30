@@ -1,8 +1,8 @@
 import type { PrismaClient } from '@flakemetry/db'
 
-export type MemberRole = 'owner' | 'admin' | 'member'
+export type MemberRole = 'owner' | 'admin' | 'member' | 'viewer'
 
-export const MEMBER_ROLES: readonly MemberRole[] = ['owner', 'admin', 'member']
+export const MEMBER_ROLES: readonly MemberRole[] = ['owner', 'admin', 'member', 'viewer']
 
 export const isMemberRole = (value: string): value is MemberRole =>
   (MEMBER_ROLES as readonly string[]).includes(value)
@@ -22,7 +22,7 @@ export const checkInvite = (input: {
 }): MemberRefusal | null => {
   if (!manages(input.actorRole)) return 'not-a-manager'
   if (!isMemberRole(input.invitedRole)) return 'unknown-role'
-  if (input.invitedRole !== 'member' && input.actorRole !== 'owner') return 'owner-only'
+  if (manages(input.invitedRole) && input.actorRole !== 'owner') return 'owner-only'
   return null
 }
 
@@ -52,7 +52,7 @@ export const checkRemoval = (input: {
   ownerCount: number
 }): MemberRefusal | null => {
   if (!manages(input.actorRole)) return 'not-a-manager'
-  if (input.targetRole !== 'member' && input.actorRole !== 'owner') return 'owner-only'
+  if (manages(input.targetRole) && input.actorRole !== 'owner') return 'owner-only'
   if (input.targetRole === 'owner' && input.ownerCount <= 1) return 'last-owner'
   return null
 }
