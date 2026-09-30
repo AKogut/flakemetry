@@ -113,7 +113,7 @@ The reporter also syncs the repo's CODEOWNERS to the project on each run, so the
 |---|---|
 | `LOG_LEVEL` | Structured (pino) log level; `authorization` header is redacted |
 | `FLAKEMETRY_MAX_QUEUE_DEPTH` | Backpressure threshold — return `503` once pending jobs reach it. Defaults to `10000`; set `0` to disable |
-| `FLAKEMETRY_SELF_OTEL_ENDPOINT` | OTLP/HTTP endpoint to export the API's own metrics to, such as `http://otel-collector:4318`; metrics are no-ops when unset. See [`deploy/observability`](../deploy/observability) |
+| `FLAKEMETRY_SELF_OTEL_ENDPOINT` | OTLP/HTTP endpoint to export the API's own metrics to, such as `http://otel-collector:4318`; metrics are no-ops when unset. See [`deploy/observability`](https://github.com/AKogut/flakemetry/tree/main/deploy/observability) |
 | `OTEL_METRIC_EXPORT_INTERVAL` | How often self-telemetry is exported, in milliseconds (default `30000`) |
 
 The API also rate-limits per project token (fixed window) and returns `429` with `Retry-After` when exceeded.

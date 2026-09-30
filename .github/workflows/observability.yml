@@ -69,6 +69,7 @@ jobs:
       FLAKEMETRY_ENDPOINT: http://localhost:4000
       FLAKEMETRY_SELF_OTEL_ENDPOINT: http://localhost:4318
       OTEL_METRIC_EXPORT_INTERVAL: '2000'
+      AUTH_SECRET: compose-interpolates-every-service-even-unstarted-ones
 
     steps:
       - uses: actions/checkout@v5
