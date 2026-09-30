@@ -26,6 +26,10 @@ x-plugins: &plugins
   FLAKEMETRY_PLUGINS: ${FLAKEMETRY_PLUGINS:-}
   FLAKEMETRY_PLUGIN_TIMEOUT_MS: ${FLAKEMETRY_PLUGIN_TIMEOUT_MS:-}
 
+x-self-telemetry: &self_telemetry
+  FLAKEMETRY_SELF_OTEL_ENDPOINT: ${FLAKEMETRY_SELF_OTEL_ENDPOINT:-}
+  OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-}
+
 x-policy: &policy
   FLAKEMETRY_PUBLIC_API_URL: https://${API_DOMAIN:?set API_DOMAIN}
   FLAKEMETRY_EXECUTION_RETENTION_DAYS: ${FLAKEMETRY_EXECUTION_RETENTION_DAYS:-90}
@@ -133,7 +137,7 @@ services:
       createbuckets:
         condition: service_completed_successfully
     environment:
-      <<: [*database_url, *s3, *plugins]
+      <<: [*database_url, *s3, *plugins, *self_telemetry]
       PORT: 4000
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:4000/health']
@@ -150,7 +154,7 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      <<: [*database_url, *s3, *policy, *plugins]
+      <<: [*database_url, *s3, *policy, *plugins, *self_telemetry]
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-1000}
       FLAKEMETRY_AI_PROVIDER: ${FLAKEMETRY_AI_PROVIDER:-}
       FLAKEMETRY_AI_MODEL: ${FLAKEMETRY_AI_MODEL:-}

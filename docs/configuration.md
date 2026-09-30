@@ -113,7 +113,8 @@ The reporter also syncs the repo's CODEOWNERS to the project on each run, so the
 |---|---|
 | `LOG_LEVEL` | Structured (pino) log level; `authorization` header is redacted |
 | `FLAKEMETRY_MAX_QUEUE_DEPTH` | Backpressure threshold — return `503` once pending jobs reach it. Defaults to `10000`; set `0` to disable |
-| `FLAKEMETRY_SELF_OTEL_ENDPOINT` | OTLP endpoint to export the API's own metrics to (dogfooding); metrics are no-ops when unset |
+| `FLAKEMETRY_SELF_OTEL_ENDPOINT` | OTLP/HTTP endpoint to export the API's own metrics to, such as `http://otel-collector:4318`; metrics are no-ops when unset. See [`deploy/observability`](https://github.com/AKogut/flakemetry/tree/main/deploy/observability) |
+| `OTEL_METRIC_EXPORT_INTERVAL` | How often self-telemetry is exported, in milliseconds (default `30000`) |
 
 The API also rate-limits per project token (fixed window) and returns `429` with `Retry-After` when exceeded.
 
@@ -124,7 +125,8 @@ Rate-limit and backpressure state are held per API process (in-memory). Running 
 | Variable | Effect |
 |---|---|
 | `POLL_INTERVAL_MS` | Idle poll interval between dequeue attempts |
-| `FLAKEMETRY_SELF_OTEL_ENDPOINT` | OTLP endpoint for the worker's own metrics (processing lag, throughput, error rate, queue depth) |
+| `FLAKEMETRY_SELF_OTEL_ENDPOINT` | OTLP/HTTP endpoint for the worker's own metrics (time to processed, queue wait, throughput, failures, queue depth) |
+| `OTEL_METRIC_EXPORT_INTERVAL` | How often self-telemetry is exported, in milliseconds (default `30000`) |
 | `FLAKEMETRY_CLUSTER_THRESHOLD` | Jaccard similarity (0–1) above which a new error signature joins an existing cluster (default `0.5`) |
 | `FLAKEMETRY_QUEUE_VISIBILITY_MS` | How long a dequeued job stays invisible to other workers before it is redelivered (default `300000`). Raise it only if a single run legitimately takes longer than this to process — lowering it below the slowest job causes the same run to be processed twice |
 | `FLAKEMETRY_EXECUTION_RETENTION_DAYS` / `FLAKEMETRY_ARTIFACT_RETENTION_DAYS` | Global retention floor for projects with no per-project policy; see [Trend rollups and retention](#trend-rollups-and-retention) |

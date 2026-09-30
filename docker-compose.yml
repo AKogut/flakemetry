@@ -78,6 +78,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-flakemetry}:${POSTGRES_PASSWORD:-flakemetry}@postgres:5432/${POSTGRES_DB:-flakemetry}?schema=public
       FLAKEMETRY_PLUGINS: ${FLAKEMETRY_PLUGINS:-}
       FLAKEMETRY_PLUGIN_TIMEOUT_MS: ${FLAKEMETRY_PLUGIN_TIMEOUT_MS:-}
+      FLAKEMETRY_SELF_OTEL_ENDPOINT: ${FLAKEMETRY_SELF_OTEL_ENDPOINT:-}
+      OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-}
       FLAKEMETRY_S3_BUCKET: ${S3_BUCKET:-flakemetry-artifacts}
       FLAKEMETRY_S3_ENDPOINT: ${FLAKEMETRY_S3_ENDPOINT:-http://minio:9000}
       FLAKEMETRY_S3_REGION: ${FLAKEMETRY_S3_REGION:-us-east-1}
@@ -105,6 +107,8 @@ services:
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-1000}
       FLAKEMETRY_PLUGINS: ${FLAKEMETRY_PLUGINS:-}
       FLAKEMETRY_PLUGIN_TIMEOUT_MS: ${FLAKEMETRY_PLUGIN_TIMEOUT_MS:-}
+      FLAKEMETRY_SELF_OTEL_ENDPOINT: ${FLAKEMETRY_SELF_OTEL_ENDPOINT:-}
+      OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-}
       FLAKEMETRY_FLAKY_THRESHOLD: ${FLAKEMETRY_FLAKY_THRESHOLD:-}
       FLAKEMETRY_FLAKY_MIN_SAMPLES: ${FLAKEMETRY_FLAKY_MIN_SAMPLES:-}
       FLAKEMETRY_QUARANTINE_ENABLED: ${FLAKEMETRY_QUARANTINE_ENABLED:-}
@@ -190,6 +194,45 @@ services:
       timeout: 3s
       retries: 6
 
+  otel-collector:
+    profiles: [observability]
+    image: otel/opentelemetry-collector-contrib:0.161.0
+    command: ['--config=/etc/otelcol/config.yaml']
+    volumes:
+      - ./deploy/observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - '${BIND_ADDRESS:-127.0.0.1}:${OTLP_HTTP_PORT:-4318}:4318'
+    depends_on:
+      - prometheus
+
+  prometheus:
+    profiles: [observability]
+    image: prom/prometheus:v3.15.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-otlp-receiver
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}
+    volumes:
+      - ./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/observability/rules:/etc/prometheus/rules:ro
+      - prometheusdata:/prometheus
+    ports:
+      - '${BIND_ADDRESS:-127.0.0.1}:${PROMETHEUS_PORT:-9090}:9090'
+
+  grafana:
+    profiles: [observability]
+    image: grafana/grafana:13.2.3
+    volumes:
+      - ./deploy/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - '${BIND_ADDRESS:-127.0.0.1}:${GRAFANA_PORT:-3001}:3000'
+    depends_on:
+      - prometheus
+
 volumes:
   pgdata:
   miniodata:
+  prometheusdata:
+  grafanadata:

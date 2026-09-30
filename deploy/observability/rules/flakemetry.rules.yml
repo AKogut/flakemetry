@@ -1,0 +1,123 @@
+groups:
+  - name: flakemetry-sli
+    interval: 30s
+    rules:
+      - record: flakemetry:ingest_requests:rate5m
+        expr: >
+          sum(rate(flakemetry_http_server_duration_milliseconds_count{job="flakemetry-api",route=~"/v1/ingest.*|/v1/traces"}[5m]))
+      - record: flakemetry:ingest_requests:rate1h
+        expr: >
+          sum(rate(flakemetry_http_server_duration_milliseconds_count{job="flakemetry-api",route=~"/v1/ingest.*|/v1/traces"}[1h]))
+      - record: flakemetry:ingest_errors:rate5m
+        expr: >
+          sum(rate(flakemetry_http_server_duration_milliseconds_count{job="flakemetry-api",route=~"/v1/ingest.*|/v1/traces",status=~"5.."}[5m]))
+          or vector(0)
+      - record: flakemetry:ingest_errors:rate1h
+        expr: >
+          sum(rate(flakemetry_http_server_duration_milliseconds_count{job="flakemetry-api",route=~"/v1/ingest.*|/v1/traces",status=~"5.."}[1h]))
+          or vector(0)
+      - record: flakemetry:ingest_error_ratio:rate5m
+        expr: flakemetry:ingest_errors:rate5m / flakemetry:ingest_requests:rate5m
+      - record: flakemetry:ingest_error_ratio:rate1h
+        expr: flakemetry:ingest_errors:rate1h / flakemetry:ingest_requests:rate1h
+      - record: flakemetry:ingest_under_300ms:ratio_rate10m
+        expr: >
+          sum(rate(flakemetry_http_server_duration_milliseconds_bucket{job="flakemetry-api",route=~"/v1/ingest.*|/v1/traces",le="300"}[10m]))
+          /
+          sum(rate(flakemetry_http_server_duration_milliseconds_count{job="flakemetry-api",route=~"/v1/ingest.*|/v1/traces"}[10m]))
+      - record: flakemetry:time_to_processed:p95_5m
+        expr: >
+          histogram_quantile(0.95, sum by (le) (rate(flakemetry_worker_time_to_processed_milliseconds_bucket{job="flakemetry-worker"}[5m])))
+      - record: flakemetry:queue_depth:max
+        expr: max(flakemetry_queue_depth{job="flakemetry-api"})
+
+  - name: flakemetry-slo
+    rules:
+      - alert: FlakemetryIngestErrorBudgetBurn
+        expr: >
+          flakemetry:ingest_error_ratio:rate1h > (36 * 0.001)
+          and
+          flakemetry:ingest_error_ratio:rate5m > (36 * 0.001)
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: Ingestion is burning its error budget fast enough to spend 5% of the month in an hour
+          description: >
+            {{ $value | humanizePercentage }} of ingest requests failed with a 5xx over the last
+            hour, against a 0.1% monthly budget. CI pipelines are being told to retry or losing
+            runs. See "202 latency rising, 5xx on ingest" in deploy/RUNBOOK.md.
+
+      - alert: FlakemetryIngestLatency
+        expr: flakemetry:ingest_under_300ms:ratio_rate10m < 0.99
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: Fewer than 99% of ingest requests answer within 300 ms
+          description: >
+            Only {{ $value | humanizePercentage }} of ingest requests finished within 300 ms over
+            the last 10 minutes. Ingestion only enqueues, so this is the api or its database
+            writes, not processing. See "202 latency rising" in deploy/RUNBOOK.md.
+
+      - alert: FlakemetryProcessingLag
+        expr: flakemetry:time_to_processed:p95_5m > 60000
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: The 95th percentile run takes over a minute from accepted to processed
+          description: >
+            p95 time from acceptance to processed is {{ printf "%.0f" $value }} ms over the last
+            5 minutes. Lag drains no budget while the queue drains; page only if it keeps
+            growing. See "Queue depth climbing, lag rising" in deploy/RUNBOOK.md.
+
+      - alert: FlakemetryQueueNotDraining
+        expr: >
+          min_over_time(deriv(flakemetry:queue_depth:max[5m])[30m:1m]) > 0
+          and
+          flakemetry:queue_depth:max > flakemetry:queue_depth:max offset 30m
+        labels:
+          severity: page
+        annotations:
+          summary: The ingestion queue has grown without pause for 30 minutes
+          description: >
+            Workers are not keeping up. Accepted runs are safe in Postgres but their results are
+            falling further behind. See "Queue depth climbing, lag rising" in deploy/RUNBOOK.md.
+
+      - alert: FlakemetryWorkersStalled
+        expr: >
+          flakemetry:queue_depth:max > 0
+          and on ()
+          (sum(rate(flakemetry_worker_jobs_processed_total[15m])) or vector(0)) == 0
+        for: 15m
+        labels:
+          severity: page
+        annotations:
+          summary: Runs are waiting and no worker has processed one in 15 minutes
+          description: >
+            {{ $value }} jobs are queued and nothing completed. Check that worker pods are running
+            and not crash-looping, and that they reach the database.
+
+      - alert: FlakemetryRunsDeadLettered
+        expr: increase(flakemetry_worker_jobs_dead_lettered_total[15m]) > 0
+        labels:
+          severity: ticket
+        annotations:
+          summary: Accepted runs were given up on after exhausting their retries
+          description: >
+            These runs were acknowledged to CI and will not be processed. Their payload and last
+            error are on the ingestion_job rows with status 'dead'.
+
+      - alert: FlakemetryTelemetryMissing
+        expr: >
+          absent_over_time(flakemetry_queue_depth{job="flakemetry-api"}[10m])
+          or
+          absent_over_time(flakemetry_worker_queue_depth{job="flakemetry-worker"}[10m])
+        labels:
+          severity: ticket
+        annotations:
+          summary: The api or worker stopped exporting its own metrics
+          description: >
+            Every other Flakemetry alert is blind without them. Check FLAKEMETRY_SELF_OTEL_ENDPOINT
+            on the api and worker and the collector they send to.

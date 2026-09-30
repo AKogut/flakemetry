@@ -1,10 +1,11 @@
 import { buildApp } from '@flakemetry/api/app'
 import { createPrismaClient, generateToken, hashToken, IngestionQueue } from '@flakemetry/db'
 import { exportRunOverOtlp, TestRunRecorder } from '@flakemetry/sdk'
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createEventBus, type DomainEventMap } from '../events'
 import { createWorker, type Worker } from '../runner'
+import { workerMetrics } from '../telemetry'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
 const prisma = createPrismaClient()
@@ -204,6 +205,27 @@ describe.skipIf(!hasDb)('full ingestion chain', () => {
 
     expect(await prisma.run.count()).toBe(2)
     expect(await prisma.testExecution.count()).toBe(3)
+  })
+
+  it('records how long a run took from acceptance to processed, and only once it is', async () => {
+    const original = workerMetrics.timeToProcessed
+    const record = vi.fn()
+    workerMetrics.timeToProcessed = { record } as unknown as typeof original
+    try {
+      const worker = createWorker(prisma, new IngestionQueue(prisma))
+      await exportRunOverOtlp(recordRun('aaa1111', true), 'e2e-run-000001', { endpoint, token })
+      await prisma.ingestionJob.updateMany({ data: { payload: { broken: true } } })
+      await drain(worker)
+      expect(record).not.toHaveBeenCalled()
+
+      await exportRunOverOtlp(recordRun('bbb2222', false), 'e2e-run-000002', { endpoint, token })
+      await drain(worker)
+
+      expect(record).toHaveBeenCalledTimes(1)
+      expect(record.mock.calls[0]?.[0]).toBeGreaterThanOrEqual(0)
+    } finally {
+      workerMetrics.timeToProcessed = original
+    }
   })
 
   it('applies the project policy the worker loads from the database', async () => {
