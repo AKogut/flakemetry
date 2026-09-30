@@ -202,6 +202,15 @@ Retention is resolved **per project**: a project can set its own execution/artif
 
 Recompute is idempotent: re-delivering a run recomputes the same day's aggregates rather than double-counting.
 
+### Plugins
+
+Set on **both the API and the worker**. See the [plugins guide](https://akogut.github.io/flakemetry/guide/plugins).
+
+| Variable | Effect |
+|---|---|
+| `FLAKEMETRY_PLUGINS` | Comma-separated plugin modules: package names, or paths (relative paths resolve from the working directory). A plugin that fails to load stops the service |
+| `FLAKEMETRY_PLUGIN_TIMEOUT_MS` | Deadline for each plugin call (default 5000). An analyzer past it is abandoned without failing the run; a parser past it gets the request refused |
+
 ## Inspecting the resolved configuration
 
 ```bash

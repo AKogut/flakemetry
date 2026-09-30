@@ -18,6 +18,7 @@ import { getTeamHealthLeaderboard, getTestHealthMetrics } from '../health'
 import { findMergeCandidates, listIdentityChanges } from '../identity'
 import { getIngestionHealth } from '../ingestion'
 import { getParamBuckets } from '../params'
+import { listPluginSignals } from '../plugins'
 import { getEffectiveProjectPolicy, listPolicyChanges } from '../policy'
 import { setQuarantine } from '../quarantine'
 import { getRca } from '../rca'
@@ -224,6 +225,17 @@ const seedTenant = async (label: string): Promise<Tenant> => {
       url: 'https://github.com/a/b/issues/1',
     },
   })
+  await prisma.pluginSignal.create({
+    data: {
+      ...tenant,
+      testIdentityId: identity.id,
+      runId: run.id,
+      plugin: 'slow-outlier',
+      code: 'SLOW_OUTLIER',
+      severity: 'warning',
+      message: 'took 4.0s',
+    },
+  })
 
   return {
     orgId: org.id,
@@ -329,6 +341,7 @@ describe.skipIf(!hasDb)('tenant isolation', { timeout: 180_000 }, () => {
       ['getParamBuckets', () => getParamBuckets(prisma, a.projectId, b.identityId)],
       ['getFlakeBisect', () => getFlakeBisect(prisma, a.projectId, b.identityId)],
       ['findMergeCandidates', () => findMergeCandidates(prisma, a.projectId, b.identityId)],
+      ['listPluginSignals', () => listPluginSignals(prisma, a.projectId, b.identityId)],
     ]
 
     it.each(crossReads)('%s', async (_name, call) => {

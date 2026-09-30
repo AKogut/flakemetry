@@ -1,5 +1,5 @@
 import { type LlmProvider, resolveProvider } from '@flakemetry/ai'
-import { ingestRunBatchSchema } from '@flakemetry/contracts'
+import { type FlakemetryPlugin, ingestRunBatchSchema } from '@flakemetry/contracts'
 import type { IngestionQueue, PrismaClient } from '@flakemetry/db'
 
 import type { EventBus } from './events'
@@ -13,6 +13,8 @@ export interface WorkerOptions {
   now?: () => Date
   events?: EventBus
   provider?: LlmProvider | null
+  plugins?: readonly FlakemetryPlugin[]
+  pluginTimeoutMs?: number
 }
 
 export interface Worker {
@@ -60,6 +62,8 @@ export const createWorker = (
           quarantineEnabled: policy.quarantineEnabled,
           quarantineCooldownRuns: policy.quarantineCooldownRuns,
           events: options.events,
+          plugins: options.plugins,
+          pluginTimeoutMs: options.pluginTimeoutMs,
         })
         await queue.complete(job.id)
         workerMetrics.jobsProcessed.add(1)

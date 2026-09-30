@@ -1,0 +1,42 @@
+{
+  "name": "@flakemetry/plugin-host",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Loads Flakemetry plugins and runs their hooks under a deadline",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown --config-loader native",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@flakemetry/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@flakemetry/build-config": "workspace:*",
+    "@flakemetry/eslint-config": "workspace:*",
+    "@flakemetry/tsconfig": "workspace:*",
+    "@types/node": "^22.10.5",
+    "vitest": "^4.1.11"
+  }
+}

@@ -1,4 +1,5 @@
 import { getPrismaClient, IngestionQueue } from '@flakemetry/db'
+import { loadPluginsFromEnv, resolvePluginTimeout } from '@flakemetry/plugin-host'
 import { resolveObjectStore } from '@flakemetry/storage'
 
 import { buildApp } from './app'
@@ -28,9 +29,13 @@ const queue = new IngestionQueue(prisma)
 
 observeQueueDepth(() => queue.depth())
 
+const plugins = await loadPluginsFromEnv(process.env)
+
 const app = buildApp({
   prisma,
   queue,
+  plugins,
+  pluginTimeoutMs: resolvePluginTimeout(process.env),
   store: resolveObjectStore(process.env),
   logger: {
     level: process.env.LOG_LEVEL ?? 'info',

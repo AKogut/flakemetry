@@ -32,6 +32,12 @@ export const workerMetrics = {
   rcaBudgetExhausted: meter.createCounter('flakemetry.worker.rca_budget_exhausted', {
     description: 'RCA runs skipped because the daily token budget was spent',
   }),
+  pluginSignals: meter.createCounter('flakemetry.worker.plugin_signals', {
+    description: 'signals raised by analyzer plugins',
+  }),
+  pluginFailures: meter.createCounter('flakemetry.worker.plugin_failures', {
+    description: 'analyzer plugin runs that threw, timed out or broke the contract',
+  }),
 }
 
 export const observeQueueDepth = (getDepth: () => Promise<number>): void => {

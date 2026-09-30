@@ -4,6 +4,7 @@ import { createGunzip } from 'node:zlib'
 import {
   artifactPresignRequestSchema,
   codeownersUploadSchema,
+  type FlakemetryPlugin,
   ingestRunBatchSchema,
   isAllowedArtifactContentType,
   junitIngestSchema,
@@ -11,10 +12,13 @@ import {
   notificationRoutingSchema,
   otlpToIngestBatch,
   otlpTraceRequestSchema,
+  parsedReportSchema,
   parseJunitXml,
+  pluginIngestRequestSchema,
   quarantineSetSchema,
 } from '@flakemetry/contracts'
 import { IngestionQueue, type PrismaClient } from '@flakemetry/db'
+import { DEFAULT_PLUGIN_TIMEOUT_MS, withDeadline } from '@flakemetry/plugin-host'
 import {
   type BadgeVariant,
   type GateStrictness,
@@ -56,6 +60,8 @@ export interface AppOptions {
   rateLimit?: { max: number; windowMs: number }
   rateLimitNow?: () => number
   now?: () => number
+  plugins?: readonly FlakemetryPlugin[]
+  pluginTimeoutMs?: number
 }
 
 type Admission = { ok: true } | { ok: false; status: number; reason: string; retryAfterMs: number }
@@ -317,6 +323,116 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
       idempotencyKey: parsed.data.idempotencyKey,
       resource: parsed.data.resource,
     })
+
+    const { jobId, deduplicated } = await queue.enqueue({
+      orgId: project.orgId,
+      projectId: project.projectId,
+      idempotencyKey: batch.idempotencyKey,
+      payload: JSON.parse(JSON.stringify(batch)),
+    })
+
+    apiMetrics.runsAccepted.add(1)
+    apiMetrics.executionsAccepted.add(batch.executions.length)
+
+    return reply.code(202).send({
+      receiptId: jobId,
+      acceptedExecutions: batch.executions.length,
+      deduplicated,
+    })
+  })
+
+  const parsers = new Map(
+    (options.plugins ?? [])
+      .filter((plugin) => plugin.parse)
+      .map((plugin) => [plugin.name, plugin] as const),
+  )
+
+  app.post('/v1/ingest/plugin/:name', async (request, reply) => {
+    const { name } = request.params as { name: string }
+    const project = await authenticateProject(prisma, request)
+    if (!project) {
+      return reply.code(401).send({ error: 'unauthorized', message: 'missing or invalid token' })
+    }
+    if (!hasScope(project, 'ingest')) {
+      return reply
+        .code(403)
+        .send({ error: 'insufficient_scope', message: 'this endpoint needs the "ingest" scope' })
+    }
+
+    const plugin = parsers.get(name)
+    if (!plugin?.parse) {
+      return reply.code(404).send({
+        error: 'unknown_plugin',
+        message: `no ingestion plugin named "${name}" is loaded`,
+        available: [...parsers.keys()],
+      })
+    }
+
+    const admission = await admit(project.projectId)
+    if (!admission.ok) {
+      setRetryAfter(reply, admission.retryAfterMs)
+      return reply.code(admission.status).send({ error: admission.reason })
+    }
+
+    const parsed = pluginIngestRequestSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: 'invalid_payload',
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      })
+    }
+
+    const parse = plugin.parse
+    let output: unknown
+    try {
+      output = await withDeadline(
+        () => parse(parsed.data.content),
+        options.pluginTimeoutMs ?? DEFAULT_PLUGIN_TIMEOUT_MS,
+        `plugin ${plugin.name}`,
+      )
+    } catch (error) {
+      return reply.code(422).send({
+        error: 'plugin_failed',
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+
+    const report = parsedReportSchema.safeParse(output)
+    if (!report.success) {
+      return reply.code(422).send({
+        error: 'invalid_plugin_output',
+        issues: report.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      })
+    }
+    if (report.data.executions.length === 0) {
+      return reply.code(400).send({
+        error: 'empty_report',
+        message: 'the plugin found no test cases in the content',
+      })
+    }
+
+    const candidate = ingestRunBatchSchema.safeParse(
+      junitToIngestBatch(report.data, {
+        idempotencyKey: parsed.data.idempotencyKey,
+        resource: parsed.data.resource,
+      }),
+    )
+    if (!candidate.success) {
+      return reply.code(422).send({
+        error: 'invalid_plugin_output',
+        issues: candidate.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      })
+    }
+    const batch = candidate.data
 
     const { jobId, deduplicated } = await queue.enqueue({
       orgId: project.orgId,

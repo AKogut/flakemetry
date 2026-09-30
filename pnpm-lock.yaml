@@ -55,6 +55,9 @@ importers:
       '@flakemetry/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@flakemetry/plugin-host':
+        specifier: workspace:*
+        version: link:../../packages/plugin-host
       '@flakemetry/queries':
         specifier: workspace:*
         version: link:../../packages/queries
@@ -189,6 +192,9 @@ importers:
       '@flakemetry/notify':
         specifier: workspace:*
         version: link:../../packages/notify
+      '@flakemetry/plugin-host':
+        specifier: workspace:*
+        version: link:../../packages/plugin-host
       '@flakemetry/queries':
         specifier: workspace:*
         version: link:../../packages/queries
@@ -464,6 +470,28 @@ importers:
       '@types/nodemailer':
         specifier: ^8.0.1
         version: 8.0.1
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.20.1)(vite@7.3.6(@types/node@22.20.1)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
+  packages/plugin-host:
+    dependencies:
+      '@flakemetry/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      '@flakemetry/build-config':
+        specifier: workspace:*
+        version: link:../build-config
+      '@flakemetry/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@flakemetry/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@types/node':
+        specifier: ^22.10.5
+        version: 22.20.1
       vitest:
         specifier: ^4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.20.1)(vite@7.3.6(@types/node@22.20.1)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))

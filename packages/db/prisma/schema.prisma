@@ -185,6 +185,7 @@ model Project {
   identityMerges  IdentityMerge[]
   identityChanges IdentityChange[]
   trackerIssues   TrackerIssue[]
+  pluginSignals   PluginSignal[]
 
   @@unique([orgId, slug])
   @@index([orgId])
@@ -336,6 +337,7 @@ model TestIdentity {
   healthEvents TestHealthEvent[]
   stitches     IdentityStitch[]
   trackerIssue TrackerIssue?
+  pluginSignals PluginSignal[]
 
   @@unique([projectId, fingerprint])
   @@index([orgId])
@@ -745,4 +747,27 @@ model TrackerIssue {
   @@index([projectId, state])
   @@index([orgId])
   @@map("tracker_issue")
+}
+
+model PluginSignal {
+  id             String   @id @default(uuid()) @db.Uuid
+  orgId          String   @map("org_id") @db.Uuid
+  projectId      String   @map("project_id") @db.Uuid
+  testIdentityId String   @map("test_identity_id") @db.Uuid
+  runId          String   @map("run_id") @db.Uuid
+  plugin         String
+  code           String
+  severity       String
+  message        String
+  data           Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  identity TestIdentity @relation(fields: [testIdentityId], references: [id], onDelete: Cascade)
+
+  @@unique([testIdentityId, plugin, code])
+  @@index([projectId, updatedAt(sort: Desc)])
+  @@index([orgId])
+  @@map("plugin_signal")
 }

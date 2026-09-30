@@ -8,6 +8,7 @@ import {
   quarantineSetSchema,
 } from './ingestion'
 import { otlpTraceRequestSchema } from './otel'
+import { pluginIngestRequestSchema } from './plugin'
 import {
   flakyBoardInputSchema,
   rcaGetInputSchema,
@@ -52,6 +53,15 @@ export const REST_ENDPOINTS: readonly RestEndpoint[] = [
       'Ingest a JUnit XML report directly, for CI that cannot run the CLI. Parsed server-side into the same run batch the CLI would have sent.',
     auth: 'ingest-token',
     request: { name: 'JunitIngestRequest', schema: junitIngestSchema },
+    response: '`202` with `{ receiptId, acceptedExecutions }`',
+  },
+  {
+    method: 'POST',
+    path: '/v1/ingest/plugin/:name',
+    summary:
+      'Ingest a report in a format an ingestion plugin understands. The named plugin parses `content` on the server into the same run batch as every other route; `404` lists the plugins that are loaded.',
+    auth: 'ingest-token',
+    request: { name: 'PluginIngestRequest', schema: pluginIngestRequestSchema },
     response: '`202` with `{ receiptId, acceptedExecutions }`',
   },
   {
