@@ -1,4 +1,5 @@
 import { getPrismaClient, IngestionQueue } from '@flakemetry/db'
+import { loadPluginsFromEnv, resolvePluginTimeout } from '@flakemetry/plugin-host'
 import { resolveObjectStore } from '@flakemetry/storage'
 
 import { createProjectChannelLoader } from './channels'
@@ -35,9 +36,16 @@ if (startNotifications(events, process.env, createProjectChannelLoader(prisma)))
   process.stdout.write('worker: notifications enabled\n')
 }
 
+const plugins = await loadPluginsFromEnv(process.env)
+for (const plugin of plugins) {
+  process.stdout.write(`worker: plugin ${plugin.name} loaded\n`)
+}
+
 const worker = createWorker(prisma, queue, {
   pollIntervalMs: Number(process.env.POLL_INTERVAL_MS ?? 1_000),
   events,
+  plugins,
+  pluginTimeoutMs: resolvePluginTimeout(process.env),
 })
 
 let shuttingDown = false

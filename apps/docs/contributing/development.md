@@ -55,6 +55,7 @@ else ships inside the Docker images.
 | `packages/queries` | Tenant-scoped reads and writes shared by the API and the dashboard | no |
 | `packages/ai` | LLM providers, scrubbing, root-cause prompts | no |
 | `packages/notify` | Slack, Discord, email and signed webhook delivery, tracker issues | no |
+| `packages/plugin-host` | Loads plugins from `FLAKEMETRY_PLUGINS` and runs their hooks under a deadline | no |
 | `packages/storage` | Object store for artifacts (S3, MinIO, in-memory) | no |
 | `packages/eslint-config` | Shared lint rules | no |
 | `packages/tsconfig` | Shared TypeScript presets | no |

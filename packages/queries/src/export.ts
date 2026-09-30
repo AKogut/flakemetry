@@ -111,6 +111,7 @@ export const EXPORT_DATASETS: readonly ExportDataset[] = [
   { name: 'identity_change', table: 'identity_change', filterColumn: 'project_id', keys: byId },
   { name: 'identity_merge', table: 'identity_merge', filterColumn: 'project_id', keys: byId },
   { name: 'tracker_issue', table: 'tracker_issue', filterColumn: 'project_id', keys: byId },
+  { name: 'plugin_signal', table: 'plugin_signal', filterColumn: 'project_id', keys: byId },
 ]
 
 /**

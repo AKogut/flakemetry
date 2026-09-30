@@ -9,6 +9,7 @@ import {
   getRca,
   getRcaFeedback,
   getTest,
+  listPluginSignals,
 } from '@flakemetry/queries'
 import { notFound } from 'next/navigation'
 
@@ -76,6 +77,7 @@ export default async function TestDetailPage({
 
   const mergeCandidates = canSplit ? await findMergeCandidates(prisma, projectId, testId) : []
   const paramBuckets = await getParamBuckets(prisma, projectId, testId)
+  const pluginSignals = await listPluginSignals(prisma, projectId, testId)
 
   const timeline = [...test.history].reverse()
   const failures = timeline.filter((point) => point.status === 'fail')
@@ -198,6 +200,36 @@ export default async function TestDetailPage({
         </div>
         <ReasonCodes codes={test.reasonCodes} />
       </div>
+
+      {pluginSignals.length > 0 ? (
+        <div className="card" style={{ marginBottom: '1.25rem' }}>
+          <div className="rca-label" style={{ marginBottom: '0.6rem' }}>
+            Plugin signals
+          </div>
+          <table>
+            <tbody>
+              {pluginSignals.map((signal) => (
+                <tr key={`${signal.plugin}:${signal.code}`}>
+                  <td>
+                    <span
+                      className="mono"
+                      style={{
+                        color: signal.severity === 'warning' ? 'var(--flaky)' : undefined,
+                      }}
+                    >
+                      {signal.code}
+                    </span>
+                  </td>
+                  <td>{signal.message}</td>
+                  <td className="muted">
+                    {signal.plugin} · {formatWhen(signal.updatedAt)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
       {paramBuckets ? (
         <div className="card" style={{ marginBottom: '1.25rem' }}>
