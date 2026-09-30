@@ -1,6 +1,6 @@
 {
   "name": "@flakemetry/contracts",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Shared zod schemas and inferred types across ingestion, api, worker and web",
   "license": "MIT",
   "author": "Andrii Kohut",
