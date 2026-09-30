@@ -75,7 +75,7 @@ services:
       retries: 10
 
   minio:
-    image: minio/minio:latest
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     restart: unless-stopped
     command: server /data
     environment:
@@ -90,7 +90,7 @@ services:
       retries: 10
 
   createbuckets:
-    image: minio/mc:latest
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     depends_on:
       minio:
         condition: service_healthy

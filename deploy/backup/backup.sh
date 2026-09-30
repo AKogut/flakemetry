@@ -32,10 +32,16 @@ fi
 
 echo "backup: wrote $DUMP ($SIZE bytes)"
 
-if [ -n "${FLAKEMETRY_S3_BUCKET:-}" ] && [ -n "${FLAKEMETRY_BACKUP_MIRROR:-}" ]; then
-  echo "backup: mirroring artifacts to $FLAKEMETRY_BACKUP_MIRROR"
-  $COMPOSE run --rm -T minio-mc mirror --overwrite "local/$FLAKEMETRY_S3_BUCKET" \
-    "$FLAKEMETRY_BACKUP_MIRROR"
+if [ -n "${FLAKEMETRY_BACKUP_MIRROR:-}" ]; then
+  MC_SERVICE="${FLAKEMETRY_MC_SERVICE:-createbuckets}"
+  BUCKET="${FLAKEMETRY_S3_BUCKET:-${S3_BUCKET:-flakemetry-artifacts}}"
+  mkdir -p "$FLAKEMETRY_BACKUP_MIRROR"
+  MIRROR="$(cd "$FLAKEMETRY_BACKUP_MIRROR" && pwd)"
+  echo "backup: mirroring artifacts from $BUCKET to $MIRROR"
+  $COMPOSE run --rm -T -v "$MIRROR:/mirror" -e "S3_BUCKET=$BUCKET" --entrypoint /bin/sh \
+    "$MC_SERVICE" -c \
+    'mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null &&
+     mc mirror --overwrite "local/$S3_BUCKET" /mirror'
 fi
 
 # Rotation is deliberate rather than infinite: a disk that fills is an outage, and the
