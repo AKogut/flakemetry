@@ -1,4 +1,4 @@
-import { createPrismaClient } from '@flakemetry/db'
+import { createPrismaClient, refreshRunCounts } from '@flakemetry/db'
 import { createMemoryObjectStore, projectArtifactPrefix } from '@flakemetry/storage'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
@@ -129,6 +129,7 @@ describe.skipIf(!hasDb)('runRetentionSweep', () => {
         startedAt: daysAgo(5),
       },
     })
+    await refreshRunCounts(prisma, project.id)
     return project.id
   }
 
@@ -192,6 +193,7 @@ describe.skipIf(!hasDb)('runRetentionSweep', () => {
         },
       })
     }
+    await refreshRunCounts(prisma, tenant.projectId)
     return tenant
   }
 

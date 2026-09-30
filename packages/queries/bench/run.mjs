@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks'
 
-import { createPrismaClient } from '@flakemetry/db'
+import { createPrismaClient, storedExecutionCount } from '@flakemetry/db'
 import {
   flakyBoard,
   getClusterImpact,
@@ -69,7 +69,7 @@ const queries = {
   'flake bisect (one test)': () => getFlakeBisect(prisma, PROJECT, flaky.testIdentityId),
   'run summary by commit': () => getRunSummaryByCommit(prisma, PROJECT, latestRun.commitSha),
   'PR gate': () => getPrGate(prisma, PROJECT, latestRun.commitSha, { baseBranch: 'main' }),
-  'retention count': () => prisma.testExecution.count({ where: { projectId: PROJECT } }),
+  'retention count': () => storedExecutionCount(prisma, PROJECT),
 }
 
 const percentile = (sorted, p) =>

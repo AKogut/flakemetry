@@ -379,6 +379,7 @@ model Run {
   failedCount    Int        @default(0) @map("failed_count")
   skippedCount   Int        @default(0) @map("skipped_count")
   flakyCount     Int        @default(0) @map("flaky_count")
+  storedExecutions Int      @default(0) @map("stored_executions")
 
   project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   executions TestExecution[]

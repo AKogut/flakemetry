@@ -1,4 +1,4 @@
-import { createPrismaClient } from '@flakemetry/db'
+import { createPrismaClient, refreshRunCounts } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { getWorkspaceUsage } from '../workspace-usage'
@@ -39,6 +39,7 @@ const seedProject = async (orgId: string, name: string, executions: number) => {
       },
     })
   }
+  await refreshRunCounts(prisma, project.id)
   return project.id
 }
 

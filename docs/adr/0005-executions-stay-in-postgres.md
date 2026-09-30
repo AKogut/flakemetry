@@ -108,3 +108,20 @@ not scanning is faster still. Each has a fix inside the current schema:
     slowest HTTP calls across all runs;
   - one project retains more than about 100 M executions;
   - retention sweeps cannot keep up with ingestion.
+
+## After the follow-ups
+
+Same benchmark, p95 in milliseconds, at whichever 15 M shape was worse for the query:
+
+| query | before | after |
+| --- | ---: | ---: |
+| runs list (#357) | 4,760 | 2.0 |
+| usage page (#359) | 6,588 | 3.5 |
+| retention count (#359) | 6,168 | 1.3 |
+| cost of flakiness (#358) | 2,433 | 104 |
+| leaderboards (#358) | 1,301 | 146 |
+| daily trend (#358) | 586 | 61 |
+| health KPIs (#358) | 373 | 74 |
+
+Every query in the benchmark now answers under 300 ms at 15 M executions. The slowest is
+the run page at 20,000 tests, 123 ms, and that page returns all 20,000 executions.
