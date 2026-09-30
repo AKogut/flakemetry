@@ -6,6 +6,7 @@ export const NOTIFICATION_EVENTS = [
   'rca_ready',
   'suite_regressed',
   'suite_slowed',
+  'ai_budget_spent',
 ] as const
 
 export const notificationChannelConfigSchema = z

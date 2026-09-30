@@ -13,6 +13,7 @@ const EVENT_LABELS: Record<string, string> = {
   rca_ready: 'RCA ready',
   suite_regressed: 'Suite regression',
   suite_slowed: 'Suite slowdown',
+  ai_budget_spent: 'AI budget spent',
 }
 
 export default async function NotificationsPage({
