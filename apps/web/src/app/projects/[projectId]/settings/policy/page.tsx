@@ -85,6 +85,7 @@ export default async function PolicyPage({
       | 'flakyThreshold'
       | 'minSamples'
       | 'quarantineCooldownRuns'
+      | 'aiDailyTokenBudget'
       | 'executionRetentionDays'
       | 'artifactRetentionDays'
       | 'ciMinuteCost'
@@ -262,6 +263,30 @@ export default async function PolicyPage({
                 worker.
               </p>
               <EnvNote source={eff.aiRcaEnabled.source} />
+            </div>
+
+            <div className="policy-field">
+              <div>
+                <label htmlFor="aiDailyTokenBudget">{FIELD_LABELS.aiDailyTokenBudget}</label>
+                <input
+                  id="aiDailyTokenBudget"
+                  name="aiDailyTokenBudget"
+                  type="number"
+                  step="1"
+                  min="0"
+                  placeholder="200000 (default)"
+                  defaultValue={numberValue('aiDailyTokenBudget')}
+                />
+              </div>
+              <Effective
+                value={eff.aiDailyTokenBudget.value}
+                source={eff.aiDailyTokenBudget.source}
+              />
+              <p className="policy-help">
+                Tokens this project may spend on root-cause analysis per UTC day. Once spent,
+                analysis pauses until midnight UTC. 0 turns analysis off. Enforced by the worker.
+              </p>
+              <EnvNote source={eff.aiDailyTokenBudget.source} />
             </div>
 
             <div className="policy-field">

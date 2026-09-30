@@ -3,11 +3,25 @@ import type { PrismaClient } from '@flakemetry/db'
 export interface AiSpend {
   spentToday: number
   budget: number
-  /** Null when no budget is set, since a share of nothing is not zero. */
+  /** Null when the budget is 0, since a share of nothing is not zero. */
   fraction: number | null
   exhausted: boolean
+  analysisOff: boolean
   reportsToday: number
 }
+
+export const summarizeAiSpend = (
+  spentToday: number,
+  budget: number,
+  reportsToday: number,
+): AiSpend => ({
+  spentToday,
+  budget,
+  fraction: budget > 0 ? spentToday / budget : null,
+  exhausted: budget > 0 && spentToday >= budget,
+  analysisOff: budget <= 0,
+  reportsToday,
+})
 
 export interface StoredRows {
   executions: number
@@ -92,13 +106,7 @@ export const getProjectUsage = async (
   }
 
   return {
-    ai: {
-      spentToday,
-      budget,
-      fraction: budget > 0 ? spentToday / budget : null,
-      exhausted: budget > 0 && spentToday >= budget,
-      reportsToday,
-    },
+    ai: summarizeAiSpend(spentToday, budget, reportsToday),
     rows: { executions, runs, identities, rcaReports },
     artifacts,
     oldestExecution: oldest?.startedAt ?? null,
