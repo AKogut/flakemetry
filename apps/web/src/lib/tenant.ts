@@ -4,6 +4,11 @@ import { redirect } from 'next/navigation'
 
 const prisma = getPrismaClient()
 
+const grantsReaching = (userId: string) => ({
+  where: { OR: [{ userId }, { team: { members: { some: { userId } } } }] },
+  select: { role: true },
+})
+
 export interface AccessibleProject {
   id: string
   name: string
@@ -34,7 +39,7 @@ export const listAccessibleProjects = async (userId: string): Promise<Accessible
               name: true,
               slug: true,
               restricted: true,
-              grants: { where: { userId }, select: { role: true }, take: 1 },
+              grants: grantsReaching(userId),
             },
           },
         },
@@ -47,7 +52,7 @@ export const listAccessibleProjects = async (userId: string): Promise<Accessible
       const role = effectiveProjectRole({
         orgRole: membership.role,
         restricted: project.restricted,
-        grantRole: project.grants[0]?.role ?? null,
+        grantRoles: project.grants.map((grant) => grant.role),
       })
       if (!role) return []
       return [
@@ -78,7 +83,7 @@ export const findProjectAccess = async (
       name: true,
       slug: true,
       restricted: true,
-      grants: { where: { userId }, select: { role: true }, take: 1 },
+      grants: grantsReaching(userId),
       org: {
         select: {
           id: true,
@@ -96,7 +101,7 @@ export const findProjectAccess = async (
   const role = effectiveProjectRole({
     orgRole,
     restricted: project.restricted,
-    grantRole: project.grants[0]?.role ?? null,
+    grantRoles: project.grants.map((grant) => grant.role),
   })
   if (!role) return null
 
