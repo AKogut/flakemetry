@@ -6,3 +6,10 @@ packages:
   # playwright-demo alongside it deliberately installs them from npm, which is
   # what a reader copying it would get, and must keep doing so.
   - 'examples/reporter-smoke'
+
+onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - '@prisma/engines'
+  - esbuild
+  - prisma
+  - unrs-resolver
