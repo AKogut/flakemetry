@@ -1,0 +1,11 @@
+{{- if .Values.database.caBundle }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "flakemetry.fullname" . }}-database-ca
+  labels:
+    {{- include "flakemetry.labels" . | nindent 4 }}
+data:
+  ca.pem: |
+    {{- .Values.database.caBundle | trim | nindent 4 }}
+{{- end }}

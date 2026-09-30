@@ -57,12 +57,13 @@ Dependency direction is strictly downward: apps depend on packages, packages dep
 | OTel-native ingestion, tests as traces | [ADR-0002](https://github.com/AKogut/flakemetry/blob/main/docs/adr/0002-otel-native-ingestion.md) |
 | Explainable statistical flaky scoring, no black-box ML | [ADR-0003](https://github.com/AKogut/flakemetry/blob/main/docs/adr/0003-explainable-flaky-scoring.md) |
 | Async ingestion: 202 + durable Postgres queue | [ADR-0004](https://github.com/AKogut/flakemetry/blob/main/docs/adr/0004-async-ingestion-202-queue.md) |
+| Executions and spans stay in Postgres; no columnar store | [ADR-0005](https://github.com/AKogut/flakemetry/blob/main/docs/adr/0005-executions-stay-in-postgres.md) |
 
 New load-bearing decisions require a new ADR from [the template](https://github.com/AKogut/flakemetry/blob/main/docs/adr/template.md); superseded decisions are marked, never deleted.
 
 ## Cross-cutting rules
 
 - **Multi-tenancy from day one**: `org_id` and `project_id` on every table, indexed, even in single-tenant self-host.
-- **Storage seams**: the span store and the queue sit behind interfaces so columnar storage and a real broker can slot in at scale without touching core.
+- **Storage seams**: the queue sits behind an interface so a real broker can replace it at scale without touching producers or consumers. Executions and spans stay in Postgres; [ADR-0005](https://github.com/AKogut/flakemetry/blob/main/docs/adr/0005-executions-stay-in-postgres.md) records the benchmark behind that.
 - **Fail open at the edge**: reporters and the GitHub Action never fail a CI job because Flakemetry is unreachable.
 - **Provider-agnostic AI**: hosted or local models are a config change, never a code change.

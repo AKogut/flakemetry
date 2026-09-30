@@ -44,7 +44,7 @@ Flakemetry closes all three by modelling every test execution as an OpenTelemetr
    Workers ── normalize ▶ test identity ▶ flaky scoring ▶ signature clustering ▶ AI RCA
               │
               ▼
-   PostgreSQL (relational + JSONB + pgvector) · Object store (S3/MinIO)
+   PostgreSQL (relational + JSONB) · Object store (S3/MinIO)
               │
               ▼
    Query API (tRPC/REST) ─▶ Next.js dashboard  (runs · test history · flaky board · RCA)

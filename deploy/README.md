@@ -16,8 +16,12 @@ table, so there is no separate broker.
 
 ### 1. Provision dependencies
 
-- A Postgres 16 database (with the `pgvector` extension for AI RCA).
+- A Postgres 16 database.
 - An S3 bucket (or compatible) plus access credentials.
+
+On AWS, [`terraform/aws`](terraform/aws) creates both. It writes the chart values that
+connect them: the database URL with its CA bundle, the bucket, and an IAM role for the
+service account or an access key.
 
 ### 2. Publish the images
 
@@ -65,9 +69,3 @@ Set `selfTelemetry.otlpEndpoint` to your OpenTelemetry Collector and the api and
 export their own metrics. [`observability/`](observability) has the alert rules for the SLOs
 in [`RUNBOOK.md`](RUNBOOK.md) and a Grafana dashboard to load into your Prometheus and
 Grafana.
-
-## Not yet here
-
-Terraform modules for the managed dependencies are tracked as a follow-up on the
-[roadmap](https://github.com/users/AKogut/projects/14). Today the documented path is the
-Helm chart against managed Postgres and object storage.

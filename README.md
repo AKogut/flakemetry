@@ -69,7 +69,7 @@ If every test execution is modelled as an **OpenTelemetry span**, then historica
    Workers ── normalize ▶ test identity ▶ flaky scoring ▶ signature clustering ▶ AI RCA
               │
               ▼
-   PostgreSQL (relational + JSONB + pgvector) · Object store (S3/MinIO)
+   PostgreSQL (relational + JSONB) · Object store (S3/MinIO)
               │
               ▼
    Query API (tRPC/REST) ─▶ Next.js dashboard  (runs · test history · flaky board · RCA)
@@ -267,8 +267,8 @@ Built with pnpm workspaces + Turborepo. Rationale in [ADR-0001](https://github.c
 | **M2** | Deep observability & test intelligence — full traces, artifacts, waterfall, suite health, signature clustering, auto-quarantine, PR quality gate, notifications, code ownership | Complete |
 | **M3** | Known-issue detection, cross-run correlation, deeper root-cause analysis | Complete |
 | **M7** | Actionability — cost of flakiness, flake bisect, tracker issues, health badges | Complete |
-| **M4** | Platform — multi-framework reporters, public REST API + webhooks, CLI, data governance, plugins | Plugins left |
-| **M5** | SaaS & scale — multi-tenant, RBAC/SSO, columnar span store | Open |
+| **M4** | Platform — multi-framework reporters, public REST API + webhooks, CLI, data governance, plugins | Complete |
+| **M5** | SaaS & scale — multi-tenant isolation, RBAC, teams and SSO, Helm and Terraform, self-telemetry and SLO alerts, scale benchmarks | Usage metering left |
 | **M6** | Community, docs & launch | Open |
 
 M7 was pulled forward ahead of M4–M6: shipping the actions a team takes on a flaky test
