@@ -62,7 +62,10 @@ ai:
 existingSecret: ''
 
 # Runs `prisma migrate deploy` as a pre-install/pre-upgrade hook before the
-# app pods roll. It never seeds — production data is never touched.
+# app pods roll. It never seeds — production data is never touched. Hooks run
+# before the release's own Secret and ServiceAccount exist, so the job reads the
+# database URL from a Secret of its own (or existingSecret) and runs under the
+# namespace's default ServiceAccount unless serviceAccount.create is false.
 migrate:
   enabled: true
   backoffLimit: 3

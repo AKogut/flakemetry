@@ -2,7 +2,7 @@ apiVersion: v2
 name: flakemetry
 description: OpenTelemetry-native test intelligence — ingestion API, processing worker, and dashboard
 type: application
-version: 0.1.0
+version: 0.1.1
 appVersion: '0.1.0'
 home: https://akogut.github.io/flakemetry/
 sources:

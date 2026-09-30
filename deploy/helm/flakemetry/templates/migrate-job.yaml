@@ -19,7 +19,10 @@ spec:
         app.kubernetes.io/component: migrate
     spec:
       restartPolicy: Never
+      {{- if not .Values.serviceAccount.create }}
       serviceAccountName: {{ include "flakemetry.serviceAccountName" . }}
+      {{- end }}
+      automountServiceAccountToken: false
       {{- with .Values.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -37,7 +40,7 @@ spec:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "flakemetry.secretName" . }}
+                  name: {{ .Values.existingSecret | default (printf "%s-migrate" (include "flakemetry.fullname" .)) }}
                   key: database-url
           resources:
             {{- toYaml .Values.migrate.resources | nindent 12 }}

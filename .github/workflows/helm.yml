@@ -5,10 +5,14 @@ on:
     branches: [main]
     paths:
       - 'deploy/helm/**'
+      - 'Dockerfile'
+      - 'packages/db/prisma/**'
       - '.github/workflows/helm.yml'
   pull_request:
     paths:
       - 'deploy/helm/**'
+      - 'Dockerfile'
+      - 'packages/db/prisma/**'
       - '.github/workflows/helm.yml'
 
 jobs:
@@ -37,3 +41,98 @@ jobs:
             --set ingress.enabled=true \
             > /tmp/rendered.yaml
           test "$(grep -c '^kind:' /tmp/rendered.yaml)" -ge 10
+
+  install:
+    name: installs and upgrades on a real cluster
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: azure/setup-helm@v5
+        with:
+          version: v3.16.3
+
+      - uses: helm/kind-action@v1.15.0
+        with:
+          cluster_name: flakemetry
+
+      - name: Build the images and load them into the cluster
+        run: |
+          for target in api worker web migrate; do
+            docker build --target "$target" -t "flakemetry-$target:ci" .
+            kind load docker-image "flakemetry-$target:ci" --name flakemetry
+          done
+
+      - name: Start Postgres in the cluster
+        run: |
+          kubectl create namespace flakemetry
+          kubectl -n flakemetry apply -f - <<'YAML'
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: postgres
+          spec:
+            selector:
+              matchLabels: { app: postgres }
+            template:
+              metadata:
+                labels: { app: postgres }
+              spec:
+                containers:
+                  - name: postgres
+                    image: postgres:16-alpine
+                    env:
+                      - { name: POSTGRES_USER, value: flakemetry }
+                      - { name: POSTGRES_PASSWORD, value: flakemetry }
+                      - { name: POSTGRES_DB, value: flakemetry }
+                    ports: [{ containerPort: 5432 }]
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: postgres
+          spec:
+            selector: { app: postgres }
+            ports: [{ port: 5432 }]
+          YAML
+          kubectl -n flakemetry rollout status deploy/postgres --timeout=180s
+
+      - name: A first install migrates the database and starts every component
+        run: |
+          helm install fm deploy/helm/flakemetry -n flakemetry --wait --timeout 5m \
+            --set image.registry=docker.io --set image.repository=library \
+            --set image.tag=ci --set image.pullPolicy=Never \
+            --set database.url='postgresql://flakemetry:flakemetry@postgres:5432/flakemetry?schema=public' \
+            --set auth.secret='ci-placeholder-secret-value-0001' \
+            --set auth.url=http://localhost:3000
+          applied=$(kubectl -n flakemetry exec deploy/postgres -- psql -U flakemetry -tAc \
+            'select count(*) from _prisma_migrations where finished_at is not null')
+          shipped=$(find packages/db/prisma/migrations -mindepth 1 -maxdepth 1 -type d | wc -l)
+          echo "applied $applied of $shipped migrations"
+          test "$applied" -eq "$shipped"
+
+      - name: An upgrade runs the migration hook again and rolls
+        run: |
+          helm upgrade fm deploy/helm/flakemetry -n flakemetry --reuse-values --wait --timeout 5m \
+            --set-string podAnnotations.rolled="$(date +%s)"
+          test "$(kubectl -n flakemetry get secret -o name | grep -c migrate)" -eq 0
+
+      - name: The api and the dashboard answer through their Services
+        run: |
+          kubectl -n flakemetry port-forward svc/fm-flakemetry-api 4000:80 > /dev/null 2>&1 &
+          kubectl -n flakemetry port-forward svc/fm-flakemetry-web 3000:80 > /dev/null 2>&1 &
+          for port in 4000 3000; do
+            for _ in $(seq 1 30); do
+              if curl -sf "http://localhost:$port/health"; then echo; break; fi
+              sleep 2
+            done
+            curl -sf "http://localhost:$port/health" > /dev/null
+          done
+
+      - name: Cluster state
+        if: failure()
+        run: |
+          kubectl -n flakemetry get all,jobs,secrets
+          kubectl -n flakemetry get events --sort-by=.lastTimestamp | tail -40
+          kubectl -n flakemetry logs -l app.kubernetes.io/instance=fm --all-containers --tail=80 || true
