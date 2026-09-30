@@ -28,6 +28,7 @@ export interface NotificationEvent {
   url?: string | null
   fields?: NotificationField[]
   dedupeKey: string
+  dedupeWindowMs?: number
 }
 
 export const isNotificationType = (value: string): value is NotificationType =>

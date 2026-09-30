@@ -43,12 +43,12 @@
     "@flakemetry/tsconfig": "workspace:*",
     "@flakemetry/tsup-config": "workspace:*",
     "@types/node": "^22.10.5",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@flakemetry/contracts": "workspace:*",
     "@flakemetry/sdk": "workspace:*",
     "commander": "^13.0.0",
-    "yaml": "^2.7.0"
+    "yaml": "^2.9.1"
   }
 }

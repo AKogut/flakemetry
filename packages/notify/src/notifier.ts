@@ -63,11 +63,11 @@ export const createDispatcher = (options: DispatcherOptions): Dispatcher => {
   const now = options.now ?? (() => Date.now())
   const window = options.dedupeWindowMs ?? 6 * 60 * 60 * 1000
   const onError = options.onError ?? (() => undefined)
-  const lastSentAt = new Map<string, number>()
+  const suppressedUntil = new Map<string, number>()
 
   const prune = (at: number): void => {
-    for (const [key, sentAt] of lastSentAt) {
-      if (at - sentAt >= window) lastSentAt.delete(key)
+    for (const [key, until] of suppressedUntil) {
+      if (until <= at) suppressedUntil.delete(key)
     }
   }
 
@@ -117,19 +117,19 @@ export const createDispatcher = (options: DispatcherOptions): Dispatcher => {
     )
     for (const channel of targets) {
       const key = `${channel.id}:${event.dedupeKey}`
-      const previous = lastSentAt.get(key)
-      if (previous != null && now() - previous < window) continue
-      lastSentAt.set(key, now())
+      const until = suppressedUntil.get(key)
+      if (until != null && now() < until) continue
+      suppressedUntil.set(key, now() + (event.dedupeWindowMs ?? window))
       try {
         const result = await deliver(channel, event)
         if (!result.ok) {
-          lastSentAt.delete(key)
+          suppressedUntil.delete(key)
           onError(
             new Error(`notify: ${channel.kind} channel ${channel.id} returned ${result.status}`),
           )
         }
       } catch (error) {
-        lastSentAt.delete(key)
+        suppressedUntil.delete(key)
         onError(error)
       }
     }

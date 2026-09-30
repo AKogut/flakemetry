@@ -160,51 +160,57 @@ export const effectivePolicyValues = (policy: EffectiveProjectPolicy): ScoringPo
   aiRcaEnabled: policy.aiRcaEnabled.value,
 })
 
+type NumericPolicyField = {
+  [K in keyof ProjectPolicyValues]: ProjectPolicyValues[K] extends number ? K : never
+}[keyof ProjectPolicyValues]
+
+type BooleanPolicyField = {
+  [K in keyof ProjectPolicyValues]: ProjectPolicyValues[K] extends boolean ? K : never
+}[keyof ProjectPolicyValues]
+
+const NUMERIC_POLICY_ENV: ReadonlyArray<readonly [string, NumericPolicyField]> = [
+  ['FLAKEMETRY_FLAKY_THRESHOLD', 'flakyThreshold'],
+  ['FLAKEMETRY_FLAKY_MIN_SAMPLES', 'minSamples'],
+  ['FLAKEMETRY_QUARANTINE_COOLDOWN_RUNS', 'quarantineCooldownRuns'],
+  ['FLAKEMETRY_AI_DAILY_TOKEN_BUDGET', 'aiDailyTokenBudget'],
+  ['FLAKEMETRY_CI_MINUTE_COST', 'ciMinuteCost'],
+  ['FLAKEMETRY_DEVELOPER_HOUR_COST', 'developerHourCost'],
+  ['FLAKEMETRY_INVESTIGATION_MINUTES', 'investigationMinutes'],
+  ['FLAKEMETRY_TRACKER_AFTER_DAYS', 'trackerAfterDays'],
+  ['FLAKEMETRY_TRACKER_RECOVERY_DAYS', 'trackerRecoveryDays'],
+]
+
+const BOOLEAN_POLICY_ENV: ReadonlyArray<readonly [string, BooleanPolicyField]> = [
+  ['FLAKEMETRY_QUARANTINE_ENABLED', 'quarantineEnabled'],
+  ['FLAKEMETRY_AI_RCA', 'aiRcaEnabled'],
+  ['FLAKEMETRY_TRACKER_ENABLED', 'trackerEnabled'],
+]
+
+export const POLICY_ENV_VARIABLES: readonly string[] = [
+  ...NUMERIC_POLICY_ENV,
+  ...BOOLEAN_POLICY_ENV,
+].map(([name]) => name)
+
 const parseBoolean = (value: string): boolean => value === 'true' || value === '1'
+
+const parsePolicyNumber = (field: NumericPolicyField, raw: string): number | undefined => {
+  const parsed = projectPolicyInputSchema.shape[field].safeParse(Number(raw))
+  return parsed.success && typeof parsed.data === 'number' ? parsed.data : undefined
+}
 
 export const projectPolicyEnvOverrides = (
   env: Record<string, string | undefined>,
 ): Partial<ProjectPolicyValues> => {
   const overrides: Partial<ProjectPolicyValues> = {}
-  if (env.FLAKEMETRY_FLAKY_THRESHOLD !== undefined && env.FLAKEMETRY_FLAKY_THRESHOLD !== '')
-    overrides.flakyThreshold = Number(env.FLAKEMETRY_FLAKY_THRESHOLD)
-  if (env.FLAKEMETRY_FLAKY_MIN_SAMPLES !== undefined && env.FLAKEMETRY_FLAKY_MIN_SAMPLES !== '')
-    overrides.minSamples = Number(env.FLAKEMETRY_FLAKY_MIN_SAMPLES)
-  if (env.FLAKEMETRY_QUARANTINE_ENABLED !== undefined && env.FLAKEMETRY_QUARANTINE_ENABLED !== '')
-    overrides.quarantineEnabled = parseBoolean(env.FLAKEMETRY_QUARANTINE_ENABLED)
-  if (
-    env.FLAKEMETRY_QUARANTINE_COOLDOWN_RUNS !== undefined &&
-    env.FLAKEMETRY_QUARANTINE_COOLDOWN_RUNS !== ''
-  )
-    overrides.quarantineCooldownRuns = Number(env.FLAKEMETRY_QUARANTINE_COOLDOWN_RUNS)
-  if (env.FLAKEMETRY_AI_RCA !== undefined && env.FLAKEMETRY_AI_RCA !== '')
-    overrides.aiRcaEnabled = parseBoolean(env.FLAKEMETRY_AI_RCA)
-  if (
-    env.FLAKEMETRY_AI_DAILY_TOKEN_BUDGET !== undefined &&
-    env.FLAKEMETRY_AI_DAILY_TOKEN_BUDGET !== ''
-  )
-    overrides.aiDailyTokenBudget = Number(env.FLAKEMETRY_AI_DAILY_TOKEN_BUDGET)
-  if (env.FLAKEMETRY_CI_MINUTE_COST !== undefined && env.FLAKEMETRY_CI_MINUTE_COST !== '')
-    overrides.ciMinuteCost = Number(env.FLAKEMETRY_CI_MINUTE_COST)
-  if (env.FLAKEMETRY_DEVELOPER_HOUR_COST !== undefined && env.FLAKEMETRY_DEVELOPER_HOUR_COST !== '')
-    overrides.developerHourCost = Number(env.FLAKEMETRY_DEVELOPER_HOUR_COST)
-  if (
-    env.FLAKEMETRY_INVESTIGATION_MINUTES !== undefined &&
-    env.FLAKEMETRY_INVESTIGATION_MINUTES !== ''
-  )
-    overrides.investigationMinutes = Number(env.FLAKEMETRY_INVESTIGATION_MINUTES)
-  // The tracker fields were in POLICY_FIELDS, in both compose files, in .env.example and
-  // in the configuration reference, and read by nothing — so setting them did nothing and
-  // the dashboard reported the source as "default". policy-env.test.ts now fails if any
-  // effective-policy field loses its environment tier again.
-  if (env.FLAKEMETRY_TRACKER_ENABLED !== undefined && env.FLAKEMETRY_TRACKER_ENABLED !== '')
-    overrides.trackerEnabled = parseBoolean(env.FLAKEMETRY_TRACKER_ENABLED)
-  if (env.FLAKEMETRY_TRACKER_AFTER_DAYS !== undefined && env.FLAKEMETRY_TRACKER_AFTER_DAYS !== '')
-    overrides.trackerAfterDays = Number(env.FLAKEMETRY_TRACKER_AFTER_DAYS)
-  if (
-    env.FLAKEMETRY_TRACKER_RECOVERY_DAYS !== undefined &&
-    env.FLAKEMETRY_TRACKER_RECOVERY_DAYS !== ''
-  )
-    overrides.trackerRecoveryDays = Number(env.FLAKEMETRY_TRACKER_RECOVERY_DAYS)
+  for (const [name, field] of NUMERIC_POLICY_ENV) {
+    const raw = env[name]?.trim()
+    if (!raw) continue
+    const value = parsePolicyNumber(field, raw)
+    if (value !== undefined) overrides[field] = value
+  }
+  for (const [name, field] of BOOLEAN_POLICY_ENV) {
+    const raw = env[name]
+    if (raw !== undefined && raw !== '') overrides[field] = parseBoolean(raw)
+  }
   return overrides
 }
