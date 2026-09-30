@@ -8,6 +8,11 @@
       "dependsOn": ["^build", "@flakemetry/db#db:generate"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**", ".vitepress/dist/**"]
     },
+    "@flakemetry/docs#build": {
+      "dependsOn": ["^build", "@flakemetry/db#db:generate"],
+      "outputs": [".vitepress/dist/**"],
+      "env": ["DOCS_SITE", "DOCS_VERSION", "DOCS_SNAPSHOTS"]
+    },
     "typecheck": {
       "dependsOn": ["^build", "@flakemetry/db#db:generate"]
     },

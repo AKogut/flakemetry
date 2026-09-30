@@ -36,7 +36,23 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Fetch the release snapshots
+        id: snapshots
+        run: |
+          labels=''
+          if git fetch --quiet --depth 1 origin docs-snapshots 2> /dev/null; then
+            git worktree add --quiet --detach "$RUNNER_TEMP/snapshots" FETCH_HEAD
+            labels=$(find "$RUNNER_TEMP/snapshots/v" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -r | tr '\n' ' ')
+          fi
+          echo "labels=$labels" >> "$GITHUB_OUTPUT"
+
       - run: pnpm turbo run build --filter @flakemetry/docs
+        env:
+          DOCS_SNAPSHOTS: ${{ steps.snapshots.outputs.labels }}
+
+      - name: Add the release snapshots
+        if: steps.snapshots.outputs.labels != ''
+        run: cp -R "$RUNNER_TEMP/snapshots/v" apps/docs/.vitepress/dist/v
 
       - uses: actions/configure-pages@v6
         with:

@@ -1,0 +1,95 @@
+name: docs snapshot
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit, tag or branch whose documentation to keep
+        required: true
+        default: main
+      label:
+        description: Release date as YYYY-MM-DD, the commit date in UTC when empty
+        required: false
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: docs-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    name: snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Label
+        id: label
+        env:
+          LABEL: ${{ inputs.label }}
+        run: |
+          label="${LABEL:-$(TZ=UTC git show -s --date=format-local:%Y-%m-%d --format=%cd HEAD)}"
+          if ! [[ "$label" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "::error::a snapshot label is a date, YYYY-MM-DD, not '$label'"
+            exit 1
+          fi
+          echo "value=$label" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - run: pnpm turbo run build --filter @flakemetry/docs
+        env:
+          DOCS_VERSION: ${{ steps.label.outputs.value }}
+
+      - name: Store on the docs-snapshots branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABEL: ${{ steps.label.outputs.value }}
+          SHA: ${{ steps.label.outputs.sha }}
+        run: |
+          gh auth setup-git
+          remote="https://github.com/${GITHUB_REPOSITORY}.git"
+          store="$RUNNER_TEMP/store"
+          if git ls-remote --exit-code --heads "$remote" docs-snapshots > /dev/null; then
+            git clone --quiet --depth 1 --branch docs-snapshots "$remote" "$store"
+          else
+            git init --quiet -b docs-snapshots "$store"
+            git -C "$store" remote add origin "$remote"
+          fi
+          rm -rf "$store/v/$LABEL"
+          mkdir -p "$store/v"
+          cp -R apps/docs/.vitepress/dist "$store/v/$LABEL"
+          cd "$store"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The $LABEL documentation is already stored as built from $SHA."
+          else
+            git commit --quiet -m "docs: keep the $LABEL release documentation" -m "Built from $SHA."
+            git push --quiet origin docs-snapshots
+          fi
+
+      - name: Redeploy the site with the new version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run docs.yml --ref main --repo "$GITHUB_REPOSITORY"
