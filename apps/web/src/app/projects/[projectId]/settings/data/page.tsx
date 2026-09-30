@@ -23,6 +23,15 @@ const formatDate = (date: Date | null): string =>
       }).format(date)
     : '—'
 
+const capLabel = (used: number, cap: number, format: (value: number) => string) => {
+  if (cap <= 0) return null
+  return used > cap ? (
+    <strong> — over the cap of {format(cap)}; the next retention sweep trims the oldest</strong>
+  ) : (
+    <> (cap {format(cap)})</>
+  )
+}
+
 const retentionLabel = (days: number | null | undefined, fallback: string | undefined): string => {
   if (typeof days === 'number' && days > 0) return `${days} days`
   const global = Number(fallback)
@@ -59,6 +68,9 @@ export default async function DataPage({
     }),
     listDataRequests(prisma, { projectId }),
   ])
+
+  const executionCap = effective.effective.storageMaxExecutions.value
+  const artifactCapMb = effective.effective.storageMaxArtifactMb.value
 
   const isOwner = project.role === 'owner'
   const pendingErasure = requests.some(
@@ -118,10 +130,17 @@ export default async function DataPage({
               <td className="muted">{usage.ai.reportsToday}</td>
             </tr>
             <tr>
-              <td>Executions stored</td>
+              <td>Raw executions (hot)</td>
               <td className="muted">
                 {usage.rows.executions.toLocaleString()} across {usage.rows.runs.toLocaleString()}{' '}
                 runs and {usage.rows.identities.toLocaleString()} tests
+                {capLabel(usage.rows.executions, executionCap, (n) => n.toLocaleString())}
+              </td>
+            </tr>
+            <tr>
+              <td>Daily rollups (cold)</td>
+              <td className="muted">
+                {usage.rows.rollups.toLocaleString()} rows, kept when raw executions are pruned
               </td>
             </tr>
             <tr>
@@ -129,7 +148,12 @@ export default async function DataPage({
               <td className="muted">
                 {usage.artifacts
                   ? `${usage.artifacts.objects.toLocaleString()} objects, ${formatBytes(usage.artifacts.bytes)}`
-                  : 'object storage is not configured'}
+                  : store
+                    ? 'object storage did not answer the dashboard'
+                    : 'object storage is not configured'}
+                {usage.artifacts
+                  ? capLabel(usage.artifacts.bytes, artifactCapMb * 1024 * 1024, formatBytes)
+                  : null}
               </td>
             </tr>
             <tr>

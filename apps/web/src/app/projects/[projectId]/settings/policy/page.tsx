@@ -23,6 +23,8 @@ const FIELD_LABELS: Record<string, string> = {
   trackerEnabled: 'Open tracker issues for flakes',
   trackerAfterDays: 'Days flaky before opening an issue',
   trackerRecoveryDays: 'Days stable before closing it',
+  storageMaxExecutions: 'Most executions to keep',
+  storageMaxArtifactMb: 'Most artifact storage (MB)',
 }
 
 const formatDateTime = (date: Date): string =>
@@ -92,7 +94,9 @@ export default async function PolicyPage({
       | 'developerHourCost'
       | 'investigationMinutes'
       | 'trackerAfterDays'
-      | 'trackerRecoveryDays',
+      | 'trackerRecoveryDays'
+      | 'storageMaxExecutions'
+      | 'storageMaxArtifactMb',
   ): string => (stored[key] === undefined ? '' : String(stored[key]))
   const tristateValue = (key: 'quarantineEnabled' | 'aiRcaEnabled' | 'trackerEnabled'): string =>
     stored[key] === undefined ? 'inherit' : stored[key] ? 'on' : 'off'
@@ -330,6 +334,55 @@ export default async function PolicyPage({
                 retention. Blank inherits the global{' '}
                 <span className="mono">FLAKEMETRY_ARTIFACT_RETENTION_DAYS</span>.
               </p>
+            </div>
+
+            <div className="policy-field">
+              <div>
+                <label htmlFor="storageMaxExecutions">{FIELD_LABELS.storageMaxExecutions}</label>
+                <input
+                  id="storageMaxExecutions"
+                  name="storageMaxExecutions"
+                  type="number"
+                  step="1"
+                  min="0"
+                  placeholder="0 (no cap)"
+                  defaultValue={numberValue('storageMaxExecutions')}
+                />
+              </div>
+              <Effective
+                value={eff.storageMaxExecutions.value}
+                source={eff.storageMaxExecutions.source}
+              />
+              <p className="policy-help">
+                When the project stores more raw executions than this, the worker removes the oldest
+                until it fits. Trends and scores keep their history in the daily rollups. 0 means no
+                cap.
+              </p>
+              <EnvNote source={eff.storageMaxExecutions.source} />
+            </div>
+
+            <div className="policy-field">
+              <div>
+                <label htmlFor="storageMaxArtifactMb">{FIELD_LABELS.storageMaxArtifactMb}</label>
+                <input
+                  id="storageMaxArtifactMb"
+                  name="storageMaxArtifactMb"
+                  type="number"
+                  step="1"
+                  min="0"
+                  placeholder="0 (no cap)"
+                  defaultValue={numberValue('storageMaxArtifactMb')}
+                />
+              </div>
+              <Effective
+                value={eff.storageMaxArtifactMb.value}
+                source={eff.storageMaxArtifactMb.source}
+              />
+              <p className="policy-help">
+                When the project's screenshots, videos and traces take more than this, the worker
+                deletes the oldest until they fit. 0 means no cap.
+              </p>
+              <EnvNote source={eff.storageMaxArtifactMb.source} />
             </div>
 
             <div className="policy-field">
