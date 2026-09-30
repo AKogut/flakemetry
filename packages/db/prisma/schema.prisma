@@ -228,6 +228,8 @@ model ProjectPolicy {
   trackerEnabled         Boolean? @map("tracker_enabled")
   trackerAfterDays       Int?     @map("tracker_after_days")
   trackerRecoveryDays    Int?     @map("tracker_recovery_days")
+  storageMaxExecutions   Int?     @map("storage_max_executions")
+  storageMaxArtifactMb   Int?     @map("storage_max_artifact_mb")
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 

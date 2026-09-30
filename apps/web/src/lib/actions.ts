@@ -324,6 +324,8 @@ export const updateProjectPolicy = async (formData: FormData): Promise<void> => 
     trackerEnabled: tristateField(formData, 'trackerEnabled'),
     trackerAfterDays: numberField(formData, 'trackerAfterDays', true),
     trackerRecoveryDays: numberField(formData, 'trackerRecoveryDays', true),
+    storageMaxExecutions: numberField(formData, 'storageMaxExecutions', true),
+    storageMaxArtifactMb: numberField(formData, 'storageMaxArtifactMb', true),
   })
 
   const { changed } = await persistProjectPolicy(prisma, { projectId, userId: user.id, input })

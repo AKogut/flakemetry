@@ -28,6 +28,7 @@ export interface StoredRows {
   runs: number
   identities: number
   rcaReports: number
+  rollups: number
 }
 
 export interface ArtifactUsage {
@@ -69,24 +70,36 @@ export const getProjectUsage = async (
   const now = options.now ?? new Date()
   const since = startOfUtcDay(now)
 
-  const [spend, reportsToday, executions, runs, identities, rcaReports, oldest] = await Promise.all(
-    [
-      prisma.rcaReport.aggregate({
-        where: { projectId, createdAt: { gte: since } },
-        _sum: { tokenCost: true },
-      }),
-      prisma.rcaReport.count({ where: { projectId, createdAt: { gte: since } } }),
-      prisma.testExecution.count({ where: { projectId } }),
-      prisma.run.count({ where: { projectId } }),
-      prisma.testIdentity.count({ where: { projectId } }),
-      prisma.rcaReport.count({ where: { projectId } }),
-      prisma.testExecution.findFirst({
-        where: { projectId },
-        orderBy: { startedAt: 'asc' },
-        select: { startedAt: true },
-      }),
-    ],
-  )
+  const [
+    spend,
+    reportsToday,
+    executions,
+    runs,
+    identities,
+    rcaReports,
+    oldest,
+    testRollups,
+    suiteRollups,
+    trendRollups,
+  ] = await Promise.all([
+    prisma.rcaReport.aggregate({
+      where: { projectId, createdAt: { gte: since } },
+      _sum: { tokenCost: true },
+    }),
+    prisma.rcaReport.count({ where: { projectId, createdAt: { gte: since } } }),
+    prisma.testExecution.count({ where: { projectId } }),
+    prisma.run.count({ where: { projectId } }),
+    prisma.testIdentity.count({ where: { projectId } }),
+    prisma.rcaReport.count({ where: { projectId } }),
+    prisma.testExecution.findFirst({
+      where: { projectId },
+      orderBy: { startedAt: 'asc' },
+      select: { startedAt: true },
+    }),
+    prisma.dailyTestStats.count({ where: { projectId } }),
+    prisma.suiteDaily.count({ where: { projectId } }),
+    prisma.flakyTrends.count({ where: { projectId } }),
+  ])
 
   const spentToday = spend._sum.tokenCost ?? 0
 
@@ -107,7 +120,13 @@ export const getProjectUsage = async (
 
   return {
     ai: summarizeAiSpend(spentToday, budget, reportsToday),
-    rows: { executions, runs, identities, rcaReports },
+    rows: {
+      executions,
+      runs,
+      identities,
+      rcaReports,
+      rollups: testRollups + suiteRollups + trendRollups,
+    },
     artifacts,
     oldestExecution: oldest?.startedAt ?? null,
   }

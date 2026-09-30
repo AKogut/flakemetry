@@ -17,6 +17,8 @@ export const POLICY_DEFAULTS = {
   // short enough that a real one is filed while the change that caused it is still recent.
   trackerAfterDays: 3,
   trackerRecoveryDays: 7,
+  storageMaxExecutions: 0,
+  storageMaxArtifactMb: 0,
 } as const
 
 export type ProjectPolicyValues = {
@@ -34,6 +36,8 @@ export type ProjectPolicyValues = {
   trackerEnabled: boolean
   trackerAfterDays: number
   trackerRecoveryDays: number
+  storageMaxExecutions: number
+  storageMaxArtifactMb: number
 }
 
 export const POLICY_FIELDS = [
@@ -51,6 +55,8 @@ export const POLICY_FIELDS = [
   'trackerEnabled',
   'trackerAfterDays',
   'trackerRecoveryDays',
+  'storageMaxExecutions',
+  'storageMaxArtifactMb',
 ] as const
 
 export type PolicyField = (typeof POLICY_FIELDS)[number]
@@ -71,6 +77,8 @@ export const projectPolicyInputSchema = z
     trackerEnabled: z.boolean().nullable(),
     trackerAfterDays: z.number().int().min(1).nullable(),
     trackerRecoveryDays: z.number().int().min(1).nullable(),
+    storageMaxExecutions: z.number().int().min(0).nullable(),
+    storageMaxArtifactMb: z.number().int().min(0).nullable(),
   })
   .strict()
   .partial()
@@ -97,6 +105,8 @@ export type EffectiveProjectPolicy = {
   trackerEnabled: ResolvedPolicyField<boolean>
   trackerAfterDays: ResolvedPolicyField<number>
   trackerRecoveryDays: ResolvedPolicyField<number>
+  storageMaxExecutions: ResolvedPolicyField<number>
+  storageMaxArtifactMb: ResolvedPolicyField<number>
 }
 
 export type PolicyOverrides = Partial<{ [K in PolicyField]: ProjectPolicyValues[K] | null }>
@@ -132,6 +142,8 @@ export const resolveProjectPolicy = (layers: PolicyLayers): EffectiveProjectPoli
   trackerEnabled: resolveField('trackerEnabled', layers),
   trackerAfterDays: resolveField('trackerAfterDays', layers),
   trackerRecoveryDays: resolveField('trackerRecoveryDays', layers),
+  storageMaxExecutions: resolveField('storageMaxExecutions', layers),
+  storageMaxArtifactMb: resolveField('storageMaxArtifactMb', layers),
 })
 
 export const normalizePolicyOverrides = (
@@ -178,6 +190,8 @@ const NUMERIC_POLICY_ENV: ReadonlyArray<readonly [string, NumericPolicyField]> =
   ['FLAKEMETRY_INVESTIGATION_MINUTES', 'investigationMinutes'],
   ['FLAKEMETRY_TRACKER_AFTER_DAYS', 'trackerAfterDays'],
   ['FLAKEMETRY_TRACKER_RECOVERY_DAYS', 'trackerRecoveryDays'],
+  ['FLAKEMETRY_STORAGE_MAX_EXECUTIONS', 'storageMaxExecutions'],
+  ['FLAKEMETRY_STORAGE_MAX_ARTIFACT_MB', 'storageMaxArtifactMb'],
 ]
 
 const BOOLEAN_POLICY_ENV: ReadonlyArray<readonly [string, BooleanPolicyField]> = [

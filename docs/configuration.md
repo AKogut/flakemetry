@@ -81,6 +81,8 @@ Unknown keys are rejected with an error naming the offending path — typos fail
 | `FLAKEMETRY_TRACKER_ENABLED` | `tracker.enabled` |
 | `FLAKEMETRY_TRACKER_AFTER_DAYS` | `tracker.afterDays` |
 | `FLAKEMETRY_TRACKER_RECOVERY_DAYS` | `tracker.recoveryDays` |
+| `FLAKEMETRY_STORAGE_MAX_EXECUTIONS` | Most raw executions a project keeps; the worker removes the oldest beyond it (rollups keep the history). `0` means no cap |
+| `FLAKEMETRY_STORAGE_MAX_ARTIFACT_MB` | Most artifact storage a project keeps; the worker deletes the oldest artifacts beyond it. `0` means no cap |
 | `FLAKEMETRY_PUBLIC_API_URL` | Base URL printed in badge snippets |
 
 The policy variables above (thresholds, quarantine, AI, cost and tracker) take precedence over
