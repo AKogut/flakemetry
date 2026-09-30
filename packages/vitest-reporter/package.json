@@ -47,6 +47,6 @@
     "@flakemetry/sdk": "workspace:*"
   },
   "peerDependencies": {
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10 || ^5.0.0"
   }
 }
