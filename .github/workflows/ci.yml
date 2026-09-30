@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22]
+        node: [20, 22, 24]
     services:
       postgres:
         image: postgres:16-alpine
@@ -44,9 +44,10 @@ jobs:
 
       - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v7
+      - name: Set up the build toolchain (Node 22 or later)
+        uses: actions/setup-node@v7
         with:
-          node-version: ${{ matrix.node }}
+          node-version: ${{ matrix.node == 20 && 22 || matrix.node }}
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -67,6 +68,18 @@ jobs:
 
       - run: pnpm format:check
 
-      - run: pnpm turbo run build lint typecheck test ${{ github.event_name == 'pull_request' && '--affected' || '' }}
+      - run: pnpm turbo run build lint typecheck ${{ github.event_name == 'pull_request' && '--affected' || '' }}
+        env:
+          TURBO_SCM_BASE: origin/main
+
+      - name: Run the tests on Node ${{ matrix.node }}
+        if: matrix.node == 20
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+
+      - run: node --version
+
+      - run: pnpm turbo run test --only ${{ github.event_name == 'pull_request' && '--affected' || '' }}
         env:
           TURBO_SCM_BASE: origin/main

@@ -7,7 +7,7 @@ The rules for branches, commits and changesets are in
 
 ## Setting up
 
-You need Node 20 or 22, pnpm (the version pinned in `packageManager`; `corepack enable`
+You need Node 22.18 or later (the build toolchain requires it; the published packages still run on Node 20), pnpm (the version pinned in `packageManager`; `corepack enable`
 provides it), and Docker.
 
 ```bash
