@@ -82,6 +82,18 @@ path from zero to a running environment, and the
 [runbook](https://github.com/AKogut/flakemetry/blob/main/deploy/RUNBOOK.md) covers SLOs,
 scaling, and upgrades.
 
+On AWS, the [Terraform module](https://github.com/AKogut/flakemetry/tree/main/deploy/terraform/aws)
+provisions the managed pieces the chart expects:
+
+- PostgreSQL 16 on RDS, private and encrypted, reachable only from the security groups you
+  name;
+- an artifact bucket that is private, encrypted and TLS-only;
+- S3 access through an IAM role for the release's service account, or an access key.
+
+It writes the chart values that connect them. That includes the RDS certificate authority
+as `database.caBundle`, so the pods verify the database's certificate rather than just
+encrypting to it.
+
 ### Watching Flakemetry itself
 
 The api and worker report their own health as OpenTelemetry metrics: ingest latency and
