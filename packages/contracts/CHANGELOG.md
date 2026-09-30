@@ -1,5 +1,23 @@
 # @flakemetry/contracts
 
+## 0.3.0
+
+### Minor Changes
+
+- 9cf5e92: Plugin API version 1: `FlakemetryPlugin`, `definePlugin`, `validatePlugin` and the schemas for plugin signals and parsed reports. An `analyze` hook raises signals on tests after each run, and a `parse` hook teaches the API a new report format at `POST /v1/ingest/plugin/:name`.
+- cd50173: The daily LLM token budget is now a per-project policy field. It was read only from the environment, so `ai.dailyTokenBudget` in a project's `flakemetry.yml` was documented, validated and ignored — one instance could have exactly one budget.
+- cd52503: Two policy fields cap what a project stores: `storageMaxExecutions` (raw executions) and `storageMaxArtifactMb` (artifact storage), with `FLAKEMETRY_STORAGE_MAX_EXECUTIONS` and `FLAKEMETRY_STORAGE_MAX_ARTIFACT_MB` as the environment tier. `0` means no cap.
+- eae093b: Move to zod 4. The validation shape on the wire is unchanged — `{ error, issues: [{ path, message }] }` — but the messages are more specific: an invalid commit sha now reports the pattern it had to match instead of a bare "Invalid".
+
+  `zod-to-json-schema` is gone; zod 4 generates JSON Schema itself, which the OpenAPI document and the API reference now use.
+
+### Patch Changes
+
+- 63cd348: `ai_budget_spent` is now a valid event in a `flakemetry.yml` notification channel. Before this, listing it failed validation, and that one invalid entry stopped every channel in the file from syncing.
+- 49cb6b1: Dependency updates: OpenTelemetry 2.11 / 0.222 in the SDK, zod 4.6 in the contracts, and newer `yaml` and `fast-xml-parser` in the CLI.
+- 674ddb3: A policy environment variable that is not a valid value for its field is now ignored instead of becoming `NaN`. `FLAKEMETRY_AI_DAILY_TOKEN_BUDGET=200k` used to remove the AI spending cap altogether; it now leaves the project's own setting in charge. The same check applies to every numeric policy variable and uses the ranges the Policy page accepts. `POLICY_ENV_VARIABLES` lists them.
+- 2682df5: TypeScript projects that load these packages with `require` now get CommonJS type declarations. Every package pointed both `import` and `require` at the ESM declaration file, so under `moduleResolution: node16` a CommonJS consumer got types describing an ES module ("masquerading as ESM"). The files that run are unchanged.
+
 ## 0.2.1
 
 ### Patch Changes
