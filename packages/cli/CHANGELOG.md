@@ -1,5 +1,25 @@
 # @flakemetry/cli
 
+## 0.2.2
+
+### Patch Changes
+
+- 9ea296a: `flakemetry --version` reported `0.0.0` regardless of the installed version. It now reports the real one, baked in at build time — the version is the first thing anyone is asked for in a bug report, and `0.0.0` identified nothing.
+- 49cb6b1: Dependency updates: OpenTelemetry 2.11 / 0.222 in the SDK, zod 4.6 in the contracts, and newer `yaml` and `fast-xml-parser` in the CLI.
+- 2682df5: TypeScript projects that load these packages with `require` now get CommonJS type declarations. Every package pointed both `import` and `require` at the ESM declaration file, so under `moduleResolution: node16` a CommonJS consumer got types describing an ES module ("masquerading as ESM"). The files that run are unchanged.
+- Updated dependencies [63cd348]
+- Updated dependencies [49cb6b1]
+- Updated dependencies [2d07cc2]
+- Updated dependencies [9cf5e92]
+- Updated dependencies [674ddb3]
+- Updated dependencies [cd50173]
+- Updated dependencies [b23f674]
+- Updated dependencies [cd52503]
+- Updated dependencies [2682df5]
+- Updated dependencies [eae093b]
+  - @flakemetry/contracts@0.3.0
+  - @flakemetry/sdk@0.2.3
+
 ## 0.2.1
 
 ### Patch Changes
