@@ -38,3 +38,4 @@ __pycache__/
 # Local backup dumps — never commit a database
 backups/
 *.dump
+.vitepress/cache/
