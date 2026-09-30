@@ -14,6 +14,7 @@ export default class FlakemetryVitestReporter {
   private readonly options: FlakemetryVitestReporterOptions
   private readonly env: Record<string, string | undefined>
   private rootDir = process.cwd()
+  private reported = false
 
   constructor(options: FlakemetryVitestReporterOptions = {}) {
     this.options = options
@@ -22,6 +23,15 @@ export default class FlakemetryVitestReporter {
 
   onInit(context?: { config?: { root?: string } }): void {
     if (context?.config?.root) this.rootDir = context.config.root
+    this.reported = false
+  }
+
+  onTestRunStart(): void {
+    this.reported = false
+  }
+
+  onWatcherRerun(): void {
+    this.reported = false
   }
 
   /**
@@ -43,6 +53,8 @@ export default class FlakemetryVitestReporter {
   }
 
   private async report(files: VitestFile[]): Promise<void> {
+    if (this.reported) return
+    this.reported = true
     const startedAt = new Date()
     const context = resolveRunContext(this.env)
     const recorder = new TestRunRecorder(context)

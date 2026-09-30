@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -74,5 +74,48 @@ describe('the hook Vitest actually calls', () => {
 
     expect(identify(modern).length).toBeGreaterThan(0)
     expect(identify(modern)).toEqual(identify(legacy))
+  })
+})
+
+describe('a Vitest that calls both hooks', () => {
+  const setup = () => {
+    const outputFile = join(tmpdir(), `flakemetry-${randomUUID()}.json`)
+    const reporter = withEnv(new FlakemetryVitestReporter({ outputFile })) as unknown as {
+      onTestRunStart: () => void
+      onTestRunEnd: (modules: unknown[]) => Promise<void>
+      onFinished: (files: VitestFile[]) => Promise<void>
+      onWatcherRerun: () => void
+    }
+    const delivered = (): boolean => {
+      const written = existsSync(outputFile)
+      rmSync(outputFile, { force: true })
+      return written
+    }
+    return { reporter, delivered }
+  }
+
+  it('delivers the run once, not once per hook', async () => {
+    const { reporter, delivered } = setup()
+
+    await reporter.onTestRunEnd([{ task: sampleFile() }])
+    expect(delivered()).toBe(true)
+    await reporter.onFinished([sampleFile()])
+    expect(delivered()).toBe(false)
+  })
+
+  it('delivers each run of a watch session', async () => {
+    const { reporter, delivered } = setup()
+
+    reporter.onTestRunStart()
+    await reporter.onTestRunEnd([{ task: sampleFile() }])
+    await reporter.onFinished([sampleFile()])
+    expect(delivered()).toBe(true)
+
+    reporter.onWatcherRerun()
+    reporter.onTestRunStart()
+    await reporter.onTestRunEnd([{ task: sampleFile() }])
+    expect(delivered()).toBe(true)
+    await reporter.onFinished([sampleFile()])
+    expect(delivered()).toBe(false)
   })
 })
