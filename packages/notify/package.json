@@ -19,7 +19,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "clean": "rm -rf dist .turbo",
@@ -29,9 +29,9 @@
     "nodemailer": "^10.0.13"
   },
   "devDependencies": {
+    "@flakemetry/build-config": "workspace:*",
     "@flakemetry/eslint-config": "workspace:*",
     "@flakemetry/tsconfig": "workspace:*",
-    "@flakemetry/tsup-config": "workspace:*",
     "@types/node": "^22.10.5",
     "@types/nodemailer": "^8.0.1",
     "vitest": "^4.1.11"

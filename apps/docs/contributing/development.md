@@ -58,7 +58,7 @@ else ships inside the Docker images.
 | `packages/storage` | Object store for artifacts (S3, MinIO, in-memory) | no |
 | `packages/eslint-config` | Shared lint rules | no |
 | `packages/tsconfig` | Shared TypeScript presets | no |
-| `packages/tsup-config` | Shared build preset | no |
+| `packages/build-config` | Shared tsdown build presets; published packages are checked with publint and arethetypeswrong | no |
 
 A test run travels like this:
 
