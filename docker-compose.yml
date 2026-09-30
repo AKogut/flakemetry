@@ -154,6 +154,10 @@ services:
       AUTH_SECRET: '${AUTH_SECRET:?set AUTH_SECRET in .env, generate one with openssl rand -base64 32}'
       AUTH_GITHUB_ID: ${AUTH_GITHUB_ID:-}
       AUTH_GITHUB_SECRET: ${AUTH_GITHUB_SECRET:-}
+      AUTH_OIDC_ISSUER: ${AUTH_OIDC_ISSUER:-}
+      AUTH_OIDC_ID: ${AUTH_OIDC_ID:-}
+      AUTH_OIDC_SECRET: ${AUTH_OIDC_SECRET:-}
+      AUTH_OIDC_NAME: ${AUTH_OIDC_NAME:-}
       AUTH_URL: ${AUTH_URL:-http://localhost:3000}
       AUTH_TRUST_HOST: 'true'
       FLAKEMETRY_FLAKY_THRESHOLD: ${FLAKEMETRY_FLAKY_THRESHOLD:-}

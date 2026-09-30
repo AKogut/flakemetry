@@ -53,6 +53,7 @@ enum MembershipRole {
   owner
   admin
   member
+  viewer
 }
 
 model User {
@@ -161,6 +162,7 @@ model Project {
   repository    String?
   badgeToken    String?  @unique @map("badge_token")
   codeowners    String?
+  restricted    Boolean  @default(false)
   createdAt     DateTime @default(now()) @map("created_at")
 
   org             Org              @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -186,6 +188,7 @@ model Project {
   identityChanges IdentityChange[]
   trackerIssues   TrackerIssue[]
   pluginSignals   PluginSignal[]
+  grants          ProjectGrant[]
 
   @@unique([orgId, slug])
   @@index([orgId])
@@ -772,4 +775,36 @@ model PluginSignal {
   @@index([projectId, updatedAt(sort: Desc)])
   @@index([orgId])
   @@map("plugin_signal")
+}
+
+model ProjectGrant {
+  id        String         @id @default(uuid()) @db.Uuid
+  orgId     String         @map("org_id") @db.Uuid
+  projectId String         @map("project_id") @db.Uuid
+  userId    String         @map("user_id") @db.Uuid
+  role      MembershipRole
+  grantedBy String?        @map("granted_by") @db.Uuid
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@index([orgId])
+  @@map("project_grant")
+}
+
+model AuditEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  projectId String?  @map("project_id") @db.Uuid
+  actorId   String?  @map("actor_id") @db.Uuid
+  action    String
+  target    String?
+  details   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([orgId, createdAt(sort: Desc)])
+  @@index([projectId, createdAt(sort: Desc)])
+  @@map("audit_event")
 }

@@ -185,6 +185,7 @@ const withArtifacts = async (prefix: string, count: number) => {
 describe.skipIf(!hasDb)('erasure', () => {
   beforeEach(async () => {
     await prisma.dataRequest.deleteMany()
+    await prisma.auditEvent.deleteMany()
     await prisma.project.deleteMany()
     await prisma.org.deleteMany()
     await prisma.user.deleteMany()
@@ -273,6 +274,32 @@ describe.skipIf(!hasDb)('erasure', () => {
     const record = await prisma.dataRequest.findUnique({ where: { id } })
     expect(record?.subject).toBe('project "Web" (web)')
     expect(record?.artifactPrefix).toBe(target.prefix)
+  })
+
+  it('keeps the workspace audit trail about an erased project, and drops it with the workspace', async () => {
+    const target = await seed('web')
+    await prisma.auditEvent.create({
+      data: { orgId: target.orgId, projectId: target.projectId, action: 'token.created' },
+    })
+    await prisma.auditEvent.create({ data: { orgId: target.orgId, action: 'member.invited' } })
+
+    const projectOutcome = await eraseTarget(prisma, null, {
+      kind: 'project',
+      id: target.projectId,
+      orgId: target.orgId,
+      artifactPrefix: target.prefix,
+    })
+    expect(projectOutcome.verified).toBe(true)
+    expect(await prisma.auditEvent.count({ where: { orgId: target.orgId } })).toBe(2)
+
+    const orgOutcome = await eraseTarget(prisma, null, {
+      kind: 'org',
+      id: target.orgId,
+      orgId: target.orgId,
+      artifactPrefix: `org/${target.orgId}/`,
+    })
+    expect(orgOutcome.verified).toBe(true)
+    expect(await prisma.auditEvent.count({ where: { orgId: target.orgId } })).toBe(0)
   })
 
   it('does not touch a sibling project in the same workspace', async () => {

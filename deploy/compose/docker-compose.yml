@@ -177,6 +177,10 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET, generate with openssl rand -base64 32}
       AUTH_GITHUB_ID: ${AUTH_GITHUB_ID:?set AUTH_GITHUB_ID}
       AUTH_GITHUB_SECRET: ${AUTH_GITHUB_SECRET:?set AUTH_GITHUB_SECRET}
+      AUTH_OIDC_ISSUER: ${AUTH_OIDC_ISSUER:-}
+      AUTH_OIDC_ID: ${AUTH_OIDC_ID:-}
+      AUTH_OIDC_SECRET: ${AUTH_OIDC_SECRET:-}
+      AUTH_OIDC_NAME: ${AUTH_OIDC_NAME:-}
       AUTH_URL: https://${WEB_DOMAIN}
       # Caddy terminates TLS, so Auth.js sees a plain HTTP request and has to be told the
       # forwarded host is the real one. Without this every OAuth callback redirects to the

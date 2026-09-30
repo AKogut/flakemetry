@@ -27,6 +27,9 @@ export interface ErasureOutcome {
  */
 export const ERASURE_EXEMPT_TABLES: readonly string[] = ['data_request']
 
+export const erasureExemptTables = (kind: ErasureScope): readonly string[] =>
+  kind === 'project' ? [...ERASURE_EXEMPT_TABLES, 'audit_event'] : ERASURE_EXEMPT_TABLES
+
 export const ARTIFACT_RESIDUE_KEY = 'artifacts'
 
 const IDENTIFIER = /^[a-z_][a-z0-9_]*$/
@@ -85,7 +88,12 @@ export const verifyErasure = async (
   prisma: PrismaClient,
   target: ErasureTarget,
 ): Promise<Record<string, number>> => {
-  const residue = await countByColumn(prisma, scopeColumn(target.kind), target.id)
+  const residue = await countByColumn(
+    prisma,
+    scopeColumn(target.kind),
+    target.id,
+    erasureExemptTables(target.kind),
+  )
 
   // The tenant's own row carries an id, not a scope column, so the sweep above cannot see
   // it — and a surviving project row is the loudest possible failure.
@@ -125,12 +133,18 @@ export const eraseTarget = async (
 ): Promise<ErasureOutcome> => {
   const artifactsDeleted = store ? await eraseArtifacts(store, target.artifactPrefix) : 0
 
-  const before = await countByColumn(prisma, scopeColumn(target.kind), target.id)
+  const before = await countByColumn(
+    prisma,
+    scopeColumn(target.kind),
+    target.id,
+    erasureExemptTables(target.kind),
+  )
 
   if (target.kind === 'project') {
     await prisma.project.deleteMany({ where: { id: target.id } })
   } else {
     await prisma.org.deleteMany({ where: { id: target.id } })
+    await prisma.auditEvent.deleteMany({ where: { orgId: target.id } })
   }
 
   const residue = await verifyErasure(prisma, target)

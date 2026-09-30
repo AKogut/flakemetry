@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 
 import { auth, signIn } from '@/lib/auth'
 import { safeNextPath } from '@/lib/next-path'
+import { resolveSsoProvider } from '@/lib/sso'
 
 export default async function SignInPage({
   searchParams,
@@ -12,6 +13,7 @@ export default async function SignInPage({
   const destination = safeNextPath(next)
 
   const session = await auth()
+  const sso = resolveSsoProvider(process.env)
   if (session?.user) redirect(destination)
 
   return (
@@ -33,6 +35,23 @@ export default async function SignInPage({
             Continue with GitHub
           </button>
         </form>
+        {sso ? (
+          <form
+            style={{ marginTop: '0.6rem' }}
+            action={async () => {
+              'use server'
+              await signIn('oidc', { redirectTo: destination })
+            }}
+          >
+            <button
+              className="btn"
+              type="submit"
+              style={{ width: '100%', justifyContent: 'center' }}
+            >
+              Continue with {sso.name}
+            </button>
+          </form>
+        ) : null}
       </div>
     </div>
   )

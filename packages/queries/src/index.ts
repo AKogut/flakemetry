@@ -1,4 +1,6 @@
+export * from './access'
 export * from './artifacts'
+export * from './audit'
 export * from './badge'
 export * from './bisect'
 export * from './cluster'

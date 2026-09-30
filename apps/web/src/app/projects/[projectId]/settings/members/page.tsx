@@ -4,8 +4,11 @@ import { cookies, headers } from 'next/headers'
 
 import {
   cancelInvitation,
+  grantProjectAccess,
   inviteMember,
   removeMemberFromWorkspace,
+  revokeProjectAccess,
+  setProjectRestricted,
   updateMemberRole,
 } from '@/lib/actions'
 import { requireUser } from '@/lib/session'
@@ -28,21 +31,29 @@ export default async function MembersPage({ params }: { params: Promise<{ projec
   const user = await requireUser()
   const project = await requireProjectAccess(user.id, projectId)
 
-  const [members, invitations] = await Promise.all([
+  const [members, invitations, grants] = await Promise.all([
     listMembers(prisma, project.orgId),
     listInvitations(prisma, project.orgId),
+    prisma.projectGrant.findMany({
+      where: { projectId: project.id },
+      select: { userId: true, role: true },
+    }),
   ])
 
   const created = (await cookies()).get(NEW_INVITE_COOKIE)?.value ?? null
-  const canManage = project.role === 'owner' || project.role === 'admin'
-  const isOwner = project.role === 'owner'
+  const canManage = project.orgRole === 'owner' || project.orgRole === 'admin'
+  const isOwner = project.orgRole === 'owner'
+  const grantByUser = new Map(grants.map((grant) => [grant.userId, grant.role]))
+  const grantable = members.filter((member) => member.role === 'member' || member.role === 'viewer')
   const pending = invitations.filter((invitation) => invitation.state === 'pending')
 
   return (
     <>
       <h1 className="page-title">Members</h1>
       <p className="page-subtitle">
-        Everyone in the <strong>{project.orgName}</strong> workspace can see every project in it.
+        Owners and admins manage the <strong>{project.orgName}</strong> workspace. Members can use
+        every open project, and viewers can only read. A restricted project is visible only to
+        owners, admins and the people granted access below.
       </p>
 
       {created ? (
@@ -62,11 +73,13 @@ export default async function MembersPage({ params }: { params: Promise<{ projec
             <input type="hidden" name="projectId" value={projectId} />
             <input name="email" type="email" placeholder="teammate@acme.com" required />
             <select name="role" defaultValue="member">
-              {MEMBER_ROLES.filter((role) => isOwner || role === 'member').map((role) => (
-                <option key={role} value={role}>
-                  {role}
-                </option>
-              ))}
+              {MEMBER_ROLES.filter((role) => isOwner || role === 'member' || role === 'viewer').map(
+                (role) => (
+                  <option key={role} value={role}>
+                    {role}
+                  </option>
+                ),
+              )}
             </select>
             <button className="btn" type="submit" style={{ whiteSpace: 'nowrap' }}>
               Invite
@@ -134,6 +147,74 @@ export default async function MembersPage({ params }: { params: Promise<{ projec
           </tbody>
         </table>
       </div>
+
+      {canManage ? (
+        <div className="card" style={{ marginBottom: '1.25rem' }}>
+          <h2 style={{ marginTop: 0 }}>Access to {project.name}</h2>
+          <form action={setProjectRestricted} className="row-between" style={{ gap: '0.75rem' }}>
+            <input type="hidden" name="projectId" value={projectId} />
+            <label style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
+              <input type="checkbox" name="restricted" defaultChecked={project.restricted} />
+              Restricted: only owners, admins and the people granted access can open it
+            </label>
+            <button className="btn" type="submit">
+              Save
+            </button>
+          </form>
+          {project.restricted ? (
+            <table style={{ marginTop: '1rem' }}>
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Workspace role</th>
+                  <th>Access to this project</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {grantable.map((member) => {
+                  const granted = grantByUser.get(member.userId)
+                  return (
+                    <tr key={member.userId}>
+                      <td>{member.name ?? member.email ?? 'unknown'}</td>
+                      <td className="muted">{member.role}</td>
+                      <td>
+                        <form
+                          action={grantProjectAccess}
+                          style={{ display: 'flex', gap: '0.4rem' }}
+                        >
+                          <input type="hidden" name="projectId" value={projectId} />
+                          <input type="hidden" name="userId" value={member.userId} />
+                          <select name="role" defaultValue={granted ?? 'viewer'}>
+                            <option value="viewer">viewer</option>
+                            <option value="member">member</option>
+                          </select>
+                          <button className="btn" type="submit">
+                            {granted ? 'Change' : 'Grant'}
+                          </button>
+                        </form>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        {granted ? (
+                          <form action={revokeProjectAccess}>
+                            <input type="hidden" name="projectId" value={projectId} />
+                            <input type="hidden" name="userId" value={member.userId} />
+                            <button className="btn btn-danger" type="submit">
+                              Revoke
+                            </button>
+                          </form>
+                        ) : (
+                          <span className="muted">no access</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          ) : null}
+        </div>
+      ) : null}
 
       {canManage ? (
         <div className="card">

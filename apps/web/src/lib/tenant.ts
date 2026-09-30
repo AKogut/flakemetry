@@ -1,4 +1,5 @@
 import { getPrismaClient } from '@flakemetry/db'
+import { effectiveProjectRole } from '@flakemetry/queries'
 import { redirect } from 'next/navigation'
 
 const prisma = getPrismaClient()
@@ -11,6 +12,8 @@ export interface AccessibleProject {
   orgName: string
   orgSlug: string
   role: string
+  orgRole: string
+  restricted: boolean
 }
 
 export const listAccessibleProjects = async (userId: string): Promise<AccessibleProject[]> => {
@@ -26,7 +29,13 @@ export const listAccessibleProjects = async (userId: string): Promise<Accessible
           slug: true,
           projects: {
             orderBy: { createdAt: 'asc' },
-            select: { id: true, name: true, slug: true },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              restricted: true,
+              grants: { where: { userId }, select: { role: true }, take: 1 },
+            },
           },
         },
       },
@@ -34,28 +43,42 @@ export const listAccessibleProjects = async (userId: string): Promise<Accessible
   })
 
   return memberships.flatMap((membership) =>
-    membership.org.projects.map((project) => ({
-      id: project.id,
-      name: project.name,
-      slug: project.slug,
-      orgId: membership.org.id,
-      orgName: membership.org.name,
-      orgSlug: membership.org.slug,
-      role: membership.role,
-    })),
+    membership.org.projects.flatMap((project) => {
+      const role = effectiveProjectRole({
+        orgRole: membership.role,
+        restricted: project.restricted,
+        grantRole: project.grants[0]?.role ?? null,
+      })
+      if (!role) return []
+      return [
+        {
+          id: project.id,
+          name: project.name,
+          slug: project.slug,
+          orgId: membership.org.id,
+          orgName: membership.org.name,
+          orgSlug: membership.org.slug,
+          role,
+          orgRole: membership.role,
+          restricted: project.restricted,
+        },
+      ]
+    }),
   )
 }
 
-export const requireProjectAccess = async (
+export const findProjectAccess = async (
   userId: string,
   projectId: string,
-): Promise<AccessibleProject> => {
+): Promise<AccessibleProject | null> => {
   const project = await prisma.project.findFirst({
     where: { id: projectId, org: { memberships: { some: { userId } } } },
     select: {
       id: true,
       name: true,
       slug: true,
+      restricted: true,
+      grants: { where: { userId }, select: { role: true }, take: 1 },
       org: {
         select: {
           id: true,
@@ -66,7 +89,16 @@ export const requireProjectAccess = async (
       },
     },
   })
-  if (!project) redirect('/')
+  if (!project) return null
+
+  const orgRole = project.org.memberships[0]?.role
+  if (!orgRole) return null
+  const role = effectiveProjectRole({
+    orgRole,
+    restricted: project.restricted,
+    grantRole: project.grants[0]?.role ?? null,
+  })
+  if (!role) return null
 
   return {
     id: project.id,
@@ -75,8 +107,19 @@ export const requireProjectAccess = async (
     orgId: project.org.id,
     orgName: project.org.name,
     orgSlug: project.org.slug,
-    role: project.org.memberships[0]?.role ?? 'member',
+    role,
+    orgRole,
+    restricted: project.restricted,
   }
+}
+
+export const requireProjectAccess = async (
+  userId: string,
+  projectId: string,
+): Promise<AccessibleProject> => {
+  const project = await findProjectAccess(userId, projectId)
+  if (!project) redirect('/')
+  return project
 }
 
 export const resolveActiveProject = async (
