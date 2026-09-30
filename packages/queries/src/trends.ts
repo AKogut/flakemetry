@@ -160,23 +160,29 @@ export const getProjectHealthKpis = async (
   projectId: string,
   days = 14,
 ): Promise<HealthKpis> => {
-  const rows = await prisma.dailyTestStats.findMany({
-    where: { projectId, day: { gte: since(days) } },
-    select: { total: true, passed: true, failed: true, flaky: true, avgDurationMs: true },
-  })
+  const [row] = await prisma.$queryRaw<
+    {
+      total: bigint | null
+      passed: bigint | null
+      failed: bigint | null
+      flaky: bigint | null
+      duration: bigint | null
+    }[]
+  >`
+    SELECT sum(total)::bigint AS total,
+           sum(passed)::bigint AS passed,
+           sum(failed)::bigint AS failed,
+           sum(flaky)::bigint AS flaky,
+           sum(avg_duration_ms::bigint * total)::bigint AS duration
+    FROM daily_test_stats
+    WHERE project_id = ${projectId}::uuid AND day >= ${dayString(since(days))}::date
+  `
 
-  let total = 0
-  let passed = 0
-  let failed = 0
-  let flaky = 0
-  let totalDurationMs = 0
-  for (const row of rows) {
-    total += row.total
-    passed += row.passed
-    failed += row.failed
-    flaky += row.flaky
-    totalDurationMs += row.avgDurationMs * row.total
-  }
+  const total = Number(row?.total ?? 0)
+  const passed = Number(row?.passed ?? 0)
+  const failed = Number(row?.failed ?? 0)
+  const flaky = Number(row?.flaky ?? 0)
+  const totalDurationMs = Number(row?.duration ?? 0)
 
   return {
     totalExecutions: total,
@@ -201,34 +207,30 @@ export const getDailyTrend = async (
   projectId: string,
   days = 14,
 ): Promise<DailyTrendPoint[]> => {
-  const rows = await prisma.dailyTestStats.findMany({
-    where: { projectId, day: { gte: since(days) } },
-    select: { day: true, total: true, passed: true, flaky: true, avgDurationMs: true },
+  const rows = await prisma.$queryRaw<
+    { day: Date; total: bigint; passed: bigint; flaky: bigint; duration: bigint }[]
+  >`
+    SELECT day,
+           sum(total)::bigint AS total,
+           sum(passed)::bigint AS passed,
+           sum(flaky)::bigint AS flaky,
+           sum(avg_duration_ms::bigint * total)::bigint AS duration
+    FROM daily_test_stats
+    WHERE project_id = ${projectId}::uuid AND day >= ${dayString(since(days))}::date
+    GROUP BY day
+    ORDER BY day
+  `
+
+  return rows.map((row) => {
+    const total = Number(row.total)
+    return {
+      day: dayString(row.day),
+      total,
+      passRate: total > 0 ? Number(row.passed) / total : 0,
+      flakyRate: total > 0 ? Number(row.flaky) / total : 0,
+      avgDurationMs: total > 0 ? Math.round(Number(row.duration) / total) : 0,
+    }
   })
-
-  const byDay = new Map<
-    string,
-    { total: number; passed: number; flaky: number; sumDuration: number }
-  >()
-  for (const row of rows) {
-    const key = dayString(row.day)
-    const entry = byDay.get(key) ?? { total: 0, passed: 0, flaky: 0, sumDuration: 0 }
-    entry.total += row.total
-    entry.passed += row.passed
-    entry.flaky += row.flaky
-    entry.sumDuration += row.avgDurationMs * row.total
-    byDay.set(key, entry)
-  }
-
-  return [...byDay.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([day, entry]) => ({
-      day,
-      total: entry.total,
-      passRate: entry.total > 0 ? entry.passed / entry.total : 0,
-      flakyRate: entry.total > 0 ? entry.flaky / entry.total : 0,
-      avgDurationMs: entry.total > 0 ? Math.round(entry.sumDuration / entry.total) : 0,
-    }))
 }
 
 export interface LeaderboardTest {
@@ -248,58 +250,78 @@ export interface Leaderboards {
   mostFailing: LeaderboardTest[]
 }
 
+interface LeaderboardRow {
+  board: 'slowest' | 'failing'
+  test_identity_id: string
+  title: string
+  suite: string
+  file_path: string
+  total: bigint
+  failed: bigint
+  flaky: bigint
+  avg_ms: bigint
+  fail_rate: number
+}
+
 export const getTestLeaderboards = async (
   prisma: PrismaClient,
   projectId: string,
   days = 14,
   limit = 8,
 ): Promise<Leaderboards> => {
-  const rows = await prisma.dailyTestStats.findMany({
-    where: { projectId, day: { gte: since(days) } },
-    select: {
-      testIdentityId: true,
-      total: true,
-      failed: true,
-      flaky: true,
-      avgDurationMs: true,
-      identity: { select: { title: true, suite: true, filePath: true } },
-    },
+  const rows = await prisma.$queryRaw<LeaderboardRow[]>`
+    WITH per_test AS (
+      SELECT test_identity_id,
+             sum(total)::bigint AS total,
+             sum(failed)::bigint AS failed,
+             sum(flaky)::bigint AS flaky,
+             sum(avg_duration_ms::bigint * total)::bigint AS duration
+      FROM daily_test_stats
+      WHERE project_id = ${projectId}::uuid AND day >= ${dayString(since(days))}::date
+      GROUP BY test_identity_id
+    ),
+    measured AS (
+      SELECT *,
+             CASE WHEN total > 0 THEN round(duration::numeric / total)::bigint ELSE 0 END AS avg_ms,
+             CASE WHEN total > 0 THEN (failed + flaky)::float8 / total ELSE 0 END AS fail_rate
+      FROM per_test
+    ),
+    boards AS (
+      (SELECT 'slowest' AS board, measured.*,
+              row_number() OVER (ORDER BY avg_ms DESC, test_identity_id) AS position
+       FROM measured
+       ORDER BY avg_ms DESC, test_identity_id
+       LIMIT ${limit})
+      UNION ALL
+      (SELECT 'failing' AS board, measured.*,
+              row_number() OVER (ORDER BY fail_rate DESC, failed DESC, test_identity_id) AS position
+       FROM measured
+       WHERE failed + flaky > 0
+       ORDER BY fail_rate DESC, failed DESC, test_identity_id
+       LIMIT ${limit})
+    )
+    SELECT boards.board, boards.test_identity_id, identity.title, identity.suite,
+           identity.file_path, boards.total, boards.failed, boards.flaky, boards.avg_ms,
+           boards.fail_rate
+    FROM boards
+    JOIN test_identity identity ON identity.id = boards.test_identity_id
+    ORDER BY boards.board, boards.position
+  `
+
+  const toTest = (row: LeaderboardRow): LeaderboardTest => ({
+    testIdentityId: row.test_identity_id,
+    title: row.title,
+    suite: row.suite,
+    filePath: row.file_path,
+    total: Number(row.total),
+    failed: Number(row.failed),
+    flaky: Number(row.flaky),
+    failRate: Number(row.fail_rate),
+    avgDurationMs: Number(row.avg_ms),
   })
 
-  const byTest = new Map<string, LeaderboardTest & { sumDuration: number }>()
-  for (const row of rows) {
-    const entry =
-      byTest.get(row.testIdentityId) ??
-      ({
-        testIdentityId: row.testIdentityId,
-        title: row.identity.title,
-        suite: row.identity.suite,
-        filePath: row.identity.filePath,
-        total: 0,
-        failed: 0,
-        flaky: 0,
-        failRate: 0,
-        avgDurationMs: 0,
-        sumDuration: 0,
-      } satisfies LeaderboardTest & { sumDuration: number })
-    entry.total += row.total
-    entry.failed += row.failed
-    entry.flaky += row.flaky
-    entry.sumDuration += row.avgDurationMs * row.total
-    byTest.set(row.testIdentityId, entry)
-  }
-
-  const tests = [...byTest.values()].map(({ sumDuration, ...test }) => ({
-    ...test,
-    failRate: test.total > 0 ? (test.failed + test.flaky) / test.total : 0,
-    avgDurationMs: test.total > 0 ? Math.round(sumDuration / test.total) : 0,
-  }))
-
   return {
-    slowest: [...tests].sort((a, b) => b.avgDurationMs - a.avgDurationMs).slice(0, limit),
-    mostFailing: [...tests]
-      .filter((test) => test.failed + test.flaky > 0)
-      .sort((a, b) => b.failRate - a.failRate || b.failed - a.failed)
-      .slice(0, limit),
+    slowest: rows.filter((row) => row.board === 'slowest').map(toTest),
+    mostFailing: rows.filter((row) => row.board === 'failing').map(toTest),
   }
 }
