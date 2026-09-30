@@ -141,11 +141,13 @@ signatures reach the model at all; the rest are answered from the cluster's cach
 
 When the budget runs out, the worker emits `ai_budget_spent` — subscribe to it on any
 notification channel, including email, and the day analysis stops is a day someone hears
-about. It is deduplicated per project per day, since the budget is re-checked on every run.
+about. The budget is re-checked on every run, so the alert is held to once per project per
+UTC day. That dedupe lives in the worker process, so a restart or a second worker replica can
+send it once more.
 
 ### Notifications
 
-The worker pushes intelligence to Slack, Discord and email. Webhook delivery is best-effort and de-duplicated per channel so a flapping test can't spam a channel. Channels come from two places, applied together: **global env channels** (below) and **per-project channels** configured in **Settings → Notifications** (add a Slack/Discord webhook or an email address with an event filter). Events: `flaky_detected`, `quarantine_changed`, `rca_ready`, `suite_regressed` (a suite's fail-rate crossing its trailing baseline), and `suite_slowed` (a suite's average duration rising well above its trailing baseline).
+The worker pushes intelligence to Slack, Discord and email. Webhook delivery is best-effort and de-duplicated per channel so a flapping test can't spam a channel. Channels come from two places, applied together: **global env channels** (below) and **per-project channels** configured in **Settings → Notifications** (add a Slack/Discord webhook or an email address with an event filter). Events: `flaky_detected`, `quarantine_changed`, `rca_ready`, `suite_regressed` (a suite's fail-rate crossing its trailing baseline), `suite_slowed` (a suite's average duration rising well above its trailing baseline), and `ai_budget_spent` (the project's daily AI budget is used up and root-cause analysis has paused). Every event can also be listed under `events` in `flakemetry.yml`.
 
 | Variable | Effect |
 |---|---|

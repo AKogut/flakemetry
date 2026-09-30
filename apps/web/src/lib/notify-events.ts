@@ -1,8 +1,3 @@
-export const NOTIFY_EVENTS = [
-  'flaky_detected',
-  'quarantine_changed',
-  'rca_ready',
-  'suite_regressed',
-  'suite_slowed',
-  'ai_budget_spent',
-]
+import { NOTIFICATION_EVENTS } from '@flakemetry/contracts'
+
+export const NOTIFY_EVENTS: string[] = [...NOTIFICATION_EVENTS]
