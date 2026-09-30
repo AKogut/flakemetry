@@ -3,7 +3,12 @@ import {
   projectPolicyEnvOverrides,
   resolveProjectPolicy,
 } from '@flakemetry/contracts'
-import type { PrismaClient } from '@flakemetry/db'
+import {
+  deleteExecutions,
+  executionsWithIds,
+  type PrismaClient,
+  storedExecutionCount,
+} from '@flakemetry/db'
 import {
   type ObjectStore,
   projectArtifactPrefix,
@@ -68,7 +73,7 @@ export const capRawExecutions = async (
   if (maxExecutions <= 0) return 0
   let pruned = 0
   for (;;) {
-    const stored = await prisma.testExecution.count({ where: { projectId } })
+    const stored = await storedExecutionCount(prisma, projectId)
     const excess = stored - maxExecutions
     if (excess <= 0) return pruned
     const oldest = await prisma.testExecution.findMany({
@@ -77,9 +82,10 @@ export const capRawExecutions = async (
       take: Math.min(excess, CAP_BATCH),
       select: { id: true },
     })
-    const { count } = await prisma.testExecution.deleteMany({
-      where: { id: { in: oldest.map((execution) => execution.id) } },
-    })
+    const count = await deleteExecutions(
+      prisma,
+      executionsWithIds(oldest.map((execution) => execution.id)),
+    )
     pruned += count
     if (count === 0) return pruned
   }

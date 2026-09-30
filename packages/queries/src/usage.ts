@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@flakemetry/db'
+import { type PrismaClient, storedExecutionCount } from '@flakemetry/db'
 
 export interface AiSpend {
   spentToday: number
@@ -87,7 +87,7 @@ export const getProjectUsage = async (
       _sum: { tokenCost: true },
     }),
     prisma.rcaReport.count({ where: { projectId, createdAt: { gte: since } } }),
-    prisma.testExecution.count({ where: { projectId } }),
+    storedExecutionCount(prisma, projectId),
     prisma.run.count({ where: { projectId } }),
     prisma.testIdentity.count({ where: { projectId } }),
     prisma.rcaReport.count({ where: { projectId } }),

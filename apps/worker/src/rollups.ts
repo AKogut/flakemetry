@@ -1,4 +1,9 @@
-import type { PrismaClient, TestStatus } from '@flakemetry/db'
+import {
+  deleteExecutions,
+  executionsOlderThan,
+  type PrismaClient,
+  type TestStatus,
+} from '@flakemetry/db'
 
 export interface RollupContext {
   orgId: string
@@ -11,13 +16,7 @@ export const pruneRawExecutions = async (
 ): Promise<number> => {
   const now = options.now ?? new Date()
   const cutoff = new Date(now.getTime() - options.olderThanDays * 24 * 60 * 60 * 1000)
-  const { count } = await prisma.testExecution.deleteMany({
-    where: {
-      startedAt: { lt: cutoff },
-      ...(options.projectId ? { projectId: options.projectId } : {}),
-    },
-  })
-  return count
+  return deleteExecutions(prisma, executionsOlderThan(cutoff, options.projectId))
 }
 
 const dayStart = (date: Date): Date => {
