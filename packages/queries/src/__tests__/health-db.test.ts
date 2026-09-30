@@ -7,7 +7,8 @@ const hasDb = Boolean(process.env.DATABASE_URL)
 const prisma = createPrismaClient()
 
 const DAY_MS = 24 * 60 * 60 * 1000
-const ago = (days: number): Date => new Date(Date.now() - days * DAY_MS)
+const NOW = Date.now()
+const ago = (days: number): Date => new Date(NOW - days * DAY_MS)
 const dayOnly = (days: number): Date => {
   const date = ago(days)
   date.setUTCHours(0, 0, 0, 0)
