@@ -39,8 +39,10 @@ jobs:
             --set auth.secret='ci-placeholder-secret-value-0001' \
             --set ai.enabled=true \
             --set ingress.enabled=true \
+            --set selfTelemetry.otlpEndpoint=http://otel-collector.observability:4318 \
             > /tmp/rendered.yaml
           test "$(grep -c '^kind:' /tmp/rendered.yaml)" -ge 10
+          test "$(grep -c 'name: FLAKEMETRY_SELF_OTEL_ENDPOINT' /tmp/rendered.yaml)" -eq 2
 
   install:
     name: installs and upgrades on a real cluster

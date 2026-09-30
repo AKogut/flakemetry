@@ -1,0 +1,133 @@
+name: observability
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/observability/**'
+      - 'apps/api/src/telemetry.ts'
+      - 'apps/api/src/app.ts'
+      - 'apps/worker/src/telemetry.ts'
+      - 'apps/worker/src/runner.ts'
+      - 'docker-compose.yml'
+      - '.github/workflows/observability.yml'
+  pull_request:
+    paths:
+      - 'deploy/observability/**'
+      - 'apps/api/src/telemetry.ts'
+      - 'apps/api/src/app.ts'
+      - 'apps/worker/src/telemetry.ts'
+      - 'apps/worker/src/runner.ts'
+      - 'docker-compose.yml'
+      - '.github/workflows/observability.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: observability-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rules:
+    name: alert rules pass their tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Prometheus accepts the configuration and the rules
+        run: >
+          docker run --rm -v "$PWD/deploy/observability:/etc/prometheus:ro"
+          --entrypoint promtool prom/prometheus:v3.15.0
+          check config /etc/prometheus/prometheus.yml
+
+      - name: Each alert fires when it should and stays quiet when it should not
+        run: >
+          docker run --rm -v "$PWD/deploy/observability/rules:/rules:ro" -w /rules
+          --entrypoint promtool prom/prometheus:v3.15.0
+          test rules flakemetry.rules.test.yml
+
+  live:
+    name: the platform's own metrics reach the dashboards
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: flakemetry
+          POSTGRES_PASSWORD: flakemetry
+          POSTGRES_DB: flakemetry
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U flakemetry"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://flakemetry:flakemetry@localhost:5432/flakemetry?schema=public
+      FLAKEMETRY_ENDPOINT: http://localhost:4000
+      FLAKEMETRY_SELF_OTEL_ENDPOINT: http://localhost:4318
+      OTEL_METRIC_EXPORT_INTERVAL: '2000'
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Start the collector, Prometheus and Grafana
+        run: docker compose --profile observability up -d otel-collector prometheus grafana
+
+      - name: Apply migrations
+        run: pnpm --filter @flakemetry/db exec prisma migrate deploy
+
+      - name: Build the api, the worker and a reporter
+        run: pnpm turbo run build --filter @flakemetry/api... --filter @flakemetry/worker... --filter flakemetry-reporter-smoke...
+
+      - name: Start the api and the worker with self-telemetry on
+        run: |
+          pnpm --filter @flakemetry/api start > /tmp/api.log 2>&1 &
+          pnpm --filter @flakemetry/worker start > /tmp/worker.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf http://localhost:4000/health > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/api.log
+          exit 1
+
+      - name: Send a real run through a reporter
+        working-directory: examples/reporter-smoke
+        run: |
+          pnpm provision
+          FLAKEMETRY_TOKEN="$VITEST_TOKEN" pnpm smoke:vitest || true
+
+      - name: Grafana loaded the dashboard
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -sf -u admin:admin http://127.0.0.1:3001/api/dashboards/uid/flakemetry-platform > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          docker compose --profile observability logs grafana
+          exit 1
+
+      - name: Metrics arrived, every rule evaluates and every panel query runs
+        run: |
+          for _ in $(seq 1 12); do
+            if node deploy/observability/verify.mjs; then exit 0; fi
+            sleep 10
+          done
+          exit 1
+
+      - name: Service logs
+        if: failure()
+        run: |
+          echo '--- api ---'; cat /tmp/api.log || true
+          echo '--- worker ---'; cat /tmp/worker.log || true
+          docker compose --profile observability logs otel-collector prometheus || true

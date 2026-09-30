@@ -82,3 +82,10 @@ app.kubernetes.io/instance: {{ .Release.Name }}
       name: {{ include "flakemetry.secretName" . }}
       key: s3-secret-access-key
 {{- end -}}
+
+{{- define "flakemetry.selfTelemetryEnv" -}}
+- name: FLAKEMETRY_SELF_OTEL_ENDPOINT
+  value: {{ .Values.selfTelemetry.otlpEndpoint | quote }}
+- name: OTEL_METRIC_EXPORT_INTERVAL
+  value: {{ .Values.selfTelemetry.exportIntervalMs | quote }}
+{{- end -}}

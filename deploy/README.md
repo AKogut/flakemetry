@@ -59,9 +59,15 @@ ingestion and processing scale independently with load. The durable Postgres que
 worker fleet lag under a spike and catch up without dropping data. See
 [`RUNBOOK.md`](RUNBOOK.md) for scaling guidance and SLOs.
 
+## Watching it
+
+Set `selfTelemetry.otlpEndpoint` to your OpenTelemetry Collector and the api and worker
+export their own metrics. [`observability/`](observability) has the alert rules for the SLOs
+in [`RUNBOOK.md`](RUNBOOK.md) and a Grafana dashboard to load into your Prometheus and
+Grafana.
+
 ## Not yet here
 
-Terraform modules for the managed dependencies and reference OTel dashboards for the
-platform's own telemetry are tracked as a follow-up on the
+Terraform modules for the managed dependencies are tracked as a follow-up on the
 [roadmap](https://github.com/users/AKogut/projects/14). Today the documented path is the
 Helm chart against managed Postgres and object storage.

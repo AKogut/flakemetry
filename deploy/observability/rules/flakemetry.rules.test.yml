@@ -1,0 +1,241 @@
+rule_files:
+  - flakemetry.rules.yml
+
+evaluation_interval: 30s
+
+tests:
+  - name: a sustained 5% ingest error rate pages
+    interval: 1m
+    input_series:
+      - series: 'flakemetry_http_server_duration_milliseconds_count{job="flakemetry-api",route="/v1/ingest",status="202"}'
+        values: '0+95x90'
+      - series: 'flakemetry_http_server_duration_milliseconds_count{job="flakemetry-api",route="/v1/traces",status="503"}'
+        values: '0+5x90'
+    alert_rule_test:
+      - eval_time: 80m
+        alertname: FlakemetryIngestErrorBudgetBurn
+        exp_alerts:
+          - exp_labels:
+              severity: page
+            exp_annotations:
+              summary: Ingestion is burning its error budget fast enough to spend 5% of the month in an hour
+              description: >
+                5% of ingest requests failed with a 5xx over the last hour, against a 0.1% monthly
+                budget. CI pipelines are being told to retry or losing runs. See "202 latency
+                rising, 5xx on ingest" in deploy/RUNBOOK.md.
+
+  - name: a 1% ingest error rate, or 5xx on routes that are not ingestion, does not page
+    interval: 1m
+    input_series:
+      - series: 'flakemetry_http_server_duration_milliseconds_count{job="flakemetry-api",route="/v1/ingest",status="202"}'
+        values: '0+99x90'
+      - series: 'flakemetry_http_server_duration_milliseconds_count{job="flakemetry-api",route="/v1/ingest",status="500"}'
+        values: '0+1x90'
+      - series: 'flakemetry_http_server_duration_milliseconds_count{job="flakemetry-api",route="/v1/runs",status="500"}'
+        values: '0+50x90'
+    alert_rule_test:
+      - eval_time: 80m
+        alertname: FlakemetryIngestErrorBudgetBurn
+        exp_alerts: []
+
+  - name: an outage that has already recovered stops paging
+    interval: 1m
+    input_series:
+      - series: 'flakemetry_http_server_duration_milliseconds_count{job="flakemetry-api",route="/v1/ingest",status="202"}'
+        values: '0+50x60 3000+100x30'
+      - series: 'flakemetry_http_server_duration_milliseconds_count{job="flakemetry-api",route="/v1/ingest",status="503"}'
+        values: '0+50x60 3000+0x30'
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: FlakemetryIngestErrorBudgetBurn
+        exp_alerts: []
+
+  - name: fewer than 99% of ingest requests within 300 ms opens a ticket
+    interval: 1m
+    input_series:
+      - series: 'flakemetry_http_server_duration_milliseconds_bucket{job="flakemetry-api",route="/v1/ingest",status="202",le="300"}'
+        values: '0+97x40'
+      - series: 'flakemetry_http_server_duration_milliseconds_count{job="flakemetry-api",route="/v1/ingest",status="202"}'
+        values: '0+100x40'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: FlakemetryIngestLatency
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+            exp_annotations:
+              summary: Fewer than 99% of ingest requests answer within 300 ms
+              description: >
+                Only 97% of ingest requests finished within 300 ms over the last 10 minutes.
+                Ingestion only enqueues, so this is the api or its database writes, not
+                processing. See "202 latency rising" in deploy/RUNBOOK.md.
+
+  - name: fast ingestion opens no latency ticket
+    interval: 1m
+    input_series:
+      - series: 'flakemetry_http_server_duration_milliseconds_bucket{job="flakemetry-api",route="/v1/ingest",status="202",le="300"}'
+        values: '0+100x40'
+      - series: 'flakemetry_http_server_duration_milliseconds_count{job="flakemetry-api",route="/v1/ingest",status="202"}'
+        values: '0+100x40'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: FlakemetryIngestLatency
+        exp_alerts: []
+
+  - name: runs taking two minutes to process open a ticket, not a page
+    interval: 1m
+    input_series:
+      - series: 'flakemetry_worker_time_to_processed_milliseconds_bucket{job="flakemetry-worker",le="1000"}'
+        values: '0+1x40'
+      - series: 'flakemetry_worker_time_to_processed_milliseconds_bucket{job="flakemetry-worker",le="60000"}'
+        values: '0+1x40'
+      - series: 'flakemetry_worker_time_to_processed_milliseconds_bucket{job="flakemetry-worker",le="120000"}'
+        values: '0+10x40'
+      - series: 'flakemetry_worker_time_to_processed_milliseconds_bucket{job="flakemetry-worker",le="+Inf"}'
+        values: '0+10x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: FlakemetryProcessingLag
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+            exp_annotations:
+              summary: The 95th percentile run takes over a minute from accepted to processed
+              description: >
+                p95 time from acceptance to processed is 116667 ms over the last 5 minutes. Lag
+                drains no budget while the queue drains; page only if it keeps growing. See
+                "Queue depth climbing, lag rising" in deploy/RUNBOOK.md.
+
+  - name: runs processed within a second raise nothing
+    interval: 1m
+    input_series:
+      - series: 'flakemetry_worker_time_to_processed_milliseconds_bucket{job="flakemetry-worker",le="1000"}'
+        values: '0+10x40'
+      - series: 'flakemetry_worker_time_to_processed_milliseconds_bucket{job="flakemetry-worker",le="60000"}'
+        values: '0+10x40'
+      - series: 'flakemetry_worker_time_to_processed_milliseconds_bucket{job="flakemetry-worker",le="+Inf"}'
+        values: '0+10x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: FlakemetryProcessingLag
+        exp_alerts: []
+
+  - name: a queue that grows for half an hour pages, one that grows briefly does not
+    interval: 1m
+    input_series:
+      - series: 'flakemetry_queue_depth{job="flakemetry-api",instance="a"}'
+        values: '0+10x50'
+      - series: 'flakemetry_queue_depth{job="flakemetry-api",instance="b"}'
+        values: '0+10x50'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: FlakemetryQueueNotDraining
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: FlakemetryQueueNotDraining
+        exp_alerts:
+          - exp_labels:
+              severity: page
+            exp_annotations:
+              summary: The ingestion queue has grown without pause for 30 minutes
+              description: >
+                Workers are not keeping up. Accepted runs are safe in Postgres but their results
+                are falling further behind. See "Queue depth climbing, lag rising" in
+                deploy/RUNBOOK.md.
+
+  - name: a deep queue that is draining does not page
+    interval: 1m
+    input_series:
+      - series: 'flakemetry_queue_depth{job="flakemetry-api",instance="a"}'
+        values: '5000-10x50'
+      - series: 'flakemetry_worker_jobs_processed_total{job="flakemetry-worker"}'
+        values: '0+10x50'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: FlakemetryQueueNotDraining
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: FlakemetryWorkersStalled
+        exp_alerts: []
+
+  - name: queued runs with no worker progress page, whether workers report or not
+    interval: 1m
+    input_series:
+      - series: 'flakemetry_queue_depth{job="flakemetry-api",instance="a"}'
+        values: '20x40'
+      - series: 'flakemetry_worker_jobs_processed_total{job="flakemetry-worker",instance="w"}'
+        values: '7x40'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: FlakemetryWorkersStalled
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: FlakemetryWorkersStalled
+        exp_alerts:
+          - exp_labels:
+              severity: page
+            exp_annotations:
+              summary: Runs are waiting and no worker has processed one in 15 minutes
+              description: >
+                20 jobs are queued and nothing completed. Check that worker pods are running and
+                not crash-looping, and that they reach the database.
+
+  - name: queued runs and no worker at all page too
+    interval: 1m
+    input_series:
+      - series: 'flakemetry_queue_depth{job="flakemetry-api",instance="a"}'
+        values: '20x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: FlakemetryWorkersStalled
+        exp_alerts:
+          - exp_labels:
+              severity: page
+            exp_annotations:
+              summary: Runs are waiting and no worker has processed one in 15 minutes
+              description: >
+                20 jobs are queued and nothing completed. Check that worker pods are running and
+                not crash-looping, and that they reach the database.
+
+  - name: a dead-lettered run opens a ticket
+    interval: 1m
+    input_series:
+      - series: 'flakemetry_worker_jobs_dead_lettered_total{job="flakemetry-worker",instance="w"}'
+        values: '0 0 0 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: FlakemetryRunsDeadLettered
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+              job: flakemetry-worker
+              instance: w
+            exp_annotations:
+              summary: Accepted runs were given up on after exhausting their retries
+              description: >
+                These runs were acknowledged to CI and will not be processed. Their payload and
+                last error are on the ingestion_job rows with status 'dead'.
+
+  - name: an api that stops exporting raises the blind-spot ticket
+    interval: 1m
+    input_series:
+      - series: 'flakemetry_worker_queue_depth{job="flakemetry-worker",instance="w"}'
+        values: '0x30'
+      - series: 'flakemetry_queue_depth{job="flakemetry-api",instance="a"}'
+        values: '0x5 _x25'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: FlakemetryTelemetryMissing
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: FlakemetryTelemetryMissing
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+              job: flakemetry-api
+            exp_annotations:
+              summary: The api or worker stopped exporting its own metrics
+              description: >
+                Every other Flakemetry alert is blind without them. Check
+                FLAKEMETRY_SELF_OTEL_ENDPOINT on the api and worker and the collector they send
+                to.

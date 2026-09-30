@@ -44,6 +44,9 @@ spec:
             - name: FLAKEMETRY_EXECUTION_RETENTION_DAYS
               value: {{ .Values.worker.retention.executionDays | quote }}
             {{- include "flakemetry.commonEnv" . | nindent 12 }}
+            {{- if .Values.selfTelemetry.otlpEndpoint }}
+            {{- include "flakemetry.selfTelemetryEnv" . | nindent 12 }}
+            {{- end }}
             {{- if .Values.ai.enabled }}
             - name: FLAKEMETRY_AI_RCA
               value: 'true'
