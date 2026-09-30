@@ -1,0 +1,6 @@
+misconfigurations:
+  - id: AWS-0090
+    statement: >
+      Versioning stays off on the artifact bucket. The worker deletes artifacts to enforce each
+      project's retention policy and to carry out verified erasure requests; with versioning on,
+      every deletion would leave a noncurrent version behind and the erasure would not be one.

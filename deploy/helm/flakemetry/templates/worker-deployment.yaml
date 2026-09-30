@@ -39,6 +39,9 @@ spec:
           env:
             - name: POLL_INTERVAL_MS
               value: {{ .Values.worker.pollIntervalMs | quote }}
+            {{- if .Values.database.caBundle }}
+            {{- include "flakemetry.databaseCaEnv" . | nindent 12 }}
+            {{- end }}
             - name: FLAKEMETRY_ARTIFACT_RETENTION_DAYS
               value: {{ .Values.worker.retention.artifactDays | quote }}
             - name: FLAKEMETRY_EXECUTION_RETENTION_DAYS
@@ -67,5 +70,11 @@ spec:
             {{- with .Values.worker.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          {{- if .Values.database.caBundle }}
+          {{- include "flakemetry.databaseCaMount" . | nindent 10 }}
+          {{- end }}
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}
+      {{- if .Values.database.caBundle }}
+      {{- include "flakemetry.databaseCaVolume" . | nindent 6 }}
+      {{- end }}
