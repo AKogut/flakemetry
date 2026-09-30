@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { publishedConfig } from '@flakemetry/build-config'
 import { defineConfig } from 'tsdown'
 
-const { version } = createRequire(import.meta.url)('./package.json') as { version: string }
+const { version } = createRequire(import.meta.url)('./package.json')
 
 export default defineConfig({
   ...publishedConfig,
