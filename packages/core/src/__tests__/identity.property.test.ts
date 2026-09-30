@@ -86,6 +86,60 @@ describe('identity properties', () => {
     )
   })
 
+  it('normalizes paths idempotently whatever dot and slash segments they carry', () => {
+    const segment = fc.oneof(nonEmpty, fc.constantFrom('', '.', '..'))
+    const messyPath = fc
+      .tuple(
+        fc.constantFrom('', '/', './', '/./', './/', '\\'),
+        fc.array(segment, { minLength: 1, maxLength: 6 }),
+        fc.constantFrom('/', '\\'),
+      )
+      .map(([prefix, segments, separator]) => `${prefix}${segments.join(separator)}.spec.ts`)
+
+    fc.assert(
+      fc.property(messyPath, (path) => {
+        const once = normalizeFilePath(path)
+        expect(normalizeFilePath(once)).toBe(once)
+      }),
+      { numRuns: 2000 },
+    )
+  })
+
+  it('keeps every fingerprint the previous normalizer already produced', () => {
+    const legacy = (path: string): string =>
+      path.replaceAll('\\', '/').replace(/^\.\//, '').replace(/^\/+/, '').toLowerCase()
+    const plainSegment = nonEmpty.filter(
+      (value) => !/[\\/]/.test(value) && value !== '.' && value !== '..',
+    )
+    const plainPath = fc
+      .tuple(
+        fc.constantFrom('', '/', '//', './', '.\\', '\\'),
+        fc.array(plainSegment, { minLength: 1, maxLength: 5 }),
+        fc.constantFrom('/', '\\'),
+      )
+      .map(([prefix, segments, separator]) => `${prefix}${segments.join(separator)}.spec.ts`)
+
+    fc.assert(
+      fc.property(plainPath, (path) => {
+        expect(normalizeFilePath(path)).toBe(legacy(path))
+      }),
+      { numRuns: 2000 },
+    )
+  })
+
+  it.each([
+    ['/./ /!.spec.ts', ' /!.spec.ts'],
+    ['/./tests/a.spec.ts', 'tests/a.spec.ts'],
+    ['././tests/a.spec.ts', 'tests/a.spec.ts'],
+    ['tests//a.spec.ts', 'tests/a.spec.ts'],
+    ['tests/./a.spec.ts', 'tests/a.spec.ts'],
+    ['tests/unit/../a.spec.ts', 'tests/a.spec.ts'],
+    ['../e2e/a.spec.ts', '../e2e/a.spec.ts'],
+    ['.\\E2E\\Auth\\Login.spec.ts', 'e2e/auth/login.spec.ts'],
+  ])('normalizes %s to %s', (path, expected) => {
+    expect(normalizeFilePath(path)).toBe(expected)
+  })
+
   it('hashes params independently of key order', () => {
     fc.assert(
       fc.property(fc.dictionary(nonEmpty, fc.integer(), { maxKeys: 6 }), (params) => {
