@@ -1,4 +1,4 @@
-import { createPrismaClient, generateToken, hashToken } from '@flakemetry/db'
+import { createPrismaClient, generateToken, hashToken, refreshRunCounts } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { buildApp } from '../app'
@@ -114,6 +114,7 @@ const seed = async () => {
       startedAt: at('2026-07-16T11:00:02Z'),
     },
   })
+  await refreshRunCounts(prisma, project.id)
 
   await prisma.flakyScore.create({
     data: {

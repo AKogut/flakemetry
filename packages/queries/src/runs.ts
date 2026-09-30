@@ -23,28 +23,6 @@ const applyStatus = (counts: RunCounts, status: TestStatus, amount: number): voi
   else if (status === 'flaky') counts.flaky += amount
 }
 
-const countsByRun = async (
-  prisma: PrismaClient,
-  projectId: string,
-  runIds: string[],
-): Promise<Map<string, RunCounts>> => {
-  const map = new Map<string, RunCounts>()
-  if (runIds.length === 0) return map
-
-  const grouped = await prisma.testExecution.groupBy({
-    by: ['runId', 'status'],
-    where: { projectId, runId: { in: runIds } },
-    _count: { _all: true },
-  })
-
-  for (const row of grouped) {
-    const counts = map.get(row.runId) ?? emptyCounts()
-    applyStatus(counts, row.status, row._count._all)
-    map.set(row.runId, counts)
-  }
-  return map
-}
-
 export const listRuns = async (
   prisma: PrismaClient,
   projectId: string,
@@ -76,16 +54,15 @@ export const listRuns = async (
       status: true,
       startedAt: true,
       durationMs: true,
+      passedCount: true,
+      failedCount: true,
+      skippedCount: true,
+      flakyCount: true,
     },
   })
 
   const page = runs.slice(0, input.limit)
   const nextCursor = runs.length > input.limit ? (page.at(-1)?.id ?? null) : null
-  const counts = await countsByRun(
-    prisma,
-    projectId,
-    page.map((run) => run.id),
-  )
 
   return {
     items: page.map((run) => ({
@@ -97,7 +74,13 @@ export const listRuns = async (
       status: run.status,
       startedAt: run.startedAt,
       durationMs: run.durationMs,
-      counts: counts.get(run.id) ?? emptyCounts(),
+      counts: {
+        total: run.passedCount + run.failedCount + run.skippedCount + run.flakyCount,
+        passed: run.passedCount,
+        failed: run.failedCount,
+        skipped: run.skippedCount,
+        flaky: run.flakyCount,
+      },
     })),
     nextCursor,
   }
@@ -141,7 +124,8 @@ export const getRun = async (
     },
   })
 
-  const counts = await countsByRun(prisma, projectId, [runId])
+  const counts = emptyCounts()
+  for (const execution of executions) applyStatus(counts, execution.status, 1)
 
   return {
     id: run.id,
@@ -154,7 +138,7 @@ export const getRun = async (
     startedAt: run.startedAt,
     finishedAt: run.finishedAt,
     durationMs: run.durationMs,
-    counts: counts.get(runId) ?? emptyCounts(),
+    counts,
     executions: executions.map((execution) => ({
       id: execution.id,
       testIdentityId: execution.testIdentityId,

@@ -9,7 +9,7 @@ import {
   hashParams,
   resolveIdentity,
 } from '@flakemetry/core'
-import type { Prisma, PrismaClient } from '@flakemetry/db'
+import { countStatuses, type Prisma, type PrismaClient, runCountFields } from '@flakemetry/db'
 import { DEFAULT_PLUGIN_TIMEOUT_MS } from '@flakemetry/plugin-host'
 import { computeIdentityScores, type ScoredIdentity } from '@flakemetry/queries'
 
@@ -71,6 +71,10 @@ export const processJob = async (
   let newIdentities = 0
   let movedIdentities = 0
 
+  const counts = runCountFields(
+    countStatuses(batch.executions.map((execution) => execution.status)),
+  )
+
   const runId = await prisma.$transaction(async (tx) => {
     const run = await tx.run.upsert({
       where: {
@@ -95,12 +99,14 @@ export const processJob = async (
         finishedAt,
         durationMs: runDurationMs(startedAt, finishedAt),
         otelTraceId: batch.run.traceId ?? null,
+        ...counts,
       },
       update: {
         status: batch.run.status,
         finishedAt,
         durationMs: runDurationMs(startedAt, finishedAt),
         otelTraceId: batch.run.traceId ?? null,
+        ...counts,
       },
       select: { id: true },
     })

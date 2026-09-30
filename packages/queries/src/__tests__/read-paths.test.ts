@@ -42,6 +42,8 @@ const seed = async (): Promise<Seed> => {
       status: 'failed',
       startedAt: START,
       durationMs: 5000,
+      failedCount: 1,
+      flakyCount: 1,
     },
   })
 
@@ -218,6 +220,13 @@ describe.skipIf(!hasDb)('queries read paths', () => {
 
     expect(result.items).toHaveLength(1)
     expect(result.items[0]?.commitSha).toBe(COMMIT)
+    expect(result.items[0]?.counts).toEqual({
+      total: 2,
+      passed: 0,
+      failed: 1,
+      skipped: 0,
+      flaky: 1,
+    })
     expect(result.nextCursor).toBeNull()
   })
 

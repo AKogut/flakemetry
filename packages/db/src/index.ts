@@ -2,6 +2,7 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
 
 export * from './queue'
+export * from './run-counts'
 export * from './token'
 export * from '@prisma/client'
 

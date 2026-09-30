@@ -375,6 +375,10 @@ model Run {
   durationMs     Int?       @map("duration_ms")
   gitDiffStat    Json?      @map("git_diff_stat")
   otelTraceId    String?    @map("otel_trace_id")
+  passedCount    Int        @default(0) @map("passed_count")
+  failedCount    Int        @default(0) @map("failed_count")
+  skippedCount   Int        @default(0) @map("skipped_count")
+  flakyCount     Int        @default(0) @map("flaky_count")
 
   project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   executions TestExecution[]
