@@ -29,6 +29,41 @@ describe('resolveRunContext', () => {
     expect(context.shardTotal).toBe(4)
   })
 
+  it('reads the shard from FLAKEMETRY_SHARD_INDEX and FLAKEMETRY_SHARD_TOTAL', () => {
+    const env = { GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '9000001' }
+    const first = resolveRunContext({
+      ...env,
+      FLAKEMETRY_SHARD_INDEX: '1',
+      FLAKEMETRY_SHARD_TOTAL: '2',
+    })
+    const second = resolveRunContext({
+      ...env,
+      FLAKEMETRY_SHARD_INDEX: '2',
+      FLAKEMETRY_SHARD_TOTAL: '2',
+    })
+
+    expect(first.shardIndex).toBe(1)
+    expect(second.shardTotal).toBe(2)
+    expect(buildIdempotencyKey(first, env)).not.toBe(buildIdempotencyKey(second, env))
+  })
+
+  it("prefers the runner's own shard over the environment", () => {
+    const context = resolveRunContext(
+      { FLAKEMETRY_SHARD_INDEX: '1', FLAKEMETRY_SHARD_TOTAL: '4' },
+      { current: 3, total: 4 },
+    )
+    expect(context.shardIndex).toBe(3)
+  })
+
+  it.each([
+    ['only one of the pair', { FLAKEMETRY_SHARD_INDEX: '2' }],
+    ['an index past the total', { FLAKEMETRY_SHARD_INDEX: '5', FLAKEMETRY_SHARD_TOTAL: '4' }],
+    ['a zero index', { FLAKEMETRY_SHARD_INDEX: '0', FLAKEMETRY_SHARD_TOTAL: '4' }],
+    ['a total of one', { FLAKEMETRY_SHARD_INDEX: '1', FLAKEMETRY_SHARD_TOTAL: '1' }],
+  ])('treats %s as unsharded', (_label, env) => {
+    expect(resolveRunContext(env).shardIndex).toBeNull()
+  })
+
   it('ignores a single-shard run', () => {
     const context = resolveRunContext({ GITHUB_ACTIONS: 'true' }, { current: 1, total: 1 })
     expect(context.shardIndex).toBeNull()

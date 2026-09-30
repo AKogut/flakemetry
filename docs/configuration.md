@@ -89,7 +89,7 @@ them, and the dashboard reports the effective value and its source. A value outs
 Policy page accepts, such as `200k` or a threshold above 1, is ignored, and the next tier
 applies. It does not become a number the policy never allows.
 
-### Reporter transport (Playwright)
+### Reporter transport (Playwright, Vitest, Jest)
 
 | Variable | Effect |
 |---|---|
@@ -99,7 +99,7 @@ applies. It does not become a number the policy never allows.
 | `FLAKEMETRY_COMPRESSION` | `gzip` to compress OTLP export (the ingestion API decompresses gzip request bodies) |
 | `FLAKEMETRY_COMMIT_SHA` | Commit the run belongs to, when CI detection cannot find it — a run without one lands on `0000000`, and every run on that placeholder looks like the same commit to the scorer |
 | `FLAKEMETRY_BRANCH` | Branch the run belongs to, same case; the fallback is `local` |
-| `FLAKEMETRY_SHARD_INDEX` / `FLAKEMETRY_SHARD_TOTAL` | Shard position when the runner shards in a way detection does not recognise. Both are needed; a total of 1 is treated as unsharded |
+| `FLAKEMETRY_SHARD_INDEX` / `FLAKEMETRY_SHARD_TOTAL` | Shard position (1-based) when a suite is split in a way the reporter cannot see. Playwright, Vitest and Jest `--shard` are read automatically and take precedence. Both variables are needed; a total of 1 is treated as unsharded |
 | `FLAKEMETRY_CODEOWNERS_FILE` | Explicit path to a CODEOWNERS file to sync; otherwise the reporter looks for `CODEOWNERS`, `.github/CODEOWNERS`, or `docs/CODEOWNERS` walking up from the test root |
 | `FLAKEMETRY_IDEMPOTENCY_KEY` | Explicit idempotency key for the run; makes re-delivery safe. Defaults to the run span trace id. Sharded runs get a per-shard `-shard<index>` suffix automatically |
 

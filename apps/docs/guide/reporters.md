@@ -74,6 +74,25 @@ pytest --reruns 2
 Parameterized cases keep their values as structured params, so the server buckets the variants
 under one base test instead of treating each id as a separate test.
 
+## Sharded suites
+
+A suite split across parallel jobs sends one run per shard. Each run needs its own
+idempotency key, because every shard of one CI run shares that run's id, and a batch that
+reuses another batch's key is dropped as a re-delivery.
+
+The reporters work out the shard on their own:
+
+| Runner | Where the shard comes from |
+| --- | --- |
+| Playwright | `--shard=2/4` or `shard` in the config |
+| Vitest | `--shard=2/4` |
+| Jest | `--shard=2/4` |
+| GitLab CI, CircleCI | the platform's parallel job variables, for any runner |
+
+When a suite is split some other way, for example a hand-built matrix that passes each job
+its own file list, set `FLAKEMETRY_SHARD_INDEX` and `FLAKEMETRY_SHARD_TOTAL` (1-based) in
+each job. The runner's own shard wins over these, and they win over CI detection.
+
 ## What a reporter sends
 
 Each reporter maps its framework's results onto the shared OTel test conventions —

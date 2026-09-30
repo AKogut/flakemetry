@@ -3,6 +3,7 @@ import {
   deliverRun,
   type FlakemetryDeliveryOptions,
   resolveRunContext,
+  type ShardInfo,
   TestRunRecorder,
 } from '@flakemetry/sdk'
 
@@ -15,14 +16,17 @@ export default class FlakemetryVitestReporter {
   private readonly env: Record<string, string | undefined>
   private rootDir = process.cwd()
   private reported = false
+  private shard: ShardInfo | null = null
 
   constructor(options: FlakemetryVitestReporterOptions = {}) {
     this.options = options
     this.env = process.env
   }
 
-  onInit(context?: { config?: { root?: string } }): void {
+  onInit(context?: { config?: { root?: string; shard?: { index: number; count: number } } }): void {
     if (context?.config?.root) this.rootDir = context.config.root
+    const shard = context?.config?.shard
+    this.shard = shard ? { current: shard.index, total: shard.count } : null
     this.reported = false
   }
 
@@ -56,7 +60,7 @@ export default class FlakemetryVitestReporter {
     if (this.reported) return
     this.reported = true
     const startedAt = new Date()
-    const context = resolveRunContext(this.env)
+    const context = resolveRunContext(this.env, this.shard)
     const recorder = new TestRunRecorder(context)
     recorder.startRun(startedAt)
 

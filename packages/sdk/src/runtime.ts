@@ -136,12 +136,21 @@ export const detectCi = (env: Env): CiSignals | null => {
   return null
 }
 
+const shardFromEnv = (env: Env): ShardInfo | null => {
+  const current = asNumber(pick(env.FLAKEMETRY_SHARD_INDEX))
+  const total = asNumber(pick(env.FLAKEMETRY_SHARD_TOTAL))
+  return current != null && total != null ? { current, total } : null
+}
+
+const usableShard = (shard: ShardInfo | null | undefined): ShardInfo | null =>
+  shard && shard.total > 1 && shard.current >= 1 && shard.current <= shard.total ? shard : null
+
 export const resolveRunContext = (
   env: Record<string, string | undefined>,
   shard?: ShardInfo | null,
 ): RunContext => {
   const ci = detectCi(env)
-  const explicitShard = shard && shard.total > 1 ? shard : null
+  const explicitShard = usableShard(shard) ?? usableShard(shardFromEnv(env))
 
   return {
     project: pick(env.FLAKEMETRY_PROJECT) ?? 'local/project',

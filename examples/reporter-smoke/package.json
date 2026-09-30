@@ -9,7 +9,9 @@
     "verify": "node verify.mjs",
     "smoke:playwright": "playwright test",
     "smoke:vitest": "vitest run",
-    "smoke:jest": "jest"
+    "smoke:jest": "jest",
+    "smoke:jest-shards": "jest --config jest.shards.config.mjs",
+    "smoke:vitest-shards": "vitest run --config vitest.shards.config.ts"
   },
   "devDependencies": {
     "@flakemetry/db": "workspace:*",
