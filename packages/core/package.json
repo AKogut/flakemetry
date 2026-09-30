@@ -41,7 +41,7 @@
     "@flakemetry/tsup-config": "workspace:*",
     "@types/node": "^22.10.5",
     "fast-check": "^3.23.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@flakemetry/contracts": "workspace:*"

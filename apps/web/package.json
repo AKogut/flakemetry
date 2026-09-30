@@ -17,10 +17,10 @@
     "@flakemetry/eslint-config": "workspace:*",
     "@flakemetry/tsconfig": "workspace:*",
     "@types/node": "^22.10.5",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "typescript": "^5.7.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
@@ -29,10 +29,10 @@
     "@flakemetry/db": "workspace:*",
     "@flakemetry/notify": "workspace:*",
     "@flakemetry/queries": "workspace:*",
-    "next": "^16.3.1",
+    "@flakemetry/storage": "workspace:*",
+    "next": "^16.3.7",
     "next-auth": "5.0.0-beta.32",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "@flakemetry/storage": "workspace:*"
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   }
 }
