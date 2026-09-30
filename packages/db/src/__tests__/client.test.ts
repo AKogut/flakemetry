@@ -51,11 +51,15 @@ describe.skipIf(!hasDb)('a client built from DATABASE_URL', () => {
       `select count(*)::int as n from "${schema}".org where slug = $1`,
       slug,
     )
-    const [leaked] = await prisma.$queryRawUnsafe<{ n: number }[]>(
-      `select count(*)::int as n from public.org where slug = $1`,
-      slug,
-    )
+    const [publicOrg] = await prisma.$queryRaw<{ exists: boolean }[]>`
+      select to_regclass('public.org') is not null as exists`
+    const leaked = publicOrg?.exists
+      ? await prisma.$queryRawUnsafe<{ n: number }[]>(
+          `select count(*)::int as n from public.org where slug = $1`,
+          slug,
+        )
+      : [{ n: 0 }]
     expect(found?.n).toBe(1)
-    expect(leaked?.n).toBe(0)
+    expect(leaked[0]?.n).toBe(0)
   })
 })
