@@ -48,6 +48,6 @@
     "@flakemetry/sdk": "workspace:*"
   },
   "peerDependencies": {
-    "@playwright/test": "^1.62.1"
+    "@playwright/test": "^1.44.0"
   }
 }
