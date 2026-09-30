@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 
-import { PrismaClient } from '@flakemetry/db'
+import { createPrismaClient } from '@flakemetry/db'
 import { afterAll, describe, expect, it } from 'vitest'
 
 import { getIngestionHealth } from '../ingestion'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const seedProject = async () => {
   const slug = `ingest-${randomUUID().slice(0, 8)}`

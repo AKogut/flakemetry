@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 
-import { PrismaClient } from '@flakemetry/db'
+import { createPrismaClient } from '@flakemetry/db'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { computeIdentityScore, computeIdentityScores } from '../scoring'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 const NOW = new Date('2026-08-18T12:00:00Z')
 
 interface Seeded {

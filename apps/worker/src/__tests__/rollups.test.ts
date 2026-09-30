@@ -1,5 +1,5 @@
 import type { IngestRunBatch } from '@flakemetry/contracts'
-import { PrismaClient } from '@flakemetry/db'
+import { createPrismaClient } from '@flakemetry/db'
 import {
   getDailyTrend,
   getFlakyTrend,
@@ -13,7 +13,7 @@ import { processJob } from '../processor'
 import { pruneRawExecutions } from '../rollups'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const NOW = new Date('2026-07-16T12:00:00Z')
 

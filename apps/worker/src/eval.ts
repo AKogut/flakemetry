@@ -8,7 +8,7 @@ import {
   resolveProvider,
   runEval,
 } from '@flakemetry/ai'
-import { PrismaClient } from '@flakemetry/db'
+import { createPrismaClient } from '@flakemetry/db'
 import { buildEvalSetFromFeedback } from '@flakemetry/queries'
 
 export interface EvalArgs {
@@ -68,7 +68,7 @@ const main = async (): Promise<void> => {
     return
   }
 
-  const prisma = new PrismaClient()
+  const prisma = createPrismaClient()
   try {
     const cases = await buildEvalSetFromFeedback(prisma, projectId)
     if (cases.length === 0) {

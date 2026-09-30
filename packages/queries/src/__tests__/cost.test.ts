@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 
-import { PrismaClient } from '@flakemetry/db'
+import { createPrismaClient } from '@flakemetry/db'
 import { afterAll, describe, expect, it } from 'vitest'
 
 import { ciSpendOf, getFlakinessCost, peopleSpendOf } from '../cost'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const NOW = new Date('2026-08-05T12:00:00Z')
 const RATES = { ciMinuteCost: 0.01, developerHourCost: 120, investigationMinutes: 15 }

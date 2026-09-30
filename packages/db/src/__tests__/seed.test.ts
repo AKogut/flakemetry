@@ -2,11 +2,12 @@ import { execFileSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { PrismaClient } from '@prisma/client'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
+import { createPrismaClient } from '../index'
+
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 

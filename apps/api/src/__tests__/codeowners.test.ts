@@ -1,10 +1,10 @@
-import { generateToken, hashToken, PrismaClient } from '@flakemetry/db'
+import { createPrismaClient, generateToken, hashToken } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { buildApp } from '../app'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const seedToken = async () => {
   const org = await prisma.org.create({ data: { name: 'Acme', slug: `acme-${Date.now()}` } })

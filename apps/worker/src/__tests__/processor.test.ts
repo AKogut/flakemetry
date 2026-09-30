@@ -1,12 +1,12 @@
 import type { IngestRunBatch } from '@flakemetry/contracts'
-import { PrismaClient } from '@flakemetry/db'
+import { createPrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { createEventBus, type DomainEventMap } from '../events'
 import { processJob } from '../processor'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const NOW = new Date('2026-07-16T12:00:00Z')
 

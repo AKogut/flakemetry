@@ -1,4 +1,5 @@
-import { PrismaClient } from '@flakemetry/db'
+import type { PrismaClient } from '@flakemetry/db'
+import { createPrismaClient } from '@flakemetry/db'
 import { applyHistoricalRestitch, planHistoricalRestitch } from '@flakemetry/queries'
 
 export interface RestitchArgs {
@@ -115,7 +116,7 @@ export const main = async (argv: readonly string[]): Promise<number> => {
     return 1
   }
 
-  const prisma = new PrismaClient()
+  const prisma = createPrismaClient()
   try {
     return await runRestitch(prisma, parsed.args)
   } finally {

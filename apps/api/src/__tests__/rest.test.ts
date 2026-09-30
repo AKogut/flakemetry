@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { REST_ENDPOINTS } from '@flakemetry/contracts'
-import { generateToken, hashToken, PrismaClient } from '@flakemetry/db'
+import { createPrismaClient, generateToken, hashToken } from '@flakemetry/db'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
@@ -9,7 +9,7 @@ import { buildApp } from '../app'
 import { openApiDocument, READ_ROUTES } from '../rest'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 
 const seed = async (scopes: string[]) => {
   const slug = `rest-${randomUUID().slice(0, 8)}`

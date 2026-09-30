@@ -1,11 +1,11 @@
-import { PrismaClient } from '@flakemetry/db'
+import { createPrismaClient } from '@flakemetry/db'
 import { createMemoryObjectStore } from '@flakemetry/storage'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { parseRetentionGlobals, resolveRetentionPlan, runRetentionSweep } from '../retention'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 const NOW = new Date('2026-07-30T12:00:00Z')
 const daysAgo = (days: number): Date => new Date(NOW.getTime() - days * 24 * 60 * 60 * 1000)
 
