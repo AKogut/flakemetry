@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import type { LlmProvider } from '@flakemetry/ai'
-import type { HealthEventKind, IngestRunBatch } from '@flakemetry/contracts'
+import type { FlakemetryPlugin, HealthEventKind, IngestRunBatch } from '@flakemetry/contracts'
 import {
   collectPresentTitleKeys,
   computeFingerprint,
@@ -10,9 +10,11 @@ import {
   resolveIdentity,
 } from '@flakemetry/core'
 import type { Prisma, PrismaClient } from '@flakemetry/db'
+import { DEFAULT_PLUGIN_TIMEOUT_MS } from '@flakemetry/plugin-host'
 import { computeIdentityScores, type ScoredIdentity } from '@flakemetry/queries'
 
 import type { EventBus } from './events'
+import { runAnalyzers } from './plugins'
 import { type FailureRecord, processFailures } from './rca'
 import { detectSuiteDurationRegressions, detectSuiteRegressions } from './regressions'
 import { updateRollups } from './rollups'
@@ -29,6 +31,8 @@ export interface ProcessContext {
   quarantineEnabled?: boolean
   quarantineCooldownRuns?: number
   events?: EventBus
+  plugins?: readonly FlakemetryPlugin[]
+  pluginTimeoutMs?: number
 }
 
 export interface ProcessResult {
@@ -416,6 +420,15 @@ export const processJob = async (
     },
     failures,
   )
+
+  if (ctx.plugins && ctx.plugins.length > 0) {
+    await runAnalyzers(
+      prisma,
+      ctx.plugins,
+      { orgId: ctx.orgId, projectId: ctx.projectId, runId },
+      { timeoutMs: ctx.pluginTimeoutMs ?? DEFAULT_PLUGIN_TIMEOUT_MS },
+    )
+  }
 
   ctx.events?.emit('run.processed', {
     runId,

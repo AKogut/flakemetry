@@ -31,6 +31,7 @@
     "@flakemetry/core": "workspace:*",
     "@flakemetry/db": "workspace:*",
     "@flakemetry/notify": "workspace:*",
+    "@flakemetry/plugin-host": "workspace:*",
     "@flakemetry/queries": "workspace:*",
     "@flakemetry/storage": "workspace:*",
     "@opentelemetry/api": "^1.9.0",
