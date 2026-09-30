@@ -35,7 +35,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown --config-loader native",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",

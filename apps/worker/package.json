@@ -5,7 +5,7 @@
   "description": "Processing workers: identity, scoring, clustering, RCA",
   "type": "module",
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown --config-loader native",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "clean": "rm -rf dist .turbo",
