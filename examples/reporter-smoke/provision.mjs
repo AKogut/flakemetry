@@ -2,7 +2,7 @@ import { appendFileSync } from 'node:fs'
 
 import { generateToken, getPrismaClient, hashToken } from '@flakemetry/db'
 
-export const RUNNERS = ['playwright', 'vitest', 'vitest5', 'jest']
+export const RUNNERS = ['playwright', 'vitest', 'vitest5', 'jest', 'jestshards', 'vitestshards']
 
 const prisma = getPrismaClient()
 

@@ -1,6 +1,7 @@
 import { getPrismaClient } from '@flakemetry/db'
 
-const RUNNERS = ['playwright', 'vitest', 'vitest5', 'jest']
+const RUNNERS = ['playwright', 'vitest', 'vitest5', 'jest', 'jestshards', 'vitestshards']
+const EXPECTED_RUNS = { jestshards: 2, vitestshards: 2 }
 const EXPECTED_EXECUTIONS = 3
 const TIMEOUT_MS = 120_000
 const POLL_MS = 2_000
@@ -29,9 +30,13 @@ for (const runner of RUNNERS) {
 
   // The worker processes asynchronously, so absence has to be waited out before it
   // counts as absence.
+  const expectedRuns = EXPECTED_RUNS[runner] ?? 1
   const deadline = Date.now() + TIMEOUT_MS
   let state = await inspect(projectId)
-  while (state.executions.length < EXPECTED_EXECUTIONS && Date.now() < deadline) {
+  while (
+    (state.executions.length < EXPECTED_EXECUTIONS || state.runs < expectedRuns) &&
+    Date.now() < deadline
+  ) {
     await sleep(POLL_MS)
     state = await inspect(projectId)
   }
@@ -41,6 +46,13 @@ for (const runner of RUNNERS) {
       `${runner}: no run arrived. The suite ran and passed its own assertions, so the reporter ` +
         `was either never invoked or never delivered — this is the failure mode that shipped ` +
         `broken once already.`,
+    )
+    continue
+  }
+  if (state.runs !== expectedRuns) {
+    failures.push(
+      `${runner}: expected ${expectedRuns} run(s), stored ${state.runs}. Each shard is its own ` +
+        `run; a missing one was dropped as a re-delivery of another.`,
     )
     continue
   }
