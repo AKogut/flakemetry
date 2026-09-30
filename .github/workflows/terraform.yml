@@ -1,0 +1,48 @@
+name: terraform
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/terraform/**'
+      - 'deploy/helm/flakemetry/values.yaml'
+      - '.github/workflows/terraform.yml'
+  pull_request:
+    paths:
+      - 'deploy/terraform/**'
+      - 'deploy/helm/flakemetry/values.yaml'
+      - '.github/workflows/terraform.yml'
+
+jobs:
+  module:
+    name: terraform module
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      - name: Formatted
+        run: terraform fmt -check -recursive deploy/terraform
+
+      - name: The module is valid
+        run: |
+          terraform -chdir=deploy/terraform/aws init -backend=false -input=false
+          terraform -chdir=deploy/terraform/aws validate
+
+      - name: The module's tests pass against mocked providers
+        run: terraform -chdir=deploy/terraform/aws test
+
+      - name: The example is valid
+        run: |
+          terraform -chdir=deploy/terraform/aws/examples/eks init -backend=false -input=false
+          terraform -chdir=deploy/terraform/aws/examples/eks validate
+
+      - name: No misconfiguration beyond the documented exceptions
+        run: >
+          docker run --rm -v "$PWD/deploy/terraform:/src:ro" aquasec/trivy:0.73.0
+          config --exit-code 1 --severity MEDIUM,HIGH,CRITICAL
+          --ignorefile /src/.trivyignore.yaml /src

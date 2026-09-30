@@ -50,7 +50,8 @@
       "js-yaml@>=4.0.0 <4.3.2": "^4.3.2",
       "@prisma/config>deepmerge-ts": "^8.0.0",
       "mysql2@<3.22.0": "^3.22.0",
-      "baseline-browser-mapping@<2.11.0": "^2.11.0"
+      "baseline-browser-mapping@<2.11.0": "^2.11.0",
+      "vitepress>vite": "^6.4.3"
     }
   }
 }

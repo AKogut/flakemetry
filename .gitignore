@@ -38,3 +38,10 @@ __pycache__/
 # Local backup dumps — never commit a database
 backups/
 *.dump
+.vitepress/cache/
+
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+terraform-values.yaml

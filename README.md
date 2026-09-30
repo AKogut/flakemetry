@@ -69,7 +69,7 @@ If every test execution is modelled as an **OpenTelemetry span**, then historica
    Workers ── normalize ▶ test identity ▶ flaky scoring ▶ signature clustering ▶ AI RCA
               │
               ▼
-   PostgreSQL (relational + JSONB + pgvector) · Object store (S3/MinIO)
+   PostgreSQL (relational + JSONB) · Object store (S3/MinIO)
               │
               ▼
    Query API (tRPC/REST) ─▶ Next.js dashboard  (runs · test history · flaky board · RCA)

@@ -7,6 +7,10 @@ import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk
 
 const SCOPE = 'flakemetry-worker'
 
+export const PROCESSING_BUCKETS_MS = [
+  100, 250, 500, 1_000, 2_500, 5_000, 10_000, 30_000, 60_000, 120_000, 300_000, 600_000, 1_800_000,
+]
+
 const instruments = (meter: Meter) => ({
   jobsProcessed: meter.createCounter('flakemetry.worker.jobs_processed', {
     description: 'ingestion jobs processed successfully',
@@ -20,10 +24,17 @@ const instruments = (meter: Meter) => ({
   processingLag: meter.createHistogram('flakemetry.worker.processing_lag', {
     description: 'time between a job being enqueued and picked up',
     unit: 'ms',
+    advice: { explicitBucketBoundaries: PROCESSING_BUCKETS_MS },
   }),
   processingDuration: meter.createHistogram('flakemetry.worker.processing_duration', {
     description: 'time spent processing a job',
     unit: 'ms',
+    advice: { explicitBucketBoundaries: PROCESSING_BUCKETS_MS },
+  }),
+  timeToProcessed: meter.createHistogram('flakemetry.worker.time_to_processed', {
+    description: 'time between a run being accepted and its processing completing',
+    unit: 'ms',
+    advice: { explicitBucketBoundaries: PROCESSING_BUCKETS_MS },
   }),
   rcaGenerated: meter.createCounter('flakemetry.worker.rca_generated', {
     description: 'root-cause analyses produced by the LLM',
@@ -55,6 +66,11 @@ export const observeQueueDepth = (getDepth: () => Promise<number>): void => {
     })
 }
 
+export const exportInterval = (env: NodeJS.ProcessEnv): number => {
+  const value = Number(env.OTEL_METRIC_EXPORT_INTERVAL)
+  return Number.isInteger(value) && value > 0 ? value : 30_000
+}
+
 export interface SelfTelemetryOptions {
   endpoint: string
   headers?: Record<string, string>
@@ -75,7 +91,7 @@ export const initSelfTelemetry = (options: SelfTelemetryOptions): (() => Promise
     readers: [
       new PeriodicExportingMetricReader({
         exporter,
-        exportIntervalMillis: options.exportIntervalMs ?? 30_000,
+        exportIntervalMillis: options.exportIntervalMs ?? exportInterval(process.env),
       }),
     ],
   })

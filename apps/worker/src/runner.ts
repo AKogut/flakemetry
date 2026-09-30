@@ -67,6 +67,7 @@ export const createWorker = (
         })
         await queue.complete(job.id)
         workerMetrics.jobsProcessed.add(1)
+        workerMetrics.timeToProcessed.record(Math.max(0, Date.now() - job.createdAt.getTime()))
       } catch (error) {
         const outcome = await queue.fail(
           job.id,

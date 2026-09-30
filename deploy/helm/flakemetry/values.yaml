@@ -32,6 +32,10 @@ securityContext:
 database:
   # postgresql://user:password@host:5432/flakemetry?schema=public
   url: ''
+  # PEM bundle of the CA that signs the database's certificate, for a provider
+  # whose CA Node does not trust by default, such as Amazon RDS. With it,
+  # sslmode=verify-full in the URL verifies the server instead of failing.
+  caBundle: ''
 storage:
   bucket: flakemetry-artifacts
   endpoint: ''
@@ -56,6 +60,10 @@ ai:
   apiKey: ''
   endpoint: ''
   dailyTokenBudget: ''
+
+selfTelemetry:
+  otlpEndpoint: ''
+  exportIntervalMs: 30000
 
 # Supply all sensitive values through a pre-existing Secret instead of the
 # values above. When set, the chart references this Secret and creates none.

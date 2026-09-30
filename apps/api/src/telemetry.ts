@@ -7,6 +7,10 @@ import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk
 
 const SCOPE = 'flakemetry-api'
 
+export const REQUEST_DURATION_BUCKETS_MS = [
+  5, 10, 25, 50, 100, 200, 300, 500, 1_000, 2_500, 5_000, 10_000,
+]
+
 const instruments = (meter: Meter) => ({
   runsAccepted: meter.createCounter('flakemetry.ingest.runs_accepted', {
     description: 'accepted ingest runs',
@@ -23,6 +27,7 @@ const instruments = (meter: Meter) => ({
   requestDuration: meter.createHistogram('flakemetry.http.server.duration', {
     description: 'request duration in milliseconds',
     unit: 'ms',
+    advice: { explicitBucketBoundaries: REQUEST_DURATION_BUCKETS_MS },
   }),
 })
 
@@ -35,6 +40,11 @@ export const observeQueueDepth = (getDepth: () => Promise<number>): void => {
     .addCallback(async (result) => {
       result.observe(await getDepth())
     })
+}
+
+export const exportInterval = (env: NodeJS.ProcessEnv): number => {
+  const value = Number(env.OTEL_METRIC_EXPORT_INTERVAL)
+  return Number.isInteger(value) && value > 0 ? value : 30_000
 }
 
 export interface SelfTelemetryOptions {
@@ -57,7 +67,7 @@ export const initSelfTelemetry = (options: SelfTelemetryOptions): (() => Promise
     readers: [
       new PeriodicExportingMetricReader({
         exporter,
-        exportIntervalMillis: options.exportIntervalMs ?? 30_000,
+        exportIntervalMillis: options.exportIntervalMs ?? exportInterval(process.env),
       }),
     ],
   })

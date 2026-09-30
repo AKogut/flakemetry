@@ -82,3 +82,29 @@ app.kubernetes.io/instance: {{ .Release.Name }}
       name: {{ include "flakemetry.secretName" . }}
       key: s3-secret-access-key
 {{- end -}}
+
+{{- define "flakemetry.selfTelemetryEnv" -}}
+- name: FLAKEMETRY_SELF_OTEL_ENDPOINT
+  value: {{ .Values.selfTelemetry.otlpEndpoint | quote }}
+- name: OTEL_METRIC_EXPORT_INTERVAL
+  value: {{ .Values.selfTelemetry.exportIntervalMs | quote }}
+{{- end -}}
+
+{{- define "flakemetry.databaseCaEnv" -}}
+- name: NODE_EXTRA_CA_CERTS
+  value: /etc/flakemetry/database-ca/ca.pem
+{{- end -}}
+
+{{- define "flakemetry.databaseCaMount" -}}
+volumeMounts:
+  - name: database-ca
+    mountPath: /etc/flakemetry/database-ca
+    readOnly: true
+{{- end -}}
+
+{{- define "flakemetry.databaseCaVolume" -}}
+volumes:
+  - name: database-ca
+    configMap:
+      name: {{ include "flakemetry.fullname" . }}-database-ca
+{{- end -}}
