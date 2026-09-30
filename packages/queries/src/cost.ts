@@ -77,6 +77,19 @@ const since = (days: number, now: Date): Date => {
   return start
 }
 
+const dayString = (date: Date): string => date.toISOString().slice(0, 10)
+
+interface CandidateRow {
+  test_identity_id: string
+  title: string
+  suite: string
+  file_path: string
+  quarantined: boolean
+  rerun_count: bigint
+  rerun_ms: bigint
+  flaky: bigint
+}
+
 export const getFlakinessCost = async (
   prisma: PrismaClient,
   projectId: string,
@@ -84,19 +97,48 @@ export const getFlakinessCost = async (
   rates: CostRates,
   now: Date = new Date(),
 ): Promise<FlakinessCost> => {
-  const from = since(days, now)
+  const from = dayString(since(days, now))
 
-  const rows = await prisma.dailyTestStats.findMany({
-    where: { projectId, day: { gte: from } },
-    select: {
-      day: true,
-      testIdentityId: true,
-      rerunCount: true,
-      rerunMs: true,
-      flaky: true,
-      identity: { select: { title: true, suite: true, filePath: true, quarantined: true } },
-    },
-  })
+  const [dayRows, candidates, avoidedRows] = await Promise.all([
+    prisma.$queryRaw<{ day: Date; rerun_count: bigint; rerun_ms: bigint; flaky: bigint }[]>`
+      SELECT day,
+             sum(rerun_count)::bigint AS rerun_count,
+             sum(rerun_ms)::bigint AS rerun_ms,
+             sum(flaky)::bigint AS flaky
+      FROM daily_test_stats
+      WHERE project_id = ${projectId}::uuid AND day >= ${from}::date
+      GROUP BY day
+      ORDER BY day
+    `,
+    prisma.$queryRaw<CandidateRow[]>`
+      WITH per_test AS (
+        SELECT test_identity_id,
+               sum(rerun_count)::bigint AS rerun_count,
+               sum(rerun_ms)::bigint AS rerun_ms,
+               sum(flaky)::bigint AS flaky
+        FROM daily_test_stats
+        WHERE project_id = ${projectId}::uuid
+          AND day >= ${from}::date
+          AND (rerun_count > 0 OR rerun_ms > 0 OR flaky > 0)
+        GROUP BY test_identity_id
+        HAVING sum(rerun_count) > 0 OR sum(flaky) > 0
+      )
+      SELECT per_test.test_identity_id, identity.title, identity.suite, identity.file_path,
+             identity.quarantined, per_test.rerun_count, per_test.rerun_ms, per_test.flaky
+      FROM per_test
+      JOIN test_identity identity ON identity.id = per_test.test_identity_id
+    `,
+    prisma.$queryRaw<{ quarantined_tests: bigint; flaky: bigint | null }[]>`
+      SELECT count(DISTINCT stats.test_identity_id) AS quarantined_tests,
+             sum(stats.flaky)::bigint AS flaky
+      FROM test_identity identity
+      JOIN daily_test_stats stats
+        ON stats.test_identity_id = identity.id AND stats.day >= ${from}::date
+      WHERE identity.project_id = ${projectId}::uuid
+        AND stats.project_id = ${projectId}::uuid
+        AND identity.quarantined
+    `,
+  ])
 
   const totals: CostTotals = {
     rerunCount: 0,
@@ -106,72 +148,63 @@ export const getFlakinessCost = async (
     peopleSpend: 0,
     totalSpend: 0,
   }
-  const byTest = new Map<string, CostOffender>()
-  const byDay = new Map<number, CostDay>()
-  const avoided = { quarantinedTests: new Set<string>(), flakyOccurrences: 0, peopleSpend: 0 }
-
-  for (const row of rows) {
-    totals.rerunCount += row.rerunCount
-    totals.rerunMs += row.rerunMs
-    totals.flakyOccurrences += row.flaky
-
-    const test = byTest.get(row.testIdentityId) ?? {
-      testIdentityId: row.testIdentityId,
-      title: row.identity.title,
-      suite: row.identity.suite,
-      filePath: row.identity.filePath,
-      quarantined: row.identity.quarantined,
-      rerunCount: 0,
-      rerunMs: 0,
-      flakyOccurrences: 0,
-      spend: 0,
-    }
-    test.rerunCount += row.rerunCount
-    test.rerunMs += row.rerunMs
-    test.flakyOccurrences += row.flaky
-    byTest.set(row.testIdentityId, test)
-
-    const key = row.day.getTime()
-    const day = byDay.get(key) ?? { day: row.day, rerunMs: 0, flakyOccurrences: 0, spend: 0 }
-    day.rerunMs += row.rerunMs
-    day.flakyOccurrences += row.flaky
-    byDay.set(key, day)
-
-    // A quarantined test still runs, so its CI minutes are not saved. What quarantine
-    // removes is the interruption: it no longer fails anybody's build. Claiming the CI
-    // time back as well would be the kind of number that falls apart when questioned.
-    if (row.identity.quarantined) {
-      avoided.quarantinedTests.add(row.testIdentityId)
-      avoided.flakyOccurrences += row.flaky
-    }
+  for (const row of dayRows) {
+    totals.rerunCount += Number(row.rerun_count)
+    totals.rerunMs += Number(row.rerun_ms)
+    totals.flakyOccurrences += Number(row.flaky)
   }
-
   totals.ciSpend = round(ciSpendOf(totals.rerunMs, rates))
   totals.peopleSpend = round(peopleSpendOf(totals.flakyOccurrences, rates))
   totals.totalSpend = round(totals.ciSpend + totals.peopleSpend)
 
-  for (const test of byTest.values()) {
-    test.spend = round(ciSpendOf(test.rerunMs, rates) + peopleSpendOf(test.flakyOccurrences, rates))
-  }
-  for (const day of byDay.values()) {
-    day.spend = round(ciSpendOf(day.rerunMs, rates) + peopleSpendOf(day.flakyOccurrences, rates))
-  }
-
-  const offenders = [...byTest.values()]
-    .filter((test) => test.rerunCount > 0 || test.flakyOccurrences > 0)
-    .sort((left, right) => right.spend - left.spend || right.rerunMs - left.rerunMs)
+  const offenders = candidates
+    .map((row): CostOffender => {
+      const rerunMs = Number(row.rerun_ms)
+      const flakyOccurrences = Number(row.flaky)
+      return {
+        testIdentityId: row.test_identity_id,
+        title: row.title,
+        suite: row.suite,
+        filePath: row.file_path,
+        quarantined: row.quarantined,
+        rerunCount: Number(row.rerun_count),
+        rerunMs,
+        flakyOccurrences,
+        spend: round(ciSpendOf(rerunMs, rates) + peopleSpendOf(flakyOccurrences, rates)),
+      }
+    })
+    .sort(
+      (left, right) =>
+        right.spend - left.spend ||
+        right.rerunMs - left.rerunMs ||
+        (left.testIdentityId < right.testIdentityId ? -1 : 1),
+    )
     .slice(0, OFFENDER_LIMIT)
+
+  // A quarantined test still runs, so its CI minutes are not saved. What quarantine
+  // removes is the interruption: it no longer fails anybody's build. Claiming the CI
+  // time back as well would be the kind of number that falls apart when questioned.
+  const avoidedFlaky = Number(avoidedRows[0]?.flaky ?? 0)
 
   return {
     days,
     rates,
     totals,
     offenders,
-    trend: [...byDay.values()].sort((left, right) => left.day.getTime() - right.day.getTime()),
+    trend: dayRows.map((row) => {
+      const rerunMs = Number(row.rerun_ms)
+      const flakyOccurrences = Number(row.flaky)
+      return {
+        day: row.day,
+        rerunMs,
+        flakyOccurrences,
+        spend: round(ciSpendOf(rerunMs, rates) + peopleSpendOf(flakyOccurrences, rates)),
+      }
+    }),
     avoided: {
-      quarantinedTests: avoided.quarantinedTests.size,
-      flakyOccurrences: avoided.flakyOccurrences,
-      peopleSpend: round(peopleSpendOf(avoided.flakyOccurrences, rates)),
+      quarantinedTests: Number(avoidedRows[0]?.quarantined_tests ?? 0),
+      flakyOccurrences: avoidedFlaky,
+      peopleSpend: round(peopleSpendOf(avoidedFlaky, rates)),
     },
   }
 }
