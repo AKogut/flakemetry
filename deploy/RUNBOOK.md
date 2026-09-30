@@ -22,9 +22,9 @@ broker to run.
 
 | SLO                          | Target                        | Measured by                                   |
 | ---------------------------- | ----------------------------- | --------------------------------------------- |
-| Ingestion availability       | 99.9% of `POST /v1/ingest`    | non-5xx responses / total                     |
-| Ingestion latency            | p99 `< 300ms` (enqueue only)  | api request duration                          |
-| Processing lag               | p95 run processed `< 60s`     | worker dequeue-to-complete                    |
+| Ingestion availability       | 99.9% of ingest requests      | non-5xx / total `flakemetry.http.server.duration` on `/v1/ingest*` and `/v1/traces` |
+| Ingestion latency            | p99 `< 300ms` (enqueue only)  | share of those requests in the `le="300"` bucket |
+| Processing lag               | p95 run processed `< 60s`     | `flakemetry.worker.time_to_processed`, accepted to processed |
 | Dashboard availability       | 99.5%                         | non-5xx on web health + key queries           |
 | Data durability              | no acknowledged run lost      | queue depth vs. processed count reconciliation |
 
@@ -195,6 +195,17 @@ misconfiguration.
 
 ## Platform observability
 
-Flakemetry is OpenTelemetry-native and should dogfood its own telemetry: api and worker
-export traces/metrics so ingestion latency, queue lag, and processing throughput are
-first-class dashboards. Reference OTel dashboards and alert rules are a tracked follow-up.
+The api and worker export their own metrics over OTLP when `FLAKEMETRY_SELF_OTEL_ENDPOINT`
+is set (`selfTelemetry.otlpEndpoint` in the Helm chart). [`deploy/observability`](observability)
+holds what reads them: a collector configuration, Prometheus recording and alert rules for
+the SLOs above with unit tests, and a Grafana dashboard.
+
+| Alert | Severity | Fires when |
+| --- | --- | --- |
+| `FlakemetryIngestErrorBudgetBurn` | page | over 3.6% of ingest requests fail for an hour and the last 5 minutes, which spends 5% of the month's budget in an hour |
+| `FlakemetryIngestLatency` | ticket | under 99% of ingest requests answer within 300 ms for 10 minutes |
+| `FlakemetryProcessingLag` | ticket | p95 accepted-to-processed is over 60 s for 10 minutes |
+| `FlakemetryQueueNotDraining` | page | the queue grew throughout the last 30 minutes |
+| `FlakemetryWorkersStalled` | page | runs are queued and no worker completed one for 15 minutes |
+| `FlakemetryRunsDeadLettered` | ticket | an accepted run was given up on after its retries |
+| `FlakemetryTelemetryMissing` | ticket | the api or worker stopped exporting, so the other alerts are blind |

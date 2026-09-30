@@ -57,6 +57,10 @@ ai:
   endpoint: ''
   dailyTokenBudget: ''
 
+selfTelemetry:
+  otlpEndpoint: ''
+  exportIntervalMs: 30000
+
 # Supply all sensitive values through a pre-existing Secret instead of the
 # values above. When set, the chart references this Secret and creates none.
 existingSecret: ''

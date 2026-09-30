@@ -43,6 +43,9 @@ spec:
             - name: PORT
               value: {{ .Values.api.port | quote }}
             {{- include "flakemetry.commonEnv" . | nindent 12 }}
+            {{- if .Values.selfTelemetry.otlpEndpoint }}
+            {{- include "flakemetry.selfTelemetryEnv" . | nindent 12 }}
+            {{- end }}
             {{- with .Values.api.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

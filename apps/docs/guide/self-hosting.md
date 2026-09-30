@@ -81,3 +81,22 @@ and ingress — running against a managed Postgres and object store. The
 path from zero to a running environment, and the
 [runbook](https://github.com/AKogut/flakemetry/blob/main/deploy/RUNBOOK.md) covers SLOs,
 scaling, and upgrades.
+
+### Watching Flakemetry itself
+
+The api and worker report their own health as OpenTelemetry metrics: ingest latency and
+errors, how long runs wait and take to process, queue depth, and worker failures. Locally:
+
+```bash
+FLAKEMETRY_SELF_OTEL_ENDPOINT=http://otel-collector:4318 \
+  docker compose --profile observability up -d
+```
+
+adds an OpenTelemetry Collector, Prometheus with the SLO alert rules, and Grafana on
+`http://localhost:3001` with the **Flakemetry platform** dashboard. Grafana's own default
+sign-in, `admin`/`admin`, asks for a new password the first time.
+
+In production, point `FLAKEMETRY_SELF_OTEL_ENDPOINT` (the chart's
+`selfTelemetry.otlpEndpoint`) at your collector, and load the rules and the dashboard from
+[`deploy/observability`](https://github.com/AKogut/flakemetry/tree/main/deploy/observability)
+into your own Prometheus and Grafana.

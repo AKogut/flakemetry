@@ -4,12 +4,14 @@ import type { AddressInfo } from 'node:net'
 import { metrics } from '@opentelemetry/api'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { apiMetrics, initSelfTelemetry, observeQueueDepth } from '../telemetry'
+import { apiMetrics, exportInterval, initSelfTelemetry, observeQueueDepth } from '../telemetry'
 
 interface OtlpExport {
   resourceMetrics: {
     resource: { attributes: { key: string; value: { stringValue?: string } }[] }
-    scopeMetrics: { metrics: { name: string }[] }[]
+    scopeMetrics: {
+      metrics: { name: string; histogram?: { dataPoints: { explicitBounds: number[] }[] } }[]
+    }[]
   }[]
 }
 
@@ -63,9 +65,27 @@ describe('self-telemetry', () => {
       ]),
     )
 
+    const exported = sink.received.flatMap((payload) =>
+      payload.resourceMetrics.flatMap((resource) =>
+        resource.scopeMetrics.flatMap((scope) => scope.metrics),
+      ),
+    )
+    const bounds = exported.find((metric) => metric.name === 'flakemetry.http.server.duration')
+      ?.histogram?.dataPoints[0]?.explicitBounds
+    expect(bounds).toContain(300)
+
     const attributes = sink.received[0]?.resourceMetrics[0]?.resource.attributes ?? []
     const attribute = (key: string) => attributes.find((entry) => entry.key === key)?.value
     expect(attribute('service.name')?.stringValue).toBe('flakemetry-api')
     expect(attribute('service.instance.id')?.stringValue).toMatch(/.+/)
+  })
+})
+
+describe('exportInterval', () => {
+  it('reads the standard OTEL_METRIC_EXPORT_INTERVAL and falls back to 30 seconds', () => {
+    expect(exportInterval({ OTEL_METRIC_EXPORT_INTERVAL: '5000' })).toBe(5_000)
+    expect(exportInterval({})).toBe(30_000)
+    expect(exportInterval({ OTEL_METRIC_EXPORT_INTERVAL: 'soon' })).toBe(30_000)
+    expect(exportInterval({ OTEL_METRIC_EXPORT_INTERVAL: '-1' })).toBe(30_000)
   })
 })
