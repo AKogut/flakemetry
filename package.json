@@ -32,9 +32,9 @@
     "@changesets/cli": "^3.0.3",
     "eslint": "^10.10.0",
     "prettier": "^3.9.8",
-    "publint": "^0.3.24",
+    "publint": "^0.3.25",
     "tsdown": "0.23.0",
-    "turbo": "^2.11.0",
+    "turbo": "^2.11.7",
     "typescript": "^6.0.3"
   },
   "pnpm": {
