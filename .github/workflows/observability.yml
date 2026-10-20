@@ -31,7 +31,7 @@ jobs:
     name: alert rules pass their tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Prometheus accepts the configuration and the rules
         run: >
@@ -72,7 +72,7 @@ jobs:
       AUTH_SECRET: compose-interpolates-every-service-even-unstarted-ones
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v6
 
