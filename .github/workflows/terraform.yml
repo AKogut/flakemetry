@@ -22,7 +22,7 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: 1.16.4
+          terraform_version: 1.16.6
           terraform_wrapper: false
 
       - name: Formatted
@@ -43,6 +43,6 @@ jobs:
 
       - name: No misconfiguration beyond the documented exceptions
         run: >
-          docker run --rm -v "$PWD/deploy/terraform:/src:ro" aquasec/trivy:0.73.0
+          docker run --rm -v "$PWD/deploy/terraform:/src:ro" aquasec/trivy:0.76.0
           config --exit-code 1 --severity MEDIUM,HIGH,CRITICAL
           --ignorefile /src/.trivyignore.yaml /src

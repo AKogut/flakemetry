@@ -17,14 +17,18 @@ on:
 
 jobs:
   chart:
-    name: lint + template
+    name: lint + template (helm ${{ matrix.helm }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        helm: [v3.22.1, v4.3.1]
     steps:
       - uses: actions/checkout@v5
 
       - uses: azure/setup-helm@v5
         with:
-          version: v3.16.3
+          version: ${{ matrix.helm }}
 
       - name: helm lint
         run: |
@@ -68,9 +72,9 @@ jobs:
 
       - uses: azure/setup-helm@v5
         with:
-          version: v3.16.3
+          version: v4.3.1
 
-      - uses: helm/kind-action@v1.15.0
+      - uses: helm/kind-action@v1.15.1
         with:
           cluster_name: flakemetry
 
