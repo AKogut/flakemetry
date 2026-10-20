@@ -41,7 +41,7 @@
     "@flakemetry/eslint-config": "workspace:*",
     "@flakemetry/tsconfig": "workspace:*",
     "@types/node": "^22.10.5",
-    "prisma": "^7.10.0",
+    "prisma": "^7.10.1",
     "tsx": "^4.23.13",
     "vitest": "^4.1.11"
   }
