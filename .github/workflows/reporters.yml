@@ -41,7 +41,7 @@ jobs:
       FLAKEMETRY_ENDPOINT: http://localhost:4000
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v6
 
