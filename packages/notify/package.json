@@ -33,7 +33,7 @@
     "@flakemetry/eslint-config": "workspace:*",
     "@flakemetry/tsconfig": "workspace:*",
     "@types/node": "^22.10.5",
-    "@types/nodemailer": "^8.0.1",
+    "@types/nodemailer": "^8.0.2",
     "vitest": "^4.1.11"
   },
   "private": true
