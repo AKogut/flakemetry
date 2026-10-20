@@ -1,6 +1,6 @@
 {
   "name": "@flakemetry/vitest-reporter",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Vitest reporter emitting OpenTelemetry test spans to Flakemetry",
   "license": "MIT",
   "engines": {

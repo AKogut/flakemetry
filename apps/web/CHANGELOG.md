@@ -1,5 +1,15 @@
 # @flakemetry/web
 
+## 0.0.5
+
+### Patch Changes
+
+- Updated dependencies [4667bbd]
+  - @flakemetry/contracts@0.4.0
+  - @flakemetry/core@0.2.0
+  - @flakemetry/queries@0.0.5
+  - @flakemetry/storage@0.0.5
+
 ## 0.0.4
 
 ### Patch Changes

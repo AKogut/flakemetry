@@ -1,5 +1,11 @@
 # @flakemetry/contracts
 
+## 0.4.0
+
+### Minor Changes
+
+- 4667bbd: Node 22.12 or later is now required, and each package declares it in `engines`. Node 20 reached end-of-life in April 2026; the reporters are tested on Node 22.12 exactly.
+
 ## 0.3.0
 
 ### Minor Changes
