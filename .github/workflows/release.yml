@@ -26,8 +26,14 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
+
+      - name: npm can publish through trusted publishing
+        run: >
+          node -e "if (process.argv[1].localeCompare('11.5.1', undefined, { numeric: true }) < 0)
+          { console.error('npm ' + process.argv[1] + ' predates trusted publishing, which needs 11.5.1'); process.exit(1) }"
+          "$(npm --version)"
 
       - run: pnpm install --frozen-lockfile
 
