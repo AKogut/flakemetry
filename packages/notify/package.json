@@ -26,7 +26,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "nodemailer": "^10.0.13"
+    "nodemailer": "^10.1.2"
   },
   "devDependencies": {
     "@flakemetry/build-config": "workspace:*",
