@@ -3,6 +3,9 @@
   "version": "0.3.0",
   "description": "Shared zod schemas and inferred types across ingestion, api, worker and web",
   "license": "MIT",
+  "engines": {
+    "node": ">=22.12"
+  },
   "author": "Andrii Kohut",
   "homepage": "https://github.com/AKogut/flakemetry#readme",
   "bugs": "https://github.com/AKogut/flakemetry/issues",

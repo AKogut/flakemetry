@@ -3,6 +3,9 @@
   "version": "0.1.4",
   "description": "Playwright reporter emitting OpenTelemetry test spans",
   "license": "MIT",
+  "engines": {
+    "node": ">=22.12"
+  },
   "author": "Andrii Kohut",
   "homepage": "https://github.com/AKogut/flakemetry#readme",
   "bugs": "https://github.com/AKogut/flakemetry/issues",

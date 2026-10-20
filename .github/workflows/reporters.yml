@@ -62,7 +62,7 @@ jobs:
         run: |
           pnpm --filter @flakemetry/api start > /tmp/api.log 2>&1 &
           pnpm --filter @flakemetry/worker start > /tmp/worker.log 2>&1 &
-          for attempt in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             if curl -sf http://localhost:4000/health >/dev/null; then
               echo "api healthy"
               exit 0
@@ -89,10 +89,10 @@ jobs:
       - name: Run the rest on the oldest Node the reporters support
         uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22.12.0
 
       - name: Confirm the runtime
-        run: node --version | grep -q '^v20\.' || { node --version; exit 1; }
+        run: node --version | grep -q '^v22\.12\.' || { node --version; exit 1; }
 
       - name: Playwright
         working-directory: examples/reporter-smoke
