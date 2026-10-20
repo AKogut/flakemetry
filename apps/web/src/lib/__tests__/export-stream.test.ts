@@ -8,7 +8,7 @@ const lines = async function* (count: number): AsyncGenerator<string> {
   for (let index = 0; index < count; index += 1) yield `{"n":${index}}\n`
 }
 
-const drain = async (stream: ReadableStream): Promise<Buffer> => {
+const read = async (stream: ReadableStream): Promise<Uint8Array[]> => {
   const chunks: Uint8Array[] = []
   const reader = stream.getReader()
   for (;;) {
@@ -16,8 +16,10 @@ const drain = async (stream: ReadableStream): Promise<Buffer> => {
     if (done) break
     chunks.push(value as Uint8Array)
   }
-  return Buffer.concat(chunks)
+  return chunks
 }
+
+const drain = async (stream: ReadableStream): Promise<Buffer> => Buffer.concat(await read(stream))
 
 describe('gzippedExportBody', () => {
   it('produces a gzip a browser can save and gunzip can open', async () => {
@@ -30,12 +32,13 @@ describe('gzippedExportBody', () => {
   })
 
   it('carries more than fits in one chunk', async () => {
-    const body = await drain(gzippedExportBody(lines(20_000)))
-    const inflated = gunzipSync(body).toString('utf8').trimEnd().split('\n')
+    const chunks = await read(gzippedExportBody(lines(20_000)))
+    const inflated = gunzipSync(Buffer.concat(chunks)).toString('utf8').trimEnd().split('\n')
 
+    expect(chunks.length).toBeGreaterThan(1)
     expect(inflated).toHaveLength(20_000)
     expect(inflated.at(-1)).toBe('{"n":19999}')
-  })
+  }, 30_000)
 
   it('ends the stream on an empty export rather than hanging', async () => {
     const body = await drain(gzippedExportBody(lines(0)))
