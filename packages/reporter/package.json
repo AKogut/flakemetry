@@ -1,6 +1,6 @@
 {
   "name": "@flakemetry/playwright-reporter",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Playwright reporter emitting OpenTelemetry test spans",
   "license": "MIT",
   "engines": {
