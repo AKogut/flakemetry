@@ -50,7 +50,7 @@
     "@flakemetry/tsconfig": "workspace:*",
     "@types/node": "^22.10.5",
     "fast-check": "^4.10.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.5"
   },
   "dependencies": {
     "@flakemetry/contracts": "workspace:*"
