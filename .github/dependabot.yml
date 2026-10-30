@@ -9,6 +9,10 @@ updates:
     groups:
       # One pull request per class of change keeps the queue readable; security
       # fixes still arrive on their own as soon as an advisory lands.
+      # OpenTelemetry comes first: its packages move together, majors included,
+      # and an update lands in the first group that matches it.
+      opentelemetry:
+        patterns: ['@opentelemetry/*']
       production:
         dependency-type: production
         update-types: [minor, patch]
