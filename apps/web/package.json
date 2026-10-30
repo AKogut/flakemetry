@@ -30,7 +30,7 @@
     "@flakemetry/notify": "workspace:*",
     "@flakemetry/queries": "workspace:*",
     "@flakemetry/storage": "workspace:*",
-    "next": "^16.4.2",
+    "next": "^16.4.3",
     "next-auth": "5.0.0-beta.32",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
