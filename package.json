@@ -35,7 +35,8 @@
     "publint": "^0.3.25",
     "tsdown": "0.23.2",
     "turbo": "^2.11.10",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vite": "^7.3.7"
   },
   "pnpm": {
     "overrides": {
@@ -51,7 +52,9 @@
       "@prisma/config>deepmerge-ts": "^8.0.0",
       "mysql2@<3.22.0": "^3.22.0",
       "baseline-browser-mapping@<2.11.0": "^2.11.0",
-      "vitepress>vite": "^6.4.3"
+      "vitepress>vite": "^6.4.4",
+      "launch-editor@<2.14.2": "^2.14.2",
+      "vue@>=3.0.0 <3.5.42": "^3.5.42"
     }
   }
 }
