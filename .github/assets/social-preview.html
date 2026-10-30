@@ -1,0 +1,148 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <!-- Source of social-preview.png (1280×640). Same template as the other portfolio repositories. -->
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1280px;
+        height: 640px;
+        overflow: hidden;
+      }
+      body {
+        background: linear-gradient(135deg, #0d1117 0%, #10151c 100%);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+        position: relative;
+        color: #e6edf3;
+      }
+      .topbar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 6px;
+        background: linear-gradient(90deg, #58a6ff 0%, #4cc38a 100%);
+      }
+      .wrap {
+        display: flex;
+        gap: 24px;
+        padding: 84px 80px 0;
+      }
+      .accent {
+        width: 5px;
+        border-radius: 3px;
+        background: linear-gradient(180deg, #58a6ff, #4cc38a);
+        align-self: stretch;
+        margin-bottom: 8px;
+      }
+      .eyebrow {
+        color: #58a6ff;
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: 4px;
+      }
+      h1 {
+        font-size: 60px;
+        font-weight: 800;
+        line-height: 1.1;
+        margin-top: 14px;
+      }
+      h1 .t1 {
+        color: #f0f6fc;
+        display: block;
+      }
+      h1 .t2 {
+        display: block;
+        background: linear-gradient(90deg, #58a6ff, #4cc38a);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .sub {
+        color: #c9d1d9;
+        font-size: 25px;
+        line-height: 1.36;
+        margin-top: 26px;
+      }
+      .chips {
+        display: flex;
+        gap: 16px;
+        margin-top: 40px;
+      }
+      .chip {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 24px;
+        padding: 11px 22px;
+        font-size: 22px;
+        font-weight: 600;
+        color: #e6edf3;
+        white-space: nowrap;
+      }
+      .tech {
+        color: #8b949e;
+        font-size: 23px;
+        font-weight: 500;
+        margin-top: 40px;
+      }
+      .url {
+        color: #6e7681;
+        font-size: 21px;
+        font-weight: 500;
+        margin-top: 22px;
+      }
+      .motif {
+        position: absolute;
+        top: 70px;
+        right: 56px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar"></div>
+    <svg class="motif" width="210" height="210" viewBox="0 0 240 240">
+      <g stroke="#30363d" stroke-width="1">
+        <line x1="40" y1="20" x2="40" y2="220" />
+        <line x1="100" y1="20" x2="100" y2="220" />
+        <line x1="160" y1="20" x2="160" y2="220" />
+        <line x1="220" y1="20" x2="220" y2="220" />
+      </g>
+      <rect x="20" y="36" width="200" height="16" rx="5" fill="#58a6ff" />
+      <rect x="34" y="66" width="96" height="16" rx="5" fill="#4cc38a" />
+      <rect x="138" y="66" width="74" height="16" rx="5" fill="#4cc38a" />
+      <rect x="44" y="96" width="58" height="16" rx="5" fill="#4cc38a" opacity="0.75" />
+      <rect x="148" y="96" width="44" height="16" rx="5" fill="#f85149" />
+      <rect x="52" y="126" width="34" height="16" rx="5" fill="#e3b341" />
+      <rect x="156" y="126" width="26" height="16" rx="5" fill="#4cc38a" opacity="0.75" />
+      <rect x="58" y="156" width="20" height="16" rx="5" fill="#4cc38a" opacity="0.6" />
+      <rect x="34" y="196" width="178" height="6" rx="3" fill="#58a6ff" opacity="0.25" />
+    </svg>
+    <div class="wrap">
+      <div class="accent"></div>
+      <div class="col">
+        <div class="eyebrow">TEST OBSERVABILITY · OPENTELEMETRY</div>
+        <h1>
+          <span class="t1">Flakemetry</span><span class="t2">Test Intelligence Platform</span>
+        </h1>
+        <div class="sub">
+          Treat every test run as a trace, not a report —<br />explainable flaky-test detection and
+          AI root-cause analysis.
+        </div>
+        <div class="chips">
+          <div class="chip">OpenTelemetry-native</div>
+          <div class="chip">flaky scoring</div>
+          <div class="chip">AI root cause</div>
+          <div class="chip">self-hosted</div>
+        </div>
+        <div class="tech">TypeScript · Next.js · PostgreSQL · OpenTelemetry · Helm · Terraform</div>
+        <div class="url">github.com/AKogut/flakemetry</div>
+      </div>
+    </div>
+  </body>
+</html>
