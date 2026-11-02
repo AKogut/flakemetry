@@ -4,7 +4,7 @@
   "description": "OpenTelemetry test instrumentation and ingest client",
   "license": "MIT",
   "engines": {
-    "node": ">=22.12"
+    "node": ">=22.15"
   },
   "author": "Andrii Kohut",
   "homepage": "https://github.com/AKogut/flakemetry#readme",
@@ -54,12 +54,12 @@
   "dependencies": {
     "@flakemetry/contracts": "workspace:*",
     "@flakemetry/core": "workspace:*",
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/core": "^2.12.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.223.0",
-    "@opentelemetry/otlp-exporter-base": "^0.223.0",
-    "@opentelemetry/resources": "^2.12.0",
-    "@opentelemetry/sdk-trace-base": "^2.12.0",
+    "@opentelemetry/api": "~1.10.0",
+    "@opentelemetry/core": "^3.0.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.300.0",
+    "@opentelemetry/otlp-exporter-base": "^0.300.0",
+    "@opentelemetry/resources": "^3.0.0",
+    "@opentelemetry/sdk-trace": "^3.0.0",
     "@opentelemetry/semantic-conventions": "^1.28.0",
     "yaml": "^2.9.1"
   }

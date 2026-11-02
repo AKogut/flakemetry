@@ -10,10 +10,10 @@ import {
   otlpTraceRequestSchema,
 } from '@flakemetry/contracts'
 import {
-  BasicTracerProvider,
   InMemorySpanExporter,
   SimpleSpanProcessor,
-} from '@opentelemetry/sdk-trace-base'
+  TracerProvider,
+} from '@opentelemetry/sdk-trace'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { IngestClient } from '../client'
@@ -100,7 +100,7 @@ describe('recorder to ingest batch', () => {
 describe('otel spans', () => {
   it('emits a run span parenting one case span per attempt with convention attributes', () => {
     const exporter = new InMemorySpanExporter()
-    const provider = new BasicTracerProvider({
+    const provider = new TracerProvider({
       spanProcessors: [new SimpleSpanProcessor(exporter)],
     })
     const tracer = provider.getTracer('test')
@@ -174,7 +174,7 @@ describe('step spans', () => {
 
   it('emits nested child spans under the case span (otlp path)', () => {
     const exporter = new InMemorySpanExporter()
-    const provider = new BasicTracerProvider({
+    const provider = new TracerProvider({
       spanProcessors: [new SimpleSpanProcessor(exporter)],
     })
     emitRunSpans(provider.getTracer('test'), recorderWithSteps())

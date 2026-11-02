@@ -4,7 +4,7 @@
   "description": "Pure domain logic: test identity and flaky scoring",
   "license": "MIT",
   "engines": {
-    "node": ">=22.12"
+    "node": ">=22.15"
   },
   "author": "Andrii Kohut",
   "homepage": "https://github.com/AKogut/flakemetry#readme",
