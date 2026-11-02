@@ -42,7 +42,7 @@ export const exportRunOverOtlp = async (
   const collector = new InMemorySpanExporter()
   const provider = new TracerProvider({
     resource,
-    spanProcessors: [new SimpleSpanProcessor(collector)],
+    spanProcessors: [new SimpleSpanProcessor({ exporter: collector })],
   })
 
   const exporter = new OTLPTraceExporter({

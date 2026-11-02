@@ -97,7 +97,7 @@ describe('otel spans', () => {
   it('emits a run span parenting one case span per attempt with convention attributes', () => {
     const exporter = new InMemorySpanExporter()
     const provider = new TracerProvider({
-      spanProcessors: [new SimpleSpanProcessor(exporter)],
+      spanProcessors: [new SimpleSpanProcessor({ exporter })],
     })
     const tracer = provider.getTracer('test')
 
@@ -171,7 +171,7 @@ describe('step spans', () => {
   it('emits nested child spans under the case span (otlp path)', () => {
     const exporter = new InMemorySpanExporter()
     const provider = new TracerProvider({
-      spanProcessors: [new SimpleSpanProcessor(exporter)],
+      spanProcessors: [new SimpleSpanProcessor({ exporter })],
     })
     emitRunSpans(provider.getTracer('test'), recorderWithSteps())
 
