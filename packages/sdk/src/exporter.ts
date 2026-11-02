@@ -1,11 +1,7 @@
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
 import { CompressionAlgorithm } from '@opentelemetry/otlp-exporter-base'
 import { resourceFromAttributes } from '@opentelemetry/resources'
-import {
-  BasicTracerProvider,
-  InMemorySpanExporter,
-  SimpleSpanProcessor,
-} from '@opentelemetry/sdk-trace-base'
+import { InMemorySpanExporter, SimpleSpanProcessor, TracerProvider } from '@opentelemetry/sdk-trace'
 
 import { CONVENTIONS_VERSION, RESOURCE_ATTR } from './conventions'
 import type { TestRunRecorder } from './recorder'
@@ -44,9 +40,9 @@ export const exportRunOverOtlp = async (
   })
 
   const collector = new InMemorySpanExporter()
-  const provider = new BasicTracerProvider({
+  const provider = new TracerProvider({
     resource,
-    spanProcessors: [new SimpleSpanProcessor(collector)],
+    spanProcessors: [new SimpleSpanProcessor({ exporter: collector })],
   })
 
   const exporter = new OTLPTraceExporter({

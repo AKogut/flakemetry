@@ -89,10 +89,10 @@ jobs:
       - name: Run the rest on the oldest Node the reporters support
         uses: actions/setup-node@v7
         with:
-          node-version: 22.12.0
+          node-version: 22.15.0
 
       - name: Confirm the runtime
-        run: node --version | grep -q '^v22\.12\.' || { node --version; exit 1; }
+        run: node --version | grep -q '^v22\.15\.' || { node --version; exit 1; }
 
       - name: Playwright
         working-directory: examples/reporter-smoke
