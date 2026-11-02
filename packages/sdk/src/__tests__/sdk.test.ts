@@ -9,11 +9,7 @@ import {
   otlpToIngestBatch,
   otlpTraceRequestSchema,
 } from '@flakemetry/contracts'
-import {
-  InMemorySpanExporter,
-  SimpleSpanProcessor,
-  TracerProvider,
-} from '@opentelemetry/sdk-trace'
+import { InMemorySpanExporter, SimpleSpanProcessor, TracerProvider } from '@opentelemetry/sdk-trace'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { IngestClient } from '../client'
