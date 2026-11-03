@@ -4,7 +4,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { flakyBoard } from '../flaky'
 import { getRun, listRuns } from '../runs'
-import { getRunSummaryByCommit } from '../summary'
+import { getRunSummaryByCommit, renderPrComment } from '../summary'
 import { getTest } from '../tests'
 import { getExecutionTrace } from '../trace'
 
@@ -343,6 +343,20 @@ describe.skipIf(!hasDb)('queries read paths', () => {
       expect(summary?.failed).toBe(1)
       expect(summary?.tests[0]?.title).toBe('webkit')
       expect(summary?.runStatus).toBe('failed')
+    })
+
+    it('names the variant in the summary and the PR comment', async () => {
+      const projectId = await seedJobs([
+        { key: 'webkit/1', startedAt: new Date(START.getTime() + 1000), status: 'fail' },
+      ])
+      await prisma.testIdentity.updateMany({
+        where: { projectId },
+        data: { params: { variant: 'webkit' }, paramsHash: 'abc' },
+      })
+
+      const summary = await getRunSummaryByCommit(prisma, projectId, CI_COMMIT)
+      expect(summary?.tests[0]?.variant).toBe('webkit')
+      expect(renderPrComment(summary!)).toContain('webkit · webkit')
     })
 
     it('lets a later attempt of the CI run replace an earlier failure', async () => {

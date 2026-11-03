@@ -58,6 +58,14 @@ def test_idempotency_key_is_stable_per_ci_run_and_long_enough() -> None:
     assert len(build_idempotency_key(local, {})) >= 8
 
 
+def test_a_variant_is_read_from_the_environment_and_kept_in_the_key() -> None:
+    env = {**GITHUB, "FLAKEMETRY_VARIANT": "py 3.12"}
+    context = resolve_run_context(env)
+
+    assert context.variant == "py 3.12"
+    assert build_idempotency_key(context, env) == "github_actions-555-1-py-3.12"
+
+
 def test_shards_get_distinct_keys() -> None:
     context = resolve_run_context(GITHUB)
     first = build_idempotency_key(context, {**GITHUB, "FLAKEMETRY_SHARD_INDEX": "1"})

@@ -102,6 +102,15 @@ jobs:
         # outcome. Whether the reporter delivered is decided by the verify step.
         run: pnpm smoke:playwright || true
 
+      - name: Playwright, one job per browser of a matrix
+        working-directory: examples/reporter-smoke
+        env:
+          FLAKEMETRY_TOKEN: ${{ env.PLAYWRIGHTPROJECTS_TOKEN }}
+        run: |
+          pnpm smoke:playwright-projects --project=chromium || true
+          pnpm smoke:playwright-projects --project=firefox || true
+          pnpm smoke:playwright-projects --project=webkit || true
+
       - name: Vitest
         working-directory: examples/reporter-smoke
         env:

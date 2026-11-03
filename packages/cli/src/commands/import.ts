@@ -54,8 +54,12 @@ export const syntheticCommitSha = (content: string): string => digest(content).s
  * Deterministic in the file's identity and contents, so re-running an interrupted import
  * re-sends the same keys and the server deduplicates them instead of doubling the history.
  */
-export const importIdempotencyKey = (path: string, content: string): string =>
-  `junit-import-${digest(`${path}\n${content}`).slice(0, 32)}`
+export const importIdempotencyKey = (
+  path: string,
+  content: string,
+  variant?: string | null,
+): string =>
+  `junit-import-${digest(`${path}\n${content}${variant ? `\n${variant}` : ''}`).slice(0, 32)}`
 
 const parseTimestamp = (value: string | undefined): Date | null => {
   if (!value) return null
@@ -67,6 +71,7 @@ export const planHistoricalImport = (
   files: readonly HistoricalFile[],
   manifest: ImportManifest = {},
   defaultBranch = 'main',
+  variant?: string | null,
 ): ImportPlan => {
   const runs: PlannedImport[] = []
   const skipped: SkippedImport[] = []
@@ -95,7 +100,7 @@ export const planHistoricalImport = (
 
     runs.push({
       path: file.path,
-      idempotencyKey: importIdempotencyKey(file.path, file.content),
+      idempotencyKey: importIdempotencyKey(file.path, file.content, variant),
       commitSha: entry.commitSha ?? syntheticCommitSha(file.content),
       branch: entry.branch ?? defaultBranch,
       startedAt,
@@ -141,6 +146,7 @@ export interface RunImportParams {
   plan: ImportPlan
   endpoint: string
   token: string
+  variant?: string | null
   ciProvider?: IngestResource['ciProvider']
   fetchImpl?: typeof fetch
   onProgress?: (done: number, total: number, run: PlannedImport) => void
@@ -174,6 +180,7 @@ export const runHistoricalImport = async (params: RunImportParams): Promise<Impo
       idempotencyKey: run.idempotencyKey,
       resource,
       startedAt: run.startedAt,
+      variant: params.variant,
     })
 
     const result = await client.send(batch)
@@ -205,6 +212,7 @@ export const importCommand: CommandModule = {
       .option('--token <token>', 'ingest token (overrides FLAKEMETRY_TOKEN)')
       .option('--manifest <file>', 'JSON map of report path to { commitSha, branch, startedAt }')
       .option('--branch <name>', 'branch to record when the manifest does not say', 'main')
+      .option('--variant <name>', 'browser, platform or target these reports came from')
       .option('--dry-run', 'show what would be imported without sending anything', false)
       .action(
         async (
@@ -214,6 +222,7 @@ export const importCommand: CommandModule = {
             token?: string
             manifest?: string
             branch?: string
+            variant?: string
             dryRun?: boolean
           },
         ) => {
@@ -227,7 +236,8 @@ export const importCommand: CommandModule = {
           const manifest: ImportManifest = options.manifest
             ? (JSON.parse(readFileSync(options.manifest, 'utf8')) as ImportManifest)
             : {}
-          const plan = planHistoricalImport(files, manifest, options.branch ?? 'main')
+          const variant = options.variant ?? context.env.FLAKEMETRY_VARIANT
+          const plan = planHistoricalImport(files, manifest, options.branch ?? 'main', variant)
 
           for (const skip of plan.skipped) {
             process.stderr.write(`flakemetry: skipped ${skip.path} — ${skip.reason}\n`)
@@ -269,6 +279,7 @@ export const importCommand: CommandModule = {
 
           const summary = await runHistoricalImport({
             plan,
+            variant,
             endpoint,
             token,
             onProgress: (doneCount, total) => {

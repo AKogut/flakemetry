@@ -1,6 +1,8 @@
 import type { ReasonCode, TestDetail } from '@flakemetry/contracts'
 import type { PrismaClient } from '@flakemetry/db'
 
+import { variantOf } from './params'
+
 export const getTest = async (
   prisma: PrismaClient,
   projectId: string,
@@ -15,6 +17,7 @@ export const getTest = async (
       filePath: true,
       suite: true,
       title: true,
+      params: true,
       quarantined: true,
       quarantineReason: true,
       quarantineOverride: true,
@@ -63,6 +66,7 @@ export const getTest = async (
     filePath: identity.filePath,
     suite: identity.suite,
     title: identity.title,
+    variant: variantOf(identity.params),
     quarantined: identity.quarantined,
     quarantineReason: identity.quarantineReason,
     quarantineOverride: identity.quarantineOverride,

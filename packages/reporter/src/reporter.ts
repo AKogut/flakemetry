@@ -44,6 +44,7 @@ export default class FlakemetryReporter implements Reporter {
   private recorder: TestRunRecorder | null = null
   private context: RunContext | null = null
   private rootDir = process.cwd()
+  private hasSeveralProjects = false
   private readonly firstAttemptIndex = new Map<string, number>()
 
   constructor(options: FlakemetryReporterOptions = {}) {
@@ -53,6 +54,7 @@ export default class FlakemetryReporter implements Reporter {
 
   onBegin(config: FullConfig, _suite: Suite): void {
     this.rootDir = config.rootDir
+    this.hasSeveralProjects = (config.projects ?? []).length > 1
     this.context = resolveRunContext(this.env, config.shard)
     this.recorder = new TestRunRecorder(this.context)
     this.recorder.startRun(new Date())
@@ -75,6 +77,7 @@ export default class FlakemetryReporter implements Reporter {
       filePath: relative(this.rootDir, test.location.file),
       suite: deriveSuite(collectAncestors(test)),
       title: test.title,
+      variant: this.hasSeveralProjects ? test.parent.project()?.name : undefined,
       status: statusFromResult(result.status as PlaywrightStatus, result.retry),
       attempt,
       retryOfIndex,

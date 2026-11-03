@@ -111,6 +111,7 @@ export const junitIngestSchema = z.object({
   idempotencyKey: z.string().min(8),
   resource: ingestResourceSchema,
   xml: z.string().min(1),
+  variant: z.string().min(1).max(100).nullish(),
 })
 
 export const ingestAckSchema = z.object({

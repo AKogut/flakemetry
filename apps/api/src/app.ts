@@ -322,6 +322,7 @@ export const buildApp = (options: AppOptions): FastifyInstance => {
     const batch = junitToIngestBatch(junit, {
       idempotencyKey: parsed.data.idempotencyKey,
       resource: parsed.data.resource,
+      variant: parsed.data.variant,
     })
 
     const { jobId, deduplicated } = await queue.enqueue({

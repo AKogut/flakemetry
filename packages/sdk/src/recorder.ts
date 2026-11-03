@@ -27,6 +27,7 @@ export interface RunContext {
   prNumber?: number | null
   shardIndex?: number | null
   shardTotal?: number | null
+  variant?: string | null
 }
 
 export interface RecordedStep {
@@ -45,6 +46,7 @@ export interface RecordedTest {
   suite: string
   title: string
   params?: JsonRecord | null
+  variant?: string | null
   status: TestStatus
   attempt?: number
   retryOfIndex?: number | null
@@ -74,14 +76,16 @@ export class TestRunRecorder {
   }
 
   record(test: RecordedTest): RecordedTestWithIdentity {
-    const paramsHash = hashParams(test.params)
+    const variant = [this.context.variant, test.variant].filter(Boolean).join('/')
+    const params = variant ? { ...test.params, variant } : test.params
+    const paramsHash = hashParams(params)
     const fingerprint = computeFingerprint({
       filePath: test.filePath,
       suite: test.suite,
       title: test.title,
       paramsHash,
     })
-    const enriched: RecordedTestWithIdentity = { ...test, fingerprint, paramsHash }
+    const enriched: RecordedTestWithIdentity = { ...test, params, fingerprint, paramsHash }
     this.tests.push(enriched)
     return enriched
   }

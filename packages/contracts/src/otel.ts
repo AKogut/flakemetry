@@ -3,6 +3,8 @@ import { z } from 'zod'
 import {
   type CiProvider,
   CONTRACT_VERSION,
+  type JsonRecord,
+  jsonRecordSchema,
   type RunStatus,
   type RunTrigger,
   type TestStatus,
@@ -45,6 +47,7 @@ export const SPAN_ATTR = {
   fingerprint: 'test.identity.fingerprint',
   suite: 'test.suite',
   title: 'test.title',
+  params: 'test.params',
   paramsHash: 'test.params_hash',
   status: 'test.status',
   attempt: 'test.attempt',
@@ -149,6 +152,16 @@ const parseArtifacts = (raw: string | undefined): ArtifactRef[] | undefined => {
   try {
     const parsed = artifactRefSchema.array().safeParse(JSON.parse(raw))
     return parsed.success && parsed.data.length > 0 ? parsed.data : undefined
+  } catch {
+    return undefined
+  }
+}
+
+const parseParams = (raw: string | undefined): JsonRecord | undefined => {
+  if (!raw) return undefined
+  try {
+    const parsed = jsonRecordSchema.safeParse(JSON.parse(raw))
+    return parsed.success ? parsed.data : undefined
   } catch {
     return undefined
   }
@@ -333,6 +346,7 @@ export const otlpToIngestBatch = (request: OtlpTraceRequest): IngestRunBatch => 
       filePath,
       suite: asString(attrs.get(SPAN_ATTR.suite)) ?? '',
       title,
+      params: parseParams(asString(attrs.get(SPAN_ATTR.params))),
       status,
       attempt,
       retryOfIndex,

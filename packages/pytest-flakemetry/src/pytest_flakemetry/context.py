@@ -11,6 +11,7 @@ from typing import Dict, Mapping, Optional
 CONTRACT_VERSION = "0.1.0"
 
 _PR_REF = re.compile(r"refs/pull/(\d+)/")
+_VARIANT_UNSAFE = re.compile(r"[^\w.-]+")
 
 
 def _pick(value: Optional[str]) -> Optional[str]:
@@ -36,6 +37,7 @@ class RunContext:
     trigger: str
     ci_run_id: Optional[str]
     pr_number: Optional[int]
+    variant: Optional[str] = None
 
     def to_resource(self) -> Dict[str, object]:
         resource: Dict[str, object] = {
@@ -76,6 +78,7 @@ def resolve_run_context(env: Optional[Mapping[str, str]] = None) -> RunContext:
         trigger=trigger,
         ci_run_id=_pick(env.get("GITHUB_RUN_ID")),
         pr_number=_pr_number(_pick(env.get("GITHUB_REF"))),
+        variant=_pick(env.get("FLAKEMETRY_VARIANT")),
     )
 
 
@@ -92,7 +95,8 @@ def build_idempotency_key(
         attempt = env.get("GITHUB_RUN_ATTEMPT") or "1"
         shard = _pick(env.get("FLAKEMETRY_SHARD_INDEX"))
         suffix = f"-{shard}" if shard else ""
-        return f"{context.ci_provider}-{context.ci_run_id}-{attempt}{suffix}"
+        variant = f"-{_VARIANT_UNSAFE.sub('-', context.variant)[:40]}" if context.variant else ""
+        return f"{context.ci_provider}-{context.ci_run_id}-{attempt}{suffix}{variant}"
 
     # The contract requires at least eight characters, which a bare commit sha
     # prefix would not always satisfy.

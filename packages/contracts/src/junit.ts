@@ -115,6 +115,7 @@ export interface JunitBatchParams {
   resource: IngestResource
   startedAt?: Date
   finishedAt?: Date
+  variant?: string | null
 }
 
 export const junitToIngestBatch = (run: JunitRun, params: JunitBatchParams): IngestRunBatch => {
@@ -134,6 +135,7 @@ export const junitToIngestBatch = (run: JunitRun, params: JunitBatchParams): Ing
       filePath: execution.filePath,
       suite: execution.suite,
       title: execution.title,
+      ...(params.variant ? { params: { variant: params.variant } } : {}),
       status: execution.status,
       attempt: 1,
       startedAt,

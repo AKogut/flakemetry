@@ -8,6 +8,7 @@
     "provision": "node provision.mjs",
     "verify": "node verify.mjs",
     "smoke:playwright": "playwright test",
+    "smoke:playwright-projects": "playwright test --config playwright.projects.config.ts",
     "smoke:vitest": "vitest run",
     "smoke:jest": "jest",
     "smoke:jest-shards": "jest --config jest.shards.config.mjs",

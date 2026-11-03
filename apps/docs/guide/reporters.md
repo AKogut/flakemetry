@@ -74,6 +74,28 @@ pytest --reruns 2
 Parameterized cases keep their values as structured params, so the server buckets the variants
 under one base test instead of treating each id as a separate test.
 
+## Variants
+
+The same test on two browsers is two sets of evidence. A test that always fails on WebKit is not
+flaky because it passes on Chromium, so each variant keeps its own identity, score and history.
+
+- **Playwright** records the project as the variant whenever the config has more than one. A
+  single-project config records none, so its identities and history stay as they are.
+- **Anything else** sets it for the run:
+
+```bash
+FLAKEMETRY_VARIANT=ios npx wdio run wdio.ios.conf.ts
+FLAKEMETRY_VARIANT=live npx vitest run
+FLAKEMETRY_VARIANT=api-35 npx flakemetry junit results.xml
+npx flakemetry import ./archive --variant api-35
+```
+
+The variant is a parameter called `variant`, so it appears in the variants table on the test page,
+and the board and the PR comment show it next to the title.
+
+Adding a variant to a test that had none starts a new identity, because the evidence really is
+different. The old history stays on the old identity.
+
 ## Sharded suites
 
 A suite split across parallel jobs sends one run per shard, and the key says which shard it

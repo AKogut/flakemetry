@@ -71,6 +71,21 @@ def test_parameterized_variants_carry_their_params(pytester: pytest.Pytester) ->
     ]
 
 
+def test_a_variant_joins_the_params_of_every_test(
+    pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FLAKEMETRY_VARIANT", "ios")
+    pytester.makepyfile(
+        """
+        def test_ok():
+            assert True
+        """
+    )
+    run(pytester).assert_outcomes(passed=1)
+
+    assert read_batch(pytester)["executions"][0]["params"] == {"variant": "ios"}
+
+
 def test_a_test_that_passes_on_rerun_is_flaky(pytester: pytest.Pytester) -> None:
     pytest.importorskip("pytest_rerunfailures")
     pytester.makepyfile(

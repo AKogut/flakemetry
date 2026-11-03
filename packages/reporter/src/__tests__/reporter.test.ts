@@ -73,6 +73,35 @@ const drive = async (outputFile: string) => {
   await reporter.onEnd({ status: 'failed' } as FullResult)
 }
 
+const recordOneTest = async (outputFile: string, projects: string[], project: string) => {
+  const reporter = new FlakemetryReporter({ outputFile })
+  reporter.onBegin(
+    { rootDir, projects: projects.map((name) => ({ name })) } as unknown as FullConfig,
+    {} as Suite,
+  )
+  const test = makeTest('t1', 'logs in', 'auth')
+  ;(test.parent as unknown as { project: () => { name: string } }).project = () => ({
+    name: project,
+  })
+  reporter.onTestEnd(test, makeResult('passed', 0))
+  await reporter.onEnd({ status: 'passed' } as FullResult)
+  return ingestRunBatchSchema.parse(JSON.parse(readFileSync(outputFile, 'utf8'))).executions[0]
+}
+
+describe('FlakemetryReporter projects', () => {
+  const output = () => join(tmpdir(), `flakemetry-projects-${process.hrtime.bigint()}.json`)
+
+  it('records the project as the variant when the config has several', async () => {
+    const execution = await recordOneTest(output(), ['chromium', 'webkit'], 'webkit')
+    expect(execution?.params).toEqual({ variant: 'webkit' })
+  })
+
+  it('leaves a single-project config on its existing identity', async () => {
+    const execution = await recordOneTest(output(), ['chromium'], 'chromium')
+    expect(execution?.params).toBeUndefined()
+  })
+})
+
 describe('FlakemetryReporter lifecycle', () => {
   beforeEach(() => {
     for (const key of [

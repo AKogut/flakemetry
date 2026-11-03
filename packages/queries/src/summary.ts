@@ -1,11 +1,14 @@
 import type { ReasonCode } from '@flakemetry/contracts'
 import type { PrismaClient, RunStatus } from '@flakemetry/db'
 
+import { variantOf } from './params'
+
 export interface RunSummaryTest {
   testIdentityId: string
   filePath: string
   suite: string
   title: string
+  variant: string | null
   status: 'fail' | 'flaky'
   errorMessage: string | null
   score: number | null
@@ -30,6 +33,7 @@ interface IdentityRollup {
   filePath: string
   suite: string
   title: string
+  variant: string | null
   quarantined: boolean
   lastStatus: string
   hasFlaky: boolean
@@ -71,7 +75,9 @@ export const getRunSummaryByCommit = async (
       status: true,
       attempt: true,
       errorMessage: true,
-      identity: { select: { filePath: true, suite: true, title: true, quarantined: true } },
+      identity: {
+        select: { filePath: true, suite: true, title: true, params: true, quarantined: true },
+      },
       errorSignature: { select: { cluster: { select: { knownIssueRef: true } } } },
     },
   })
@@ -84,6 +90,7 @@ export const getRunSummaryByCommit = async (
         filePath: execution.identity.filePath,
         suite: execution.identity.suite,
         title: execution.identity.title,
+        variant: variantOf(execution.identity.params),
         quarantined: execution.identity.quarantined,
         lastStatus: execution.status,
         hasFlaky: execution.status === 'flaky',
@@ -121,6 +128,7 @@ export const getRunSummaryByCommit = async (
       filePath: rollup.filePath,
       suite: rollup.suite,
       title: rollup.title,
+      variant: rollup.variant,
       status,
       errorMessage: rollup.errorMessage,
       score: score?.score ?? null,
@@ -148,6 +156,9 @@ export const getRunSummaryByCommit = async (
   }
 }
 
+export const testLabel = (test: { title: string; variant: string | null }): string =>
+  test.variant ? `${test.title} · ${test.variant}` : test.title
+
 const shortSha = (sha: string): string => sha.slice(0, 7)
 
 const escapeCell = (value: string): string => value.replace(/\|/g, '\\|').replace(/\n/g, ' ')
@@ -173,7 +184,7 @@ export const renderPrComment = (summary: RunSummary): string => {
   )
 
   for (const test of summary.tests) {
-    const label = `\`${escapeCell(test.filePath)}\` › ${escapeCell(test.title)}`
+    const label = `\`${escapeCell(test.filePath)}\` › ${escapeCell(testLabel(test))}`
     const state = test.status === 'fail' ? 'failed' : 'flaked'
     const score =
       test.score === null ? '—' : `${test.score.toFixed(2)}${test.quarantined ? ' 🔒' : ''}`

@@ -82,6 +82,7 @@ export const testDetailSchema = z.object({
   filePath: z.string(),
   suite: z.string(),
   title: z.string(),
+  variant: z.string().nullable(),
   quarantined: z.boolean(),
   quarantineReason: z.string().nullable(),
   quarantineOverride: z
@@ -103,6 +104,7 @@ export const flakyBoardItemSchema = z.object({
   filePath: z.string(),
   suite: z.string(),
   title: z.string(),
+  variant: z.string().nullable(),
   score: z.number().min(0).max(1),
   flipRate: z.number().min(0).max(1),
   passOnRerunRate: z.number().min(0).max(1),

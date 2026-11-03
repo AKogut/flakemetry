@@ -116,6 +116,18 @@ describe('derived identifiers', () => {
     expect(syntheticCommitSha('a')).not.toBe(syntheticCommitSha('b'))
   })
 
+  it('separates one report imported as two variants', () => {
+    expect(importIdempotencyKey('junit.xml', '<x/>', 'api-34')).not.toBe(
+      importIdempotencyKey('junit.xml', '<x/>', 'api-35'),
+    )
+  })
+
+  it('keeps the key of a report imported with no variant, so a repeated import still deduplicates', () => {
+    expect(importIdempotencyKey('junit.xml', '<x/>', undefined)).toBe(
+      importIdempotencyKey('junit.xml', '<x/>'),
+    )
+  })
+
   it('separates identical reports living at different paths', () => {
     // A CI archive commonly holds byte-identical reports per shard or per re-run.
     expect(importIdempotencyKey('shard-1/junit.xml', '<x/>')).not.toBe(
