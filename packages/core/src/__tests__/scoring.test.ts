@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { computeFlakyScore, type ExecutionPoint, type ScoringConfig } from '../scoring'
+import {
+  computeFlakyScore,
+  type ExecutionPoint,
+  isMassFailureRun,
+  type ScoringConfig,
+} from '../scoring'
 
 const NOW = new Date('2026-07-16T12:00:00Z')
 const config: ScoringConfig = { now: NOW, threshold: 0.8, minSamples: 5 }
@@ -18,6 +23,65 @@ const red = (commitSha: string, day: number, attempt = 1): ExecutionPoint => ({
   commitSha,
   attempt,
   startedAt: daysAgo(day),
+})
+
+describe('a run where most of the suite failed', () => {
+  const nights = (count: number): ExecutionPoint[] =>
+    Array.from({ length: count }, (_, day) => ({
+      ...green('same-commit', day + 2),
+      runId: `run-${day}`,
+    }))
+  const crash: ExecutionPoint = {
+    ...red('same-commit', 1),
+    runId: 'crash',
+    inMassFailure: true,
+  }
+
+  it('is not evidence that a test is flaky', () => {
+    const result = computeFlakyScore([...nights(20), crash], config)
+
+    expect(result.sameShaVariance).toBe(0)
+    expect(result.flipRate).toBe(0)
+    expect(result.reasonCodes.map((reason) => reason.code)).toEqual(['MASS_FAILURES_SET_ASIDE'])
+    expect(result.reasonCodes[0]?.message).toContain('1 failure(s) not counted')
+  })
+
+  it('leaves a test that failed alone with its score', () => {
+    const alone: ExecutionPoint = { ...crash, inMassFailure: false }
+
+    const withCrash = computeFlakyScore([...nights(20), crash], config)
+    const withFlake = computeFlakyScore([...nights(20), alone], config)
+
+    expect(withFlake.score).toBeGreaterThan(withCrash.score)
+    expect(withFlake.reasonCodes.map((reason) => reason.code)).toContain('SAME_SHA_VARIANCE')
+  })
+
+  it('still counts a real flake that also went down with the suite', () => {
+    const alone: ExecutionPoint = { ...red('same-commit', 3), runId: 'alone' }
+    const result = computeFlakyScore([...nights(20), alone, crash], config)
+
+    expect(result.reasonCodes.map((reason) => reason.code)).toEqual(
+      expect.arrayContaining(['SAME_SHA_VARIANCE', 'MASS_FAILURES_SET_ASIDE']),
+    )
+  })
+
+  it('explains a test seen only in such runs instead of calling it never executed', () => {
+    const result = computeFlakyScore([crash], config)
+
+    expect(result.score).toBe(0)
+    expect(result.reasonCodes.map((reason) => reason.code)).toEqual(['MASS_FAILURES_SET_ASIDE'])
+  })
+
+  it.each([
+    { failed: 46, executed: 49, mass: true },
+    { failed: 5, executed: 10, mass: true },
+    { failed: 5, executed: 11, mass: false },
+    { failed: 4, executed: 4, mass: false },
+    { failed: 22, executed: 271, mass: false },
+    { failed: 0, executed: 0, mass: false },
+  ])('$failed of $executed failing is mass: $mass', ({ failed, executed, mass }) => {
+    expect(isMassFailureRun({ failed, executed })).toBe(mass)
+  })
 })
 
 describe('reason codes describe what happened', () => {

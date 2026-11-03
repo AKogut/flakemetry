@@ -9,6 +9,7 @@ export interface ExecutionPoint {
   startedAt: Date
   runId?: string
   runFailureCount?: number
+  inMassFailure?: boolean
 }
 
 export interface ScoringConfig {
@@ -51,6 +52,11 @@ const WEIGHTS = {
   entropy: 0.1,
   failIsolation: 0.05,
 }
+
+export const MASS_FAILURE = { minFailures: 5, minShare: 0.5 } as const
+
+export const isMassFailureRun = (run: { failed: number; executed: number }): boolean =>
+  run.failed >= MASS_FAILURE.minFailures && run.failed / run.executed >= MASS_FAILURE.minShare
 
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value))
 
@@ -133,6 +139,11 @@ const computeEntropy = (green: number, red: number): number => {
   return term(pGreen) + term(pRed)
 }
 
+const massFailuresSetAside = (setAside: number): ReasonCode => ({
+  code: 'MASS_FAILURES_SET_ASIDE',
+  message: `${setAside} failure(s) not counted, because most of the suite failed in the same run`,
+})
+
 const buildReasonCodes = (signals: {
   passOnRerunRate: number
   sameShaVariance: number
@@ -142,6 +153,7 @@ const buildReasonCodes = (signals: {
   entropy: number
   failIsolation: number
   failures: number
+  setAside: number
   sampleSize: number
 }): ReasonCode[] => {
   const codes: ReasonCode[] = []
@@ -181,6 +193,9 @@ const buildReasonCodes = (signals: {
       message: `failed alone in ${percent(signals.failIsolation)}% of failing runs, pointing at the test not the environment`,
     })
   }
+  if (signals.setAside > 0) {
+    codes.push(massFailuresSetAside(signals.setAside))
+  }
   if (codes.length === 0) {
     codes.push({
       code: 'STABLE',
@@ -196,9 +211,11 @@ export const computeFlakyScore = (
 ): FlakyScoreResult => {
   const settings = { ...DEFAULTS, ...config }
   const graded = history.filter((point) => point.status !== 'skip')
-  const ordered = [...graded]
+  const windowed = [...graded]
     .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime())
     .slice(-settings.windowSize)
+  const ordered = windowed.filter((point) => !(isRed(point.status) && point.inMassFailure))
+  const setAside = windowed.length - ordered.length
 
   if (ordered.length === 0) {
     return {
@@ -209,10 +226,12 @@ export const computeFlakyScore = (
       entropy: 0,
       failIsolation: 0,
       reasonCodes: [
-        {
-          code: 'NEVER_EXECUTED',
-          message: `skipped in all ${history.length} run(s), so there is nothing to score`,
-        },
+        setAside > 0
+          ? massFailuresSetAside(setAside)
+          : {
+              code: 'NEVER_EXECUTED',
+              message: `skipped in all ${history.length} run(s), so there is nothing to score`,
+            },
       ],
       quarantineCandidate: false,
       modelVersion: SCORING_MODEL_VERSION,
@@ -277,6 +296,7 @@ export const computeFlakyScore = (
     entropy,
     failIsolation,
     failures,
+    setAside,
     sampleSize,
   })
   const quarantineCandidate =

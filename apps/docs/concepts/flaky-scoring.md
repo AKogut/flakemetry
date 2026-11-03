@@ -34,6 +34,17 @@ behind the number:
 Because the reasons travel with the score, you can trust it or challenge it — you are never
 handed a black-box number.
 
+## When most of a suite fails at once
+
+If an emulator dies or a target goes down, every test fails together. That is an incident, not
+evidence about each test, and scoring it would push the whole suite up the board next to the real
+flakes.
+
+So failures from a run where **at least 5 tests failed and they were at least half of the tests
+it executed** are not counted towards anyone's score. The run still shows its failures, and each
+affected test carries a `MASS_FAILURES_SET_ASIDE` reason saying how many were left out. A test
+that also fails on its own keeps that evidence.
+
 ## Scoring policy
 
 The threshold at which a test is considered flaky, and the minimum number of samples before

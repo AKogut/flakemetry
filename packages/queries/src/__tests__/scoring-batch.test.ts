@@ -163,3 +163,88 @@ describe.skipIf(!hasDb)('batched scoring', { timeout: 120_000 }, () => {
     ).toEqual(new Map())
   })
 })
+
+describe.skipIf(!hasDb)('scoring a run where most of the suite failed', () => {
+  const seedSuite = async (failingInSecondRun: number) => {
+    const slug = `mass-${randomUUID().slice(0, 8)}`
+    const org = await prisma.org.create({ data: { name: slug, slug } })
+    const project = await prisma.project.create({ data: { orgId: org.id, name: slug, slug } })
+    const tenant = { orgId: org.id, projectId: project.id }
+    const TESTS = 8
+
+    const identities = []
+    for (let test = 0; test < TESTS; test += 1) {
+      identities.push(
+        await prisma.testIdentity.create({
+          data: {
+            ...tenant,
+            fingerprint: `fp-${test}-${slug}`,
+            filePath: `e2e/${test}.spec.ts`,
+            suite: 'suite',
+            title: `test ${test}`,
+            firstSeenAt: NOW,
+            lastSeenAt: NOW,
+          },
+        }),
+      )
+    }
+
+    for (const [runIndex, failing] of [0, failingInSecondRun].entries()) {
+      const startedAt = new Date(NOW.getTime() - (2 - runIndex) * 3_600_000)
+      const run = await prisma.run.create({
+        data: {
+          ...tenant,
+          idempotencyKey: `run-${runIndex}-${slug}`,
+          commitSha: 'same-commit',
+          branch: 'main',
+          ciProvider: 'github_actions',
+          ciRunId: `ci-${runIndex}-${slug}`,
+          trigger: 'schedule',
+          status: failing > 0 ? 'failed' : 'passed',
+          startedAt,
+          passedCount: TESTS - failing,
+          failedCount: failing,
+        },
+      })
+      for (const [index, identity] of identities.entries()) {
+        await prisma.testExecution.create({
+          data: {
+            ...tenant,
+            runId: run.id,
+            testIdentityId: identity.id,
+            ordinal: index,
+            status: index < failing ? 'fail' : 'pass',
+            attempt: 1,
+            startedAt,
+            durationMs: 10,
+          },
+        })
+      }
+    }
+    return { ...tenant, ids: identities.map((identity) => identity.id) }
+  }
+
+  const scoreFirstTest = async (failingInSecondRun: number) => {
+    const { orgId, projectId, ids } = await seedSuite(failingInSecondRun)
+    const scored = await computeIdentityScores(prisma, orgId, projectId, ids, { now: NOW })
+    return scored.get(ids[0] as string)
+  }
+
+  it('sets the failures aside and does not date the test as flaked', async () => {
+    const scored = await scoreFirstTest(7)
+
+    expect(scored?.result.sameShaVariance).toBe(0)
+    expect(scored?.result.reasonCodes.map((reason) => reason.code)).toEqual([
+      'MASS_FAILURES_SET_ASIDE',
+    ])
+    expect(scored?.data.lastFlakedAt).toBeNull()
+  })
+
+  it('keeps the evidence when only part of the suite failed', async () => {
+    const scored = await scoreFirstTest(2)
+
+    expect(scored?.result.sameShaVariance).toBe(1)
+    expect(scored?.result.reasonCodes.map((reason) => reason.code)).toContain('SAME_SHA_VARIANCE')
+    expect(scored?.data.lastFlakedAt).not.toBeNull()
+  })
+})
