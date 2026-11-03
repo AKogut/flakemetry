@@ -22,6 +22,19 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: The release token is still accepted
+        env:
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          status=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $RELEASE_PAT" \
+            "https://api.github.com/repos/$REPOSITORY")
+          if [ "$status" != "200" ]; then
+            echo "::error title=RELEASE_PAT rejected::GitHub answered $status. No version pull request can open until it is rotated: gh secret set RELEASE_PAT"
+            exit 1
+          fi
+
       - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v7
