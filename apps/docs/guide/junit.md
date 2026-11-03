@@ -64,8 +64,9 @@ curl -X POST "$FLAKEMETRY_ENDPOINT/v1/ingest/junit" \
       }')"
 ```
 
-The `idempotencyKey` makes the upload safe to retry: replaying the same key is deduplicated
-rather than counted twice. See the [API reference](/reference/api) for the full request schema.
+The `idempotencyKey` makes the upload safe to retry: replaying the same report under the same
+key is deduplicated rather than counted twice. A different report under a repeated key is stored
+as its own run. See the [API reference](/reference/api) for the full request schema.
 
 ::: tip Python? Prefer the native plugin
 `pytest-flakemetry` records more than the JUnit round-trip can carry: parameter values travel as

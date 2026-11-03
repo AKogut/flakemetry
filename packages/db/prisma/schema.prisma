@@ -293,6 +293,7 @@ model IngestionJob {
   projectId      String             @map("project_id") @db.Uuid
   idempotencyKey String             @map("idempotency_key")
   payload        Json
+  contentDigest  String?            @map("content_digest")
   status         IngestionJobStatus @default(pending)
   attempts       Int                @default(0)
   visibleAt      DateTime           @default(dbgenerated("transaction_timestamp()")) @map("visible_at")

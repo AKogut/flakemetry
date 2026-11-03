@@ -116,6 +116,7 @@ export const junitIngestSchema = z.object({
 export const ingestAckSchema = z.object({
   receiptId: z.string().min(1),
   acceptedExecutions: z.number().int().nonnegative(),
+  deduplicated: z.boolean().optional(),
 })
 
 export const MAX_ARTIFACTS_PER_PRESIGN = 200

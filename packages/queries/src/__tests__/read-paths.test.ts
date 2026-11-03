@@ -273,4 +273,88 @@ describe.skipIf(!hasDb)('queries read paths', () => {
     const flakyRow = summary?.tests.find((test) => test.status === 'flaky')
     expect(flakyRow?.topReason).toBe('passes when retried')
   })
+
+  describe('a CI run with several jobs', () => {
+    const CI_COMMIT = 'matrix0000000'
+
+    const seedJobs = async (
+      jobs: readonly { key: string; startedAt: Date; status: 'pass' | 'fail' }[],
+    ) => {
+      const org = await prisma.org.create({ data: { name: 'Matrix', slug: `m-${Date.now()}` } })
+      const project = await prisma.project.create({
+        data: { orgId: org.id, name: 'Web', slug: 'web' },
+      })
+      const tenant = { orgId: org.id, projectId: project.id }
+      const identities = new Map<string, string>()
+      for (const job of jobs) {
+        const run = await prisma.run.create({
+          data: {
+            ...tenant,
+            idempotencyKey: job.key,
+            commitSha: CI_COMMIT,
+            branch: 'main',
+            ciProvider: 'github_actions',
+            ciRunId: '777',
+            trigger: 'push',
+            status: job.status === 'fail' ? 'failed' : 'passed',
+            startedAt: job.startedAt,
+          },
+        })
+        const name = job.key.split('/')[0] ?? job.key
+        let identityId = identities.get(name)
+        if (!identityId) {
+          const identity = await prisma.testIdentity.create({
+            data: {
+              ...tenant,
+              fingerprint: `fp-${name}`,
+              filePath: `${name}.spec.ts`,
+              suite: '',
+              title: name,
+              firstSeenAt: job.startedAt,
+              lastSeenAt: job.startedAt,
+            },
+          })
+          identityId = identity.id
+          identities.set(name, identityId)
+        }
+        await prisma.testExecution.create({
+          data: {
+            ...tenant,
+            runId: run.id,
+            testIdentityId: identityId,
+            status: job.status,
+            attempt: 1,
+            startedAt: job.startedAt,
+            durationMs: 10,
+          },
+        })
+      }
+      return project.id
+    }
+
+    it('reports a failure from a job other than the latest one', async () => {
+      const projectId = await seedJobs([
+        { key: 'webkit/1', startedAt: new Date(START.getTime() + 1000), status: 'fail' },
+        { key: 'chromium/1', startedAt: new Date(START.getTime() + 2000), status: 'pass' },
+      ])
+
+      const summary = await getRunSummaryByCommit(prisma, projectId, CI_COMMIT)
+
+      expect(summary?.failed).toBe(1)
+      expect(summary?.tests[0]?.title).toBe('webkit')
+      expect(summary?.runStatus).toBe('failed')
+    })
+
+    it('lets a later attempt of the CI run replace an earlier failure', async () => {
+      const projectId = await seedJobs([
+        { key: 'webkit/attempt-1', startedAt: new Date(START.getTime() + 1000), status: 'fail' },
+        { key: 'webkit/attempt-2', startedAt: new Date(START.getTime() + 2000), status: 'pass' },
+      ])
+
+      const summary = await getRunSummaryByCommit(prisma, projectId, CI_COMMIT)
+
+      expect(summary?.failed).toBe(0)
+      expect(summary?.runStatus).toBe('passed')
+    })
+  })
 })

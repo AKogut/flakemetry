@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 import type { Prisma, PrismaClient } from '@prisma/client'
 
 export interface EnqueueInput {
@@ -34,6 +36,31 @@ const DEFAULTS = {
   baseBackoffMs: 2_000,
 }
 
+const MAX_IDEMPOTENCY_KEY_LENGTH = 128
+const SIBLING_SUFFIX_LENGTH = 12
+
+export const batchContentDigest = (payload: unknown): string | null => {
+  const executions = (payload as { executions?: unknown } | null)?.executions
+  if (!Array.isArray(executions)) return null
+  const lines = (executions as Record<string, unknown>[])
+    .map((execution) =>
+      JSON.stringify([
+        execution.filePath,
+        execution.suite,
+        execution.title,
+        execution.params ?? null,
+        execution.status,
+        execution.attempt,
+        execution.durationMs,
+      ]),
+    )
+    .sort()
+  return createHash('sha256').update(lines.join('\n')).digest('hex')
+}
+
+const siblingKey = (idempotencyKey: string, digest: string): string =>
+  `${idempotencyKey.slice(0, MAX_IDEMPOTENCY_KEY_LENGTH - SIBLING_SUFFIX_LENGTH - 1)}~${digest.slice(0, SIBLING_SUFFIX_LENGTH)}`
+
 export class IngestionQueue {
   private readonly options: Required<IngestionQueueOptions>
 
@@ -44,32 +71,58 @@ export class IngestionQueue {
     this.options = { ...DEFAULTS, ...options }
   }
 
-  async enqueue(input: EnqueueInput): Promise<EnqueueResult> {
-    const where = {
-      projectId_idempotencyKey: {
-        projectId: input.projectId,
-        idempotencyKey: input.idempotencyKey,
-      },
-    }
+  private async createJob(
+    input: EnqueueInput,
+    idempotencyKey: string,
+    payload: Prisma.InputJsonValue,
+    contentDigest: string | null,
+  ): Promise<string | null> {
     try {
       const job = await this.prisma.ingestionJob.create({
         data: {
           orgId: input.orgId,
           projectId: input.projectId,
-          idempotencyKey: input.idempotencyKey,
-          payload: input.payload,
+          idempotencyKey,
+          payload,
+          contentDigest,
         },
         select: { id: true },
       })
-      return { jobId: job.id, deduplicated: false }
+      return job.id
     } catch (error) {
       if ((error as { code?: string }).code !== 'P2002') throw error
-      const existing = await this.prisma.ingestionJob.findUniqueOrThrow({
-        where,
-        select: { id: true },
-      })
+      return null
+    }
+  }
+
+  private findJob(projectId: string, idempotencyKey: string) {
+    return this.prisma.ingestionJob.findUniqueOrThrow({
+      where: { projectId_idempotencyKey: { projectId, idempotencyKey } },
+      select: { id: true, contentDigest: true },
+    })
+  }
+
+  async enqueue(input: EnqueueInput): Promise<EnqueueResult> {
+    const contentDigest = batchContentDigest(input.payload)
+    const created = await this.createJob(input, input.idempotencyKey, input.payload, contentDigest)
+    if (created) return { jobId: created, deduplicated: false }
+
+    const existing = await this.findJob(input.projectId, input.idempotencyKey)
+    if (!contentDigest || !existing.contentDigest || existing.contentDigest === contentDigest) {
       return { jobId: existing.id, deduplicated: true }
     }
+
+    const key = siblingKey(input.idempotencyKey, contentDigest)
+    const sibling = await this.createJob(
+      input,
+      key,
+      { ...(input.payload as Prisma.InputJsonObject), idempotencyKey: key },
+      contentDigest,
+    )
+    if (sibling) return { jobId: sibling, deduplicated: false }
+
+    const redelivered = await this.findJob(input.projectId, key)
+    return { jobId: redelivered.id, deduplicated: true }
   }
 
   async dequeue(limit = 1): Promise<QueuedJob[]> {

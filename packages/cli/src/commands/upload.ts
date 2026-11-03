@@ -14,7 +14,13 @@ export interface UploadOutcome {
   reason?: string
   receiptId?: string
   acceptedExecutions?: number
+  deduplicated?: boolean
 }
+
+export const describeUpload = (outcome: UploadOutcome): string =>
+  outcome.deduplicated
+    ? `flakemetry: already received, nothing new stored (receipt ${outcome.receiptId ?? 'n/a'})\n`
+    : `flakemetry: uploaded ${outcome.acceptedExecutions ?? 0} execution(s) (receipt ${outcome.receiptId ?? 'n/a'})\n`
 
 export interface UploadParams {
   file: string
@@ -71,6 +77,7 @@ export const runUpload = async (params: UploadParams): Promise<UploadOutcome> =>
     status: 'uploaded',
     receiptId: result.ack?.receiptId,
     acceptedExecutions: result.ack?.acceptedExecutions,
+    deduplicated: result.ack?.deduplicated,
   }
 }
 
@@ -98,9 +105,7 @@ export const uploadCommand: CommandModule = {
           const outcome = await runUpload({ file, endpoint, token })
 
           if (outcome.status === 'uploaded') {
-            process.stdout.write(
-              `flakemetry: uploaded ${outcome.acceptedExecutions ?? 0} execution(s) (receipt ${outcome.receiptId ?? 'n/a'})\n`,
-            )
+            process.stdout.write(describeUpload(outcome))
             return
           }
 
