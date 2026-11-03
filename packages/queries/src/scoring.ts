@@ -1,4 +1,9 @@
-import { computeFlakyScore, type ExecutionPoint, type FlakyScoreResult } from '@flakemetry/core'
+import {
+  computeFlakyScore,
+  type ExecutionPoint,
+  type FlakyScoreResult,
+  isMassFailureRun,
+} from '@flakemetry/core'
 import type { Prisma, PrismaClient } from '@flakemetry/db'
 
 export const SCORING_WINDOW = 500
@@ -158,11 +163,12 @@ export const computeIdentityScores = async (
               ...(ciRunIds.length > 0 ? [{ ciRunId: { in: ciRunIds } }] : []),
             ],
           },
-          select: { id: true, ciRunId: true },
+          select: { id: true, ciRunId: true, passedCount: true, flakyCount: true },
         })
   const keyByRunId = new Map(groupRuns.map((run) => [run.id, run.ciRunId ?? run.id]))
 
   const failingTestsByKey = new Map<string, Set<string>>()
+  const failingTestCountByRunId = new Map<string, number>()
   if (groupRuns.length > 0) {
     const grouped = await prisma.testExecution.groupBy({
       by: ['runId', 'testIdentityId'],
@@ -178,8 +184,18 @@ export const computeIdentityScores = async (
       const set = failingTestsByKey.get(key) ?? new Set<string>()
       set.add(row.testIdentityId)
       failingTestsByKey.set(key, set)
+      failingTestCountByRunId.set(row.runId, (failingTestCountByRunId.get(row.runId) ?? 0) + 1)
     }
   }
+
+  const massFailureRunIds = new Set(
+    groupRuns
+      .filter((run) => {
+        const failed = failingTestCountByRunId.get(run.id) ?? 0
+        return isMassFailureRun({ failed, executed: failed + run.passedCount + run.flakyCount })
+      })
+      .map((run) => run.id),
+  )
 
   for (const identityId of identityIds) {
     const executions = windows.get(identityId) ?? []
@@ -192,6 +208,7 @@ export const computeIdentityScores = async (
       runId: execution.runId,
       runFailureCount:
         failingTestsByKey.get(keyByRunId.get(execution.runId) ?? execution.runId)?.size ?? 0,
+      inMassFailure: massFailureRunIds.has(execution.runId),
     }))
 
     const result = computeFlakyScore(history, {
@@ -203,6 +220,9 @@ export const computeIdentityScores = async (
 
     const lastFlakedAt = executions
       .filter((execution) => execution.status === 'fail' || execution.status === 'flaky')
+      .filter(
+        (execution) => execution.status === 'flaky' || !massFailureRunIds.has(execution.runId),
+      )
       .map((execution) => execution.startedAt)
       .sort((a, b) => b.getTime() - a.getTime())[0]
 
