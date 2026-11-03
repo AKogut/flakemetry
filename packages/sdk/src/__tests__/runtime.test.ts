@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { assertConformantBatch, buildIdempotencyKey, resolveRunContext } from '../runtime'
+import { TestRunRecorder } from '../recorder'
+import {
+  assertConformantBatch,
+  buildIdempotencyKey,
+  resolveRunContext,
+  scopeKeyToContent,
+} from '../runtime'
 
 describe('resolveRunContext', () => {
   it('reads github actions context including pr number from the ref', () => {
@@ -85,6 +91,70 @@ describe('resolveRunContext', () => {
     })
     expect(context.commitSha).toBe('deadbeef')
     expect(context.branch).toBe('local')
+  })
+})
+
+describe('scopeKeyToContent', () => {
+  const context = {
+    project: 'acme/web',
+    commitSha: 'abc',
+    branch: 'main',
+    ciProvider: 'github_actions' as const,
+    trigger: 'push' as const,
+    ciRunId: '9000001',
+    prNumber: null,
+  }
+  const recorderWith = (
+    durationMs: number,
+    overrides: Partial<typeof context> & { shardIndex?: number } = {},
+  ) => {
+    const recorder = new TestRunRecorder({ ...context, ...overrides })
+    recorder.record({
+      filePath: 'a.spec.ts',
+      suite: '',
+      title: 'logs in',
+      status: 'pass',
+      startedAt: new Date(0),
+      durationMs,
+    })
+    return recorder
+  }
+
+  it('gives each job of a matrix its own key, so their artifacts cannot overwrite each other', () => {
+    const chromium = scopeKeyToContent('github_actions-9000001-1', recorderWith(100), {})
+    const webkit = scopeKeyToContent('github_actions-9000001-1', recorderWith(200), {})
+
+    expect(chromium).not.toBe(webkit)
+    expect(chromium.startsWith('github_actions-9000001-1-')).toBe(true)
+  })
+
+  it('derives the same key from the same results, so a re-delivery is still recognised', () => {
+    expect(scopeKeyToContent('github_actions-9000001-1', recorderWith(100), {})).toBe(
+      scopeKeyToContent('github_actions-9000001-1', recorderWith(100), {}),
+    )
+  })
+
+  it('leaves a shard key alone, because the shard already makes it unique', () => {
+    expect(
+      scopeKeyToContent(
+        'github_actions-9000001-1-shard2',
+        recorderWith(100, { shardIndex: 2 }),
+        {},
+      ),
+    ).toBe('github_actions-9000001-1-shard2')
+  })
+
+  it('leaves an explicit key alone, because the person setting it chose it', () => {
+    expect(
+      scopeKeyToContent('custom-key-1234', recorderWith(100), {
+        FLAKEMETRY_IDEMPOTENCY_KEY: 'custom-key-1234',
+      }),
+    ).toBe('custom-key-1234')
+  })
+
+  it('stays within the longest key the batch schema accepts', () => {
+    const key = scopeKeyToContent('k'.repeat(128), recorderWith(100), {})
+    expect(key.length).toBeLessThanOrEqual(128)
   })
 })
 

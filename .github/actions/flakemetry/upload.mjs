@@ -35,6 +35,8 @@ try {
   })
   if (!response.ok) finish(false, `failed — ingestion returned ${response.status}`)
   const ack = await response.json().catch(() => ({}))
+  if (ack.deduplicated)
+    finish(true, `already received, nothing new stored (receipt ${ack.receiptId ?? 'n/a'})`)
   const accepted = ack.acceptedExecutions ?? batch.executions?.length ?? 0
   finish(true, `uploaded ${accepted} execution(s) (receipt ${ack.receiptId ?? 'n/a'})`)
 } catch (error) {

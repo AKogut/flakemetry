@@ -32,7 +32,6 @@ interface IdentityRollup {
   title: string
   quarantined: boolean
   lastStatus: string
-  lastAttempt: number
   hasFlaky: boolean
   errorMessage: string | null
   knownIssueRef: string | null
@@ -46,13 +45,27 @@ export const getRunSummaryByCommit = async (
   const run = await prisma.run.findFirst({
     where: { projectId, commitSha },
     orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
-    select: { id: true, commitSha: true, branch: true, prNumber: true, status: true },
+    select: {
+      id: true,
+      commitSha: true,
+      branch: true,
+      prNumber: true,
+      status: true,
+      ciRunId: true,
+    },
   })
   if (!run) return null
 
+  const jobsOfTheCiRun = run.ciRunId
+    ? await prisma.run.findMany({
+        where: { projectId, commitSha, ciRunId: run.ciRunId },
+        select: { id: true },
+      })
+    : [{ id: run.id }]
+
   const executions = await prisma.testExecution.findMany({
-    where: { runId: run.id, projectId },
-    orderBy: [{ attempt: 'asc' }],
+    where: { runId: { in: jobsOfTheCiRun.map((job) => job.id) }, projectId },
+    orderBy: [{ run: { startedAt: 'asc' } }, { attempt: 'asc' }],
     select: {
       testIdentityId: true,
       status: true,
@@ -73,7 +86,6 @@ export const getRunSummaryByCommit = async (
         title: execution.identity.title,
         quarantined: execution.identity.quarantined,
         lastStatus: execution.status,
-        lastAttempt: execution.attempt,
         hasFlaky: execution.status === 'flaky',
         errorMessage: execution.status === 'fail' ? execution.errorMessage : null,
         knownIssueRef: execution.errorSignature?.cluster?.knownIssueRef ?? null,
@@ -82,10 +94,7 @@ export const getRunSummaryByCommit = async (
     }
     current.knownIssueRef ??= execution.errorSignature?.cluster?.knownIssueRef ?? null
     if (execution.status === 'flaky') current.hasFlaky = true
-    if (execution.attempt >= current.lastAttempt) {
-      current.lastAttempt = execution.attempt
-      current.lastStatus = execution.status
-    }
+    current.lastStatus = execution.status
     if (execution.status === 'fail') current.errorMessage = execution.errorMessage
   }
 
@@ -126,11 +135,13 @@ export const getRunSummaryByCommit = async (
     return (b.score ?? 0) - (a.score ?? 0)
   })
 
+  const anyJobFailing = tests.some((test) => test.status === 'fail')
+
   return {
     commitSha: run.commitSha,
     branch: run.branch,
     prNumber: run.prNumber,
-    runStatus: run.status,
+    runStatus: anyJobFailing ? 'failed' : run.status,
     failed: tests.filter((test) => test.status === 'fail').length,
     flaky: tests.filter((test) => test.status === 'flaky').length,
     tests,

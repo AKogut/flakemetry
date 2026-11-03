@@ -131,6 +131,7 @@ export const readHistoricalFile = (path: string): HistoricalFile => ({
 
 export interface ImportSummary {
   imported: number
+  alreadyPresent: number
   failed: number
   skipped: number
   executions: number
@@ -155,6 +156,7 @@ export const runHistoricalImport = async (params: RunImportParams): Promise<Impo
 
   const summary: ImportSummary = {
     imported: 0,
+    alreadyPresent: 0,
     failed: 0,
     skipped: params.plan.skipped.length,
     executions: 0,
@@ -176,7 +178,9 @@ export const runHistoricalImport = async (params: RunImportParams): Promise<Impo
 
     const result = await client.send(batch)
     done += 1
-    if (result.ok) {
+    if (result.ok && result.ack?.deduplicated) {
+      summary.alreadyPresent += 1
+    } else if (result.ok) {
       summary.imported += 1
       summary.executions += run.executionCount
     } else {
@@ -277,6 +281,7 @@ export const importCommand: CommandModule = {
 
           process.stdout.write(
             `\nflakemetry: imported ${summary.imported} run(s), ${summary.executions} execution(s)` +
+              `${summary.alreadyPresent > 0 ? `, ${summary.alreadyPresent} already present` : ''}` +
               `${summary.failed > 0 ? `, ${summary.failed} failed` : ''}` +
               `${summary.skipped > 0 ? `, ${summary.skipped} skipped` : ''}\n`,
           )

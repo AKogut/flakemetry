@@ -127,4 +127,30 @@ describe.skipIf(!hasDb)('POST /v1/ingest', () => {
     expect(second.json().receiptId).toBe(first.json().receiptId)
     expect(await prisma.ingestionJob.count({ where: { projectId } })).toBe(1)
   })
+
+  it('keeps every job of a CI matrix, even from a reporter that sends one key for all of them', async () => {
+    const { raw, projectId } = await seedToken()
+    const job = (durationMs: number) => {
+      const batch = validBatch('github_actions-555-1')
+      return {
+        ...batch,
+        executions: batch.executions.map((execution) => ({ ...execution, durationMs })),
+      }
+    }
+    const send = (durationMs: number) =>
+      app.inject({
+        method: 'POST',
+        url: '/v1/ingest',
+        headers: { authorization: `Bearer ${raw}` },
+        payload: job(durationMs),
+      })
+
+    const responses = [await send(100), await send(200), await send(300)]
+    const redelivered = await send(200)
+
+    expect(responses.map((response) => response.statusCode)).toEqual([202, 202, 202])
+    expect(responses.map((response) => response.json().deduplicated)).toEqual([false, false, false])
+    expect(redelivered.json().deduplicated).toBe(true)
+    expect(await prisma.ingestionJob.count({ where: { projectId } })).toBe(3)
+  })
 })

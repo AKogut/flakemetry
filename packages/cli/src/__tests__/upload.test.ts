@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { runUpload } from '../commands/upload'
+import { describeUpload, runUpload } from '../commands/upload'
 
 const validBatchJson = JSON.stringify({
   contractVersion: '0.1.0',
@@ -33,7 +33,42 @@ const withFile = (contents: string) => ({
   fileExists: () => true,
 })
 
+describe('describeUpload', () => {
+  it('says plainly when the server stored nothing new', () => {
+    const message = describeUpload({
+      status: 'uploaded',
+      receiptId: 'receipt-1',
+      acceptedExecutions: 17,
+      deduplicated: true,
+    })
+    expect(message).toContain('nothing new stored')
+    expect(message).not.toContain('uploaded')
+  })
+
+  it('reports the execution count when the run was stored', () => {
+    expect(
+      describeUpload({ status: 'uploaded', receiptId: 'receipt-1', acceptedExecutions: 17 }),
+    ).toContain('uploaded 17 execution(s)')
+  })
+})
+
 describe('runUpload', () => {
+  it('passes on that the server already had this run', async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 202,
+      json: async () => ({ receiptId: 'receipt-1', acceptedExecutions: 1, deduplicated: true }),
+    })) as unknown as typeof fetch
+    const outcome = await runUpload({
+      file: 'r.json',
+      endpoint: 'http://api',
+      token: 'fmk_x',
+      fetchImpl,
+      ...withFile(validBatchJson),
+    })
+    expect(outcome.deduplicated).toBe(true)
+  })
+
   it('skips when endpoint or token is missing', async () => {
     const outcome = await runUpload({
       file: 'r.json',

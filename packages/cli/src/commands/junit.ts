@@ -9,7 +9,7 @@ import {
 } from '@flakemetry/sdk'
 
 import type { CommandModule } from '../registry'
-import type { UploadOutcome } from './upload'
+import { describeUpload, type UploadOutcome } from './upload'
 
 export const DEFAULT_JUNIT_FILE = 'junit.xml'
 
@@ -87,6 +87,7 @@ export const runJunitUpload = async (params: JunitUploadParams): Promise<UploadO
     status: 'uploaded',
     receiptId: result.ack?.receiptId,
     acceptedExecutions: result.ack?.acceptedExecutions,
+    deduplicated: result.ack?.deduplicated,
   }
 }
 
@@ -114,9 +115,7 @@ export const junitCommand: CommandModule = {
           const outcome = await runJunitUpload({ file, endpoint, token, env: context.env })
 
           if (outcome.status === 'uploaded') {
-            process.stdout.write(
-              `flakemetry: uploaded ${outcome.acceptedExecutions ?? 0} execution(s) (receipt ${outcome.receiptId ?? 'n/a'})\n`,
-            )
+            process.stdout.write(describeUpload(outcome))
             return
           }
 

@@ -76,9 +76,13 @@ under one base test instead of treating each id as a separate test.
 
 ## Sharded suites
 
-A suite split across parallel jobs sends one run per shard. Each run needs its own
-idempotency key, because every shard of one CI run shares that run's id, and a batch that
-reuses another batch's key is dropped as a re-delivery.
+A suite split across parallel jobs sends one run per shard, and the key says which shard it
+is. A matrix that runs the same suite several ways, such as one job per browser, needs nothing
+extra: the reporters add a digest of the results to the key, so no two jobs share one.
+
+Delivering the same results twice stores them once. The server compares content as well as the
+key, so a batch with different results is kept even when its key repeats, which also protects
+reporters published before this behaviour.
 
 The reporters work out the shard on their own:
 

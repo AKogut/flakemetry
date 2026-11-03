@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
@@ -271,13 +271,35 @@ const syncReporterConfig = async (
   }
 }
 
+const MAX_IDEMPOTENCY_KEY_LENGTH = 128
+const CONTENT_SUFFIX_LENGTH = 12
+
+export const scopeKeyToContent = (
+  idempotencyKey: string,
+  recorder: TestRunRecorder,
+  env: Record<string, string | undefined>,
+): string => {
+  const { ciRunId, shardIndex } = recorder.context
+  if (!ciRunId || shardIndex != null || env.FLAKEMETRY_IDEMPOTENCY_KEY) return idempotencyKey
+  if (recorder.recorded.length === 0) return idempotencyKey
+  const content = recorder.recorded
+    .map((test) =>
+      JSON.stringify([test.fingerprint, test.status, test.attempt ?? 1, test.durationMs]),
+    )
+    .sort()
+    .join('\n')
+  const suffix = createHash('sha256').update(content).digest('hex').slice(0, CONTENT_SUFFIX_LENGTH)
+  return `${idempotencyKey.slice(0, MAX_IDEMPOTENCY_KEY_LENGTH - CONTENT_SUFFIX_LENGTH - 1)}-${suffix}`
+}
+
 export const deliverRun = async (
   recorder: TestRunRecorder,
-  idempotencyKey: string,
+  baseIdempotencyKey: string,
   options: FlakemetryDeliveryOptions,
   env: Record<string, string | undefined>,
   rootDir: string = process.cwd(),
 ): Promise<void> => {
+  const idempotencyKey = scopeKeyToContent(baseIdempotencyKey, recorder, env)
   const batch = recorder.toIngestBatch(idempotencyKey)
   writeOutput(batch, options, env)
 
@@ -315,6 +337,9 @@ export const deliverRun = async (
   }
 
   const outcome = await client.send(batch)
+  if (outcome.ok && outcome.ack?.deduplicated) {
+    process.stderr.write('flakemetry: this run was already received, nothing new was stored\n')
+  }
   if (!outcome.ok) {
     process.stderr.write(
       `flakemetry: upload skipped (${outcome.error ?? `status ${outcome.status}`}${outcome.buffered ? ', buffered' : ''})\n`,

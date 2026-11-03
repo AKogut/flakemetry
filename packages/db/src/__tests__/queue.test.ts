@@ -50,6 +50,99 @@ describe.skipIf(!hasDb)('IngestionQueue', () => {
     expect(await prisma.ingestionJob.count()).toBe(1)
   })
 
+  describe('a repeated key with different results', () => {
+    const job = (key: string, title: string, durationMs = 100) => ({
+      idempotencyKey: key,
+      executions: [
+        { filePath: 'a.spec.ts', suite: '', title, status: 'pass', attempt: 1, durationMs },
+      ],
+    })
+
+    it('stores every job of a matrix instead of dropping them as re-deliveries', async () => {
+      const { orgId, projectId } = await seedProject()
+      const queue = new IngestionQueue(prisma)
+      const key = 'github_actions-1-1'
+
+      const results = []
+      for (const durationMs of [100, 200, 300]) {
+        results.push(
+          await queue.enqueue({
+            orgId,
+            projectId,
+            idempotencyKey: key,
+            payload: job(key, 'logs in', durationMs),
+          }),
+        )
+      }
+
+      expect(results.map((result) => result.deduplicated)).toEqual([false, false, false])
+      expect(new Set(results.map((result) => result.jobId)).size).toBe(3)
+    })
+
+    it('keeps the stored key and the key inside the batch in step, since the worker reads the latter', async () => {
+      const { orgId, projectId } = await seedProject()
+      const queue = new IngestionQueue(prisma)
+      const key = 'github_actions-2-1'
+
+      await queue.enqueue({ orgId, projectId, idempotencyKey: key, payload: job(key, 'first') })
+      await queue.enqueue({ orgId, projectId, idempotencyKey: key, payload: job(key, 'second') })
+
+      const jobs = await prisma.ingestionJob.findMany({ where: { projectId } })
+      expect(jobs).toHaveLength(2)
+      for (const row of jobs) {
+        expect((row.payload as { idempotencyKey: string }).idempotencyKey).toBe(row.idempotencyKey)
+      }
+    })
+
+    it('still deduplicates when any job of the matrix is delivered again', async () => {
+      const { orgId, projectId } = await seedProject()
+      const queue = new IngestionQueue(prisma)
+      const key = 'github_actions-3-1'
+      const send = (title: string) =>
+        queue.enqueue({ orgId, projectId, idempotencyKey: key, payload: job(key, title) })
+
+      const first = await send('first')
+      const second = await send('second')
+      const firstAgain = await send('first')
+      const secondAgain = await send('second')
+
+      expect(firstAgain).toEqual({ jobId: first.jobId, deduplicated: true })
+      expect(secondAgain).toEqual({ jobId: second.jobId, deduplicated: true })
+      expect(await prisma.ingestionJob.count({ where: { projectId } })).toBe(2)
+    })
+
+    it('stays within the longest key the batch schema accepts', async () => {
+      const { orgId, projectId } = await seedProject()
+      const queue = new IngestionQueue(prisma)
+      const key = 'k'.repeat(128)
+
+      await queue.enqueue({ orgId, projectId, idempotencyKey: key, payload: job(key, 'first') })
+      await queue.enqueue({ orgId, projectId, idempotencyKey: key, payload: job(key, 'second') })
+
+      const jobs = await prisma.ingestionJob.findMany({ where: { projectId } })
+      expect(jobs).toHaveLength(2)
+      expect(Math.max(...jobs.map((row) => row.idempotencyKey.length))).toBeLessThanOrEqual(128)
+    })
+
+    it('treats a job stored before digests existed as the same batch', async () => {
+      const { orgId, projectId } = await seedProject()
+      const queue = new IngestionQueue(prisma)
+      const key = 'github_actions-4-1'
+      await prisma.ingestionJob.create({
+        data: { orgId, projectId, idempotencyKey: key, payload: job(key, 'old') },
+      })
+
+      const result = await queue.enqueue({
+        orgId,
+        projectId,
+        idempotencyKey: key,
+        payload: job(key, 'new'),
+      })
+
+      expect(result.deduplicated).toBe(true)
+    })
+  })
+
   it('dequeues with skip-locked, marks processing and hides the job from a second dequeue', async () => {
     const { orgId, projectId } = await seedProject()
     const queue = new IngestionQueue(prisma)
