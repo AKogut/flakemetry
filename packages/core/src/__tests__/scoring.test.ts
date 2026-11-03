@@ -20,6 +20,83 @@ const red = (commitSha: string, day: number, attempt = 1): ExecutionPoint => ({
   startedAt: daysAgo(day),
 })
 
+describe('reason codes describe what happened', () => {
+  const nightly = (
+    status: ExecutionPoint['status'],
+    day: number,
+    runId: string,
+  ): ExecutionPoint => ({
+    status,
+    commitSha: 'same-commit',
+    attempt: 1,
+    startedAt: daysAgo(day),
+    runId,
+  })
+
+  it('does not call a failure one night and a pass the next a rerun', () => {
+    const result = computeFlakyScore(
+      [nightly('fail', 3, 'night-1'), nightly('pass', 2, 'night-2'), nightly('pass', 1, 'night-3')],
+      config,
+    )
+    expect(result.passOnRerunRate).toBe(0)
+    expect(result.reasonCodes.map((reason) => reason.code)).not.toContain('PASS_ON_RERUN')
+    expect(result.reasonCodes.map((reason) => reason.code)).toContain('SAME_SHA_VARIANCE')
+  })
+
+  it('counts a rerun when a later attempt of one run recovers', () => {
+    const result = computeFlakyScore(
+      [
+        { ...nightly('fail', 1, 'run-1'), attempt: 1 },
+        { ...nightly('pass', 1, 'run-1'), attempt: 2 },
+      ],
+      config,
+    )
+    expect(result.passOnRerunRate).toBe(1)
+    expect(result.reasonCodes.map((reason) => reason.code)).toContain('PASS_ON_RERUN')
+  })
+
+  it('reads one flaky row, which is how Vitest and Jest report a retry, as a recovered retry', () => {
+    const result = computeFlakyScore(
+      [nightly('flaky', 2, 'run-1'), { ...nightly('pass', 1, 'run-2'), commitSha: 'other' }],
+      config,
+    )
+    expect(result.passOnRerunRate).toBe(1)
+    expect(result.sameShaVariance).toBeGreaterThan(0)
+    expect(result.reasonCodes.map((reason) => reason.code)).toEqual(
+      expect.arrayContaining(['PASS_ON_RERUN', 'SAME_SHA_VARIANCE']),
+    )
+  })
+
+  it('does not count a recovery twice when the failed attempt is also present', () => {
+    const result = computeFlakyScore(
+      [
+        { ...nightly('fail', 1, 'run-1'), attempt: 1 },
+        { ...nightly('flaky', 1, 'run-1'), attempt: 2 },
+        { ...nightly('fail', 2, 'run-2'), attempt: 1 },
+        { ...nightly('fail', 2, 'run-2'), attempt: 2 },
+      ],
+      config,
+    )
+    expect(result.passOnRerunRate).toBe(0.5)
+  })
+
+  it('scores a test that has only ever been skipped as zero and says so', () => {
+    const history = Array.from({ length: 94 }, (_, day) => ({
+      ...nightly('skip', day, `run-${day}`),
+    }))
+    const result = computeFlakyScore(history, config)
+    expect(result.score).toBe(0)
+    expect(result.sampleSize).toBe(0)
+    expect(result.reasonCodes.map((reason) => reason.code)).toEqual(['NEVER_EXECUTED'])
+  })
+
+  it('does not call a test unstable when it has never failed', () => {
+    const oldPasses = [nightly('pass', 400, 'run-1'), nightly('pass', 401, 'run-2')]
+    const result = computeFlakyScore(oldPasses, config)
+    expect(result.reasonCodes.map((reason) => reason.code)).toEqual(['STABLE'])
+  })
+})
+
 describe('computeFlakyScore', () => {
   it('scores a consistently green test near zero and explains it as stable', () => {
     const history = Array.from({ length: 8 }, (_, i) => green(`sha${i}`, i))

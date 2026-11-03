@@ -1,12 +1,13 @@
 import type { ReasonCode, TestStatus } from '@flakemetry/contracts'
 
-export const SCORING_MODEL_VERSION = '0.2.0'
+export const SCORING_MODEL_VERSION = '0.3.0'
 
 export interface ExecutionPoint {
   status: TestStatus
   commitSha: string
   attempt: number
   startedAt: Date
+  runId?: string
   runFailureCount?: number
 }
 
@@ -60,18 +61,20 @@ const DAY_MS = 86_400_000
 
 const percent = (value: number): number => Math.round(value * 100)
 
+const hasDifferentResults = (graded: readonly TestStatus[]): boolean =>
+  graded.includes('flaky') || (graded.some(isGreen) && graded.some(isRed))
+
 const computeSameShaVariance = (byCommit: Map<string, TestStatus[]>): number => {
-  let multi = 0
+  let comparable = 0
   let mixed = 0
   for (const statuses of byCommit.values()) {
     const graded = statuses.filter((status) => status !== 'skip')
-    if (graded.length < 2) continue
-    multi += 1
-    const green = graded.some(isGreen)
-    const red = graded.some(isRed)
-    if (green && red) mixed += 1
+    const different = hasDifferentResults(graded)
+    if (graded.length < 2 && !different) continue
+    comparable += 1
+    if (different) mixed += 1
   }
-  return multi === 0 ? 0 : mixed / multi
+  return comparable === 0 ? 0 : mixed / comparable
 }
 
 const computeFlipRate = (ordered: TestStatus[]): number => {
@@ -84,19 +87,31 @@ const computeFlipRate = (ordered: TestStatus[]): number => {
   return transitions / (graded.length - 1)
 }
 
-const computePassOnRerun = (byCommit: Map<string, ExecutionPoint[]>): number => {
-  let retriedAfterFail = 0
-  let recovered = 0
-  for (const points of byCommit.values()) {
-    const ordered = [...points].sort((a, b) => a.attempt - b.attempt)
-    for (let i = 1; i < ordered.length; i += 1) {
-      if (isRed(ordered[i - 1]!.status)) {
-        retriedAfterFail += 1
-        if (isGreen(ordered[i]!.status)) recovered += 1
-      }
-    }
+const computePassOnRerun = (points: readonly ExecutionPoint[]): number => {
+  const byRun = new Map<string, ExecutionPoint[]>()
+  for (const point of points) {
+    const key = point.runId ?? point.commitSha
+    const list = byRun.get(key) ?? []
+    list.push(point)
+    byRun.set(key, list)
   }
-  return retriedAfterFail === 0 ? 0 : recovered / retriedAfterFail
+
+  let retried = 0
+  let recovered = 0
+  for (const run of byRun.values()) {
+    const ordered = [...run].sort((a, b) => a.attempt - b.attempt)
+    ordered.forEach((point, index) => {
+      const previous = ordered[index - 1]
+      if (previous && point.attempt > previous.attempt && isRed(previous.status)) {
+        retried += 1
+        if (isGreen(point.status)) recovered += 1
+      } else if (point.status === 'flaky') {
+        retried += 1
+        recovered += 1
+      }
+    })
+  }
+  return retried === 0 ? 0 : recovered / retried
 }
 
 const computeFailIsolation = (
@@ -136,7 +151,7 @@ const buildReasonCodes = (signals: {
       message: `different results on ${signals.sameShaMixedCommits} identical commit(s)`,
     })
   }
-  if (signals.instability > 0.35) {
+  if (signals.instability > 0.35 && signals.failures > 0) {
     codes.push({
       code: 'RECENT_INSTABILITY',
       message: `recently unstable — ${percent(signals.instability)}% time-decayed failure weight`,
@@ -185,25 +200,39 @@ export const computeFlakyScore = (
     .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime())
     .slice(-settings.windowSize)
 
+  if (ordered.length === 0) {
+    return {
+      score: 0,
+      flipRate: 0,
+      passOnRerunRate: 0,
+      sameShaVariance: 0,
+      entropy: 0,
+      failIsolation: 0,
+      reasonCodes: [
+        {
+          code: 'NEVER_EXECUTED',
+          message: `skipped in all ${history.length} run(s), so there is nothing to score`,
+        },
+      ],
+      quarantineCandidate: false,
+      modelVersion: SCORING_MODEL_VERSION,
+      sampleSize: 0,
+    }
+  }
+
   const statusByCommit = new Map<string, TestStatus[]>()
-  const pointsByCommit = new Map<string, ExecutionPoint[]>()
   for (const point of ordered) {
     const statuses = statusByCommit.get(point.commitSha) ?? []
     statuses.push(point.status)
     statusByCommit.set(point.commitSha, statuses)
-
-    const points = pointsByCommit.get(point.commitSha) ?? []
-    points.push(point)
-    pointsByCommit.set(point.commitSha, points)
   }
 
   const sameShaVariance = computeSameShaVariance(statusByCommit)
-  const sameShaMixedCommits = [...statusByCommit.values()].filter((statuses) => {
-    const g = statuses.filter((s) => s !== 'skip')
-    return g.length >= 2 && g.some(isGreen) && g.some(isRed)
-  }).length
+  const sameShaMixedCommits = [...statusByCommit.values()].filter((statuses) =>
+    hasDifferentResults(statuses),
+  ).length
   const flipRate = computeFlipRate(ordered.map((point) => point.status))
-  const passOnRerunRate = computePassOnRerun(pointsByCommit)
+  const passOnRerunRate = computePassOnRerun(ordered)
 
   const halfLifeMs = settings.halfLifeDays * DAY_MS
   const decayConstant = Math.LN2 / halfLifeMs

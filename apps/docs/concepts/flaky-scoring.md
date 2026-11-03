@@ -26,7 +26,8 @@ Every score is explainable. It ships with **reason codes** — the human-readabl
 behind the number:
 
 - **same commit, different result** — flip-flopped outcomes with no code change.
-- **pass-on-rerun** — failed, then passed on retry with no code change.
+- **pass-on-rerun** — failed, then passed on a retry inside the same run. A failure one night and
+  a pass the next is not a rerun, so reports with no retry data, such as JUnit, never show this.
 - **intermittent across branches** — fails on some branches and not others for no code
   reason.
 
