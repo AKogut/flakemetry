@@ -80,6 +80,42 @@ for (const runner of RUNNERS) {
   )
 }
 
+const verifyMatrix = async () => {
+  const projectId = process.env.PLAYWRIGHTPROJECTS_PROJECT_ID
+  if (!projectId) return ['playwright matrix: no project id in the environment']
+
+  const deadline = Date.now() + TIMEOUT_MS
+  let scores = await prisma.flakyScore.findMany({
+    where: { projectId },
+    include: { identity: { select: { title: true, params: true } } },
+  })
+  while (scores.length < 6 && Date.now() < deadline) {
+    await sleep(POLL_MS)
+    scores = await prisma.flakyScore.findMany({
+      where: { projectId },
+      include: { identity: { select: { title: true, params: true } } },
+    })
+  }
+
+  const problems = []
+  const runs = await prisma.run.count({ where: { projectId } })
+  if (runs !== 3) problems.push(`expected a run per job of the matrix, stored ${runs}`)
+  if (scores.length !== 6) problems.push(`expected 2 tests on 3 browsers, stored ${scores.length}`)
+
+  const variants = new Set(scores.map((score) => score.identity.params?.variant))
+  for (const browser of ['chromium', 'firefox', 'webkit']) {
+    if (!variants.has(browser)) problems.push(`no identity carries the variant ${browser}`)
+  }
+
+  const onlyWebkit = scores.filter((score) => score.identity.title.includes('webkit only'))
+  if (onlyWebkit.some((score) => score.sameShaVariance !== 0)) {
+    problems.push('a failure on one browser was read as different results on one commit')
+  }
+  return problems.map((problem) => `playwright matrix: ${problem}`)
+}
+
+failures.push(...(await verifyMatrix()))
+
 await prisma.$disconnect()
 
 if (failures.length > 0) {

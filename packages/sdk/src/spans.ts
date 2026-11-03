@@ -98,7 +98,12 @@ export const emitRunSpans = (
           [SPAN_ATTR.status]: test.status,
           [SPAN_ATTR.attempt]: test.attempt ?? 1,
           [SPAN_ATTR.durationMs]: test.durationMs,
-          ...(test.paramsHash ? { [SPAN_ATTR.paramsHash]: test.paramsHash } : {}),
+          ...(test.paramsHash
+            ? {
+                [SPAN_ATTR.paramsHash]: test.paramsHash,
+                [SPAN_ATTR.params]: JSON.stringify(test.params),
+              }
+            : {}),
           ...(test.retryOfIndex != null ? { [SPAN_ATTR.retryOf]: test.retryOfIndex } : {}),
           ...(test.artifacts && test.artifacts.length > 0
             ? { [SPAN_ATTR.artifacts]: JSON.stringify(test.artifacts) }

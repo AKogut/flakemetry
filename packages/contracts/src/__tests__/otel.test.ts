@@ -95,6 +95,33 @@ const request = () => ({
 })
 
 describe('otlpToIngestBatch', () => {
+  it('carries params, so identity is the same over OTLP as over the JSON transport', () => {
+    const payload = request()
+    const caseSpan = payload.resourceSpans[0]!.scopeSpans[0]!.spans[1]!
+    ;(caseSpan.attributes as { key: string; value: { stringValue: string } }[]).push({
+      key: SPAN_ATTR.params,
+      value: s('{"variant":"webkit"}'),
+    })
+
+    const batch = otlpToIngestBatch(otlpTraceRequestSchema.parse(payload))
+
+    expect(batch.executions[0]?.params).toEqual({ variant: 'webkit' })
+    expect(batch.executions[1]?.params).toBeUndefined()
+  })
+
+  it('ignores params it cannot read rather than failing the whole run', () => {
+    const payload = request()
+    const caseSpan = payload.resourceSpans[0]!.scopeSpans[0]!.spans[1]!
+    ;(caseSpan.attributes as { key: string; value: { stringValue: string } }[]).push({
+      key: SPAN_ATTR.params,
+      value: s('{not json'),
+    })
+
+    const batch = otlpToIngestBatch(otlpTraceRequestSchema.parse(payload))
+
+    expect(batch.executions[0]?.params).toBeUndefined()
+  })
+
   it('parses a spec-conformant OTLP request', () => {
     expect(() => otlpTraceRequestSchema.parse(request())).not.toThrow()
   })

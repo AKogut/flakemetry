@@ -103,6 +103,7 @@ applies. It does not become a number the policy never allows.
 | `FLAKEMETRY_BRANCH` | Branch the run belongs to, same case; the fallback is `local` |
 | `FLAKEMETRY_SHARD_INDEX` / `FLAKEMETRY_SHARD_TOTAL` | Shard position (1-based) when a suite is split in a way the reporter cannot see. Playwright, Vitest and Jest `--shard` are read automatically and take precedence. Both variables are needed; a total of 1 is treated as unsharded |
 | `FLAKEMETRY_CODEOWNERS_FILE` | Explicit path to a CODEOWNERS file to sync; otherwise the reporter looks for `CODEOWNERS`, `.github/CODEOWNERS`, or `docs/CODEOWNERS` walking up from the test root |
+| `FLAKEMETRY_VARIANT` | The browser, platform or target this run covers, such as `ios` or `live`. Each variant keeps its own identity and history. Combined with the Playwright project when both are present |
 | `FLAKEMETRY_IDEMPOTENCY_KEY` | Explicit idempotency key for the run; makes re-delivery safe. It is used as given, while a different batch under the same key is still stored as its own run. Defaults to the run span trace id. Sharded runs get a per-shard `-shard<index>` suffix automatically |
 
 The reporter also syncs the repo's CODEOWNERS to the project on each run, so the flaky board and per-owner filters attribute each test to its owning team or user.

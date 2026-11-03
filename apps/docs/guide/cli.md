@@ -120,6 +120,7 @@ first day instead of after a fortnight of new runs.
 ```bash
 flakemetry import ./ci-artifacts --dry-run   # see what would be sent
 flakemetry import ./ci-artifacts
+flakemetry import ./espresso-reports --variant api-35   # reports from one browser, platform or target
 ```
 
 Every `.xml` file under the directory becomes one run:

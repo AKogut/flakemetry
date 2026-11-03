@@ -114,7 +114,14 @@ export default async function FlakyBoardPage({
                   </td>
                   <td>
                     <a href={`/projects/${projectId}/tests/${item.testIdentityId}`}>
-                      <div style={{ fontWeight: 600 }}>{item.title}</div>
+                      <div style={{ fontWeight: 600 }}>
+                        {item.title}
+                        {item.variant ? (
+                          <span className="pill" style={{ marginLeft: '0.4rem' }}>
+                            {item.variant}
+                          </span>
+                        ) : null}
+                      </div>
                       <div className="muted mono" style={{ fontSize: '0.8rem' }}>
                         {item.suite} · {item.filePath}
                       </div>

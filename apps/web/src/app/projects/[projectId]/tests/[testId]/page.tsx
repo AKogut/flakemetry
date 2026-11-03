@@ -106,7 +106,14 @@ export default async function TestDetailPage({
     <>
       <div className="row-between">
         <div>
-          <h1 className="page-title">{test.title}</h1>
+          <h1 className="page-title">
+            {test.title}
+            {test.variant ? (
+              <span className="pill" style={{ marginLeft: '0.5rem', verticalAlign: 'middle' }}>
+                {test.variant}
+              </span>
+            ) : null}
+          </h1>
           <p className="page-subtitle" style={{ marginBottom: 0 }}>
             <span className="mono">{test.suite}</span> ·{' '}
             <span className="mono">{test.filePath}</span>

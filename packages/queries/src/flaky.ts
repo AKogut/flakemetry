@@ -2,6 +2,8 @@ import type { FlakyBoardInput, FlakyBoardResult, FlakyTrend } from '@flakemetry/
 import { matchCodeowners, parseCodeowners } from '@flakemetry/core'
 import { Prisma, type PrismaClient } from '@flakemetry/db'
 
+import { variantOf } from './params'
+
 const TREND_EPSILON = 0.15
 
 const scoreSelect = Prisma.validator<Prisma.FlakyScoreSelect>()({
@@ -12,7 +14,7 @@ const scoreSelect = Prisma.validator<Prisma.FlakyScoreSelect>()({
   quarantineCandidate: true,
   lastFlakedAt: true,
   identity: {
-    select: { filePath: true, suite: true, title: true, quarantined: true },
+    select: { filePath: true, suite: true, title: true, params: true, quarantined: true },
   },
 })
 
@@ -121,6 +123,7 @@ export const flakyBoard = async (
     filePath: score.identity.filePath,
     suite: score.identity.suite,
     title: score.identity.title,
+    variant: variantOf(score.identity.params),
     score: score.score,
     flipRate: score.flipRate,
     passOnRerunRate: score.passOnRerunRate,

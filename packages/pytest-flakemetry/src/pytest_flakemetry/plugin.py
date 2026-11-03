@@ -91,6 +91,10 @@ class FlakemetryPlugin:
     def build_batch(self) -> Dict[str, object]:
         context = resolve_run_context()
         executions = self.collector.to_executions()
+        if context.variant:
+            for execution in executions:
+                params = execution.get("params") or {}
+                execution["params"] = {**params, "variant": context.variant}
         return {
             "contractVersion": CONTRACT_VERSION,
             "idempotencyKey": build_idempotency_key(context),

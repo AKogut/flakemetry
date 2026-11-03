@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { computeFingerprint } from '../fingerprint'
 import { TestRunRecorder } from '../recorder'
 import {
   assertConformantBatch,
@@ -91,6 +92,69 @@ describe('resolveRunContext', () => {
     })
     expect(context.commitSha).toBe('deadbeef')
     expect(context.branch).toBe('local')
+  })
+})
+
+describe('a variant', () => {
+  const context = {
+    project: 'acme/web',
+    commitSha: 'abc',
+    branch: 'main',
+    ciProvider: 'github_actions' as const,
+    trigger: 'push' as const,
+    ciRunId: '9000001',
+    prNumber: null,
+  }
+  const test_ = (variant?: string, params?: Record<string, string>) => ({
+    filePath: 'a.spec.ts',
+    suite: '',
+    title: 'logs in',
+    variant,
+    params,
+    status: 'pass' as const,
+    startedAt: new Date(0),
+    durationMs: 1,
+  })
+
+  it('comes from FLAKEMETRY_VARIANT for any runner', () => {
+    expect(resolveRunContext({ FLAKEMETRY_VARIANT: 'ios' }).variant).toBe('ios')
+    expect(resolveRunContext({}).variant).toBeNull()
+  })
+
+  it('gives each variant of a test its own identity', () => {
+    const recorder = new TestRunRecorder(context)
+    const chromium = recorder.record(test_('chromium'))
+    const webkit = recorder.record(test_('webkit'))
+    const plain = recorder.record(test_())
+
+    expect(chromium.fingerprint).not.toBe(webkit.fingerprint)
+    expect(plain.fingerprint).not.toBe(chromium.fingerprint)
+    expect(plain.params).toBeUndefined()
+  })
+
+  it('leaves a test with no variant on its existing identity', () => {
+    const recorder = new TestRunRecorder(context)
+    const plain = recorder.record(test_())
+
+    expect(plain.fingerprint).toBe(
+      computeFingerprint({ filePath: 'a.spec.ts', suite: '', title: 'logs in', paramsHash: null }),
+    )
+  })
+
+  it('keeps the parameters a test already had', () => {
+    const recorded = new TestRunRecorder(context).record(test_('webkit', { size: 'small' }))
+    expect(recorded.params).toEqual({ size: 'small', variant: 'webkit' })
+  })
+
+  it('combines the run variant with the one the runner reports', () => {
+    const recorded = new TestRunRecorder({ ...context, variant: 'linux' }).record(test_('webkit'))
+    expect(recorded.params).toEqual({ variant: 'linux/webkit' })
+  })
+
+  it('is part of the key, so reports from two platforms do not collide even on an older server', () => {
+    expect(buildIdempotencyKey({ ...context, variant: 'api 35/x86' }, {})).toBe(
+      'github_actions-9000001-1-api-35-x86',
+    )
   })
 })
 

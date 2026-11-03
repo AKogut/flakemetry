@@ -22,11 +22,20 @@ export interface ParamBucketGroup {
   totals: { total: number; failed: number; flaky: number; passRate: number }
 }
 
+export const variantOf = (params: unknown): string | null => {
+  const variant = (params as { variant?: unknown } | null)?.variant
+  return typeof variant === 'string' && variant.length > 0 ? variant : null
+}
+
 export const describeParams = (params: JsonRecord | null, paramsHash: string): string => {
   if (!params) return paramsHash.slice(0, 8)
   const entries = Object.entries(params)
   if (entries.length === 0) return paramsHash.slice(0, 8)
-  return entries.map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(', ')
+  return entries
+    .map(([key, value]) =>
+      key === 'variant' && typeof value === 'string' ? value : `${key}=${JSON.stringify(value)}`,
+    )
+    .join(', ')
 }
 
 export const getParamBuckets = async (

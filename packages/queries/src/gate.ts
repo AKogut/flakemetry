@@ -1,6 +1,6 @@
 import type { PrismaClient, RunStatus } from '@flakemetry/db'
 
-import { getRunSummaryByCommit, type RunSummaryTest } from './summary'
+import { getRunSummaryByCommit, type RunSummaryTest, testLabel } from './summary'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -136,7 +136,7 @@ export const renderGateComment = (gate: PrGate): string => {
 
   lines.push('', '| Test | In this run | Verdict | On base |', '| --- | --- | --- | --- |')
   for (const test of gate.tests) {
-    const label = `${inlineCode(escapeCell(test.filePath))} › ${escapeCell(test.title)}`
+    const label = `${inlineCode(escapeCell(test.filePath))} › ${escapeCell(testLabel(test))}`
     const state = test.status === 'fail' ? 'failed' : 'flaked'
     const flag =
       test.classification === 'new_failure'

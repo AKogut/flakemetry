@@ -154,6 +154,7 @@ export const resolveRunContext = (
 
   return {
     project: pick(env.FLAKEMETRY_PROJECT) ?? 'local/project',
+    variant: pick(env.FLAKEMETRY_VARIANT) ?? null,
     commitSha: ci?.commitSha ?? pick(env.FLAKEMETRY_COMMIT_SHA) ?? '0000000',
     branch: ci?.branch ?? pick(env.FLAKEMETRY_BRANCH) ?? 'local',
     ciProvider: ci?.provider ?? 'local',
@@ -184,7 +185,10 @@ export const buildIdempotencyKey = (
     // detection finds nothing to go on.
     const attempt = detectCi(env)?.attempt ?? pick(env.GITHUB_RUN_ATTEMPT) ?? '1'
     const shard = context.shardIndex != null ? `-shard${context.shardIndex}` : ''
-    return `${context.ciProvider}-${context.ciRunId}-${attempt}${shard}`
+    const variant = context.variant
+      ? `-${context.variant.replace(/[^\w.-]+/g, '-').slice(0, 40)}`
+      : ''
+    return `${context.ciProvider}-${context.ciRunId}-${attempt}${shard}${variant}`
   }
   return `local-${randomUUID()}`
 }

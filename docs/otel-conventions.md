@@ -39,6 +39,7 @@ M1 emits `test.run` + `test.case`. `test.step` and network/browser child spans a
 | `test.suite` | `auth` | grouping |
 | `test.title` | `logs in` | display name |
 | `test.file_path` | `e2e/auth/login.spec.ts` | source location |
+| `test.params` | `{"variant":"webkit"}` | parameters and variant as a JSON object, omitted when absent. Identity is computed from it on the server |
 | `test.params_hash` | `9f2c…` | parameterized bucket, omitted when absent |
 | `test.status` | `pass \| fail \| skip \| flaky` | verdict |
 | `test.attempt` | `2` | retry index (1-based) |

@@ -25,6 +25,10 @@ matches wins, and history is stitched onto the existing identity:
 - **L4 — parameterized.** Data-driven cases are grouped so a bucket of parameters rolls up
   to one logical test rather than fragmenting the score across every input.
 
+A [variant](/guide/reporters#variants), such as the browser or platform, is a parameter. Each
+one is scored separately, so a test that always fails on one browser reads as a failure there
+and not as a flake everywhere.
+
 Because identity is computed **server-side** from `filePath + suite + title + params`, the
 resolution is identical no matter which reporter produced the run — Playwright, Vitest,
 Jest, or a JUnit upload. The reporters never send a fingerprint; they send the raw
