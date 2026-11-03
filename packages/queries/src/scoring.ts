@@ -189,6 +189,7 @@ export const computeIdentityScores = async (
       attempt: execution.attempt,
       startedAt: execution.startedAt,
       commitSha: execution.run.commitSha,
+      runId: execution.runId,
       runFailureCount:
         failingTestsByKey.get(keyByRunId.get(execution.runId) ?? execution.runId)?.size ?? 0,
     }))
