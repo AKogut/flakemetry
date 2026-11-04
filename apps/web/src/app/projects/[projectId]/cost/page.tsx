@@ -36,7 +36,8 @@ export default async function CostPage({
 }) {
   const { projectId } = await params
   const { days: daysParam } = await searchParams
-  await requireProjectViewer(projectId)
+  const { project, isMember } = await requireProjectViewer(projectId)
+  const canChangeRates = isMember && (project.role === 'owner' || project.role === 'admin')
 
   const days = WINDOWS.includes(Number(daysParam)) ? Number(daysParam) : 30
 
@@ -95,7 +96,8 @@ export default async function CostPage({
               <div className="muted">CI time re-running</div>
               <div className="kpi-value">{hours(cost.totals.rerunMs)}</div>
               <div className="muted" style={{ fontSize: '0.8rem' }}>
-                {cost.totals.rerunCount} retries · {preciseMoney(cost.totals.ciSpend)}
+                {cost.totals.rerunCount} {cost.totals.rerunCount === 1 ? 'retry' : 'retries'} ·{' '}
+                {preciseMoney(cost.totals.ciSpend)}
               </div>
             </div>
             <div className="card kpi">
@@ -116,20 +118,25 @@ export default async function CostPage({
           </div>
 
           <div className="notice-box">
-            <strong>How this is worked out.</strong> The retry wall-clock is measured — an attempt
-            after the first only exists because an earlier one failed. Everything in money is that
-            measurement times rates you set:{' '}
+            <strong>How this is worked out.</strong> The retry wall-clock is measured, and counts
+            only attempts that followed a failed attempt of the same test. Everything in money is
+            that measurement times these rates:{' '}
             <span className="mono">{preciseMoney(rates.ciMinuteCost)}</span> per CI minute (
             {effective.ciMinuteCost.source}),{' '}
             <span className="mono">{preciseMoney(rates.developerHourCost)}</span> per developer hour
             ({effective.developerHourCost.source}), and{' '}
             <span className="mono">{rates.investigationMinutes} min</span> assumed per interruption
             ({effective.investigationMinutes.source}).{' '}
-            <a href={`${base}/settings/policy`} style={{ color: 'var(--accent)' }}>
-              Change them in policy
-            </a>
-            . Quarantine credits back only the interruption: a quarantined test still runs, so its
-            CI minutes are not saved.
+            {canChangeRates ? (
+              <>
+                <a href={`${base}/settings/policy`} style={{ color: 'var(--accent)' }}>
+                  Change them in policy
+                </a>
+                .{' '}
+              </>
+            ) : null}
+            Quarantine credits back only the interruption: a quarantined test still runs, so its CI
+            minutes are not saved.
           </div>
 
           {cost.trend.length > 1 ? (

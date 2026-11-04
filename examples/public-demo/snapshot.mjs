@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 import { getPrismaClient } from '@flakemetry/db'
@@ -19,12 +19,14 @@ const prisma = getPrismaClient()
 const projects = JSON.parse(readFileSync(provisionedFile, 'utf8'))
 
 const STYLESHEET = 'assets/style.css'
+const ICON = 'assets/icon.svg'
 const MAX_RUN_PAGES = 8
 const MAX_TRACES_PER_TEST = 2
 const CONCURRENCY = 8
 
 rmSync(output, { recursive: true, force: true })
 mkdirSync(join(output, 'assets'), { recursive: true })
+copyFileSync(new URL('../../apps/web/src/app/icon.svg', import.meta.url), join(output, ICON))
 
 const stylesheets = new Map()
 const collectStylesheets = async ($) => {
@@ -89,8 +91,9 @@ const snapshotProject = async (project) => {
     await collectStylesheets($)
 
     $('script, link[as="script"], link[rel="preload"], meta[name="next-size-adjust"]').remove()
-    $('link[rel="stylesheet"]').remove()
+    $('link[rel="stylesheet"], link[rel="icon"]').remove()
     $('head').append(`<link rel="stylesheet" href="${relativeLink(file, STYLESHEET)}">`)
+    $('head').append(`<link rel="icon" type="image/svg+xml" href="${relativeLink(file, ICON)}">`)
 
     for (const element of $('a[href]').toArray()) {
       const link = $(element)
@@ -168,7 +171,7 @@ for (const page of pages) {
   if (/bdg_[a-z0-9]{8,}/i.test(html)) problems.push(`${page}: has a badge token`)
   if (html.includes(web) || /\/sign-in/.test(html)) problems.push(`${page}: points at the app`)
   const $ = cheerio.load(html)
-  for (const element of $('a[href]').toArray()) {
+  for (const element of $('a[href], link[href]').toArray()) {
     const href = $(element).attr('href')
     if (/^https?:\/\//.test(href) || href.startsWith('#')) continue
     const resolved = join(dirname(join(output, page)), href.split('#')[0])

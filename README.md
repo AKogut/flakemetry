@@ -114,7 +114,7 @@ The [live demo](https://akogut.github.io/flakemetry/demo/) runs on the real CI h
 
 ![Flakemetry on the real history of three test suites](docs/demo.gif)
 
-<sub>Recorded from the live demo · re-capture it with [docs/recording-the-demo.md](docs/recording-the-demo.md).</sub>
+<sub>Recorded from the live demo · [watch a one-minute walkthrough](https://akogut.github.io/flakemetry/flakemetry-demo.mp4) · re-capture it with [docs/recording-the-demo.md](docs/recording-the-demo.md).</sub>
 
 ## See it in 60 seconds
 

@@ -46,3 +46,9 @@ instead of bolted-on hacks. That single decision is the platform's technical moa
 
 Ready to try it? [Self-host in one command](/guide/self-hosting), then
 [send your first run](/guide/reporters).
+
+## See it on real test suites
+
+<video controls muted playsinline preload="metadata" width="100%" src="https://akogut.github.io/flakemetry/flakemetry-demo.mp4"></video>
+
+A one-minute walk through the [live demo](https://akogut.github.io/flakemetry/demo/), which runs on the real CI history of public test suites.

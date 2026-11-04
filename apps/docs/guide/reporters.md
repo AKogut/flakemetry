@@ -79,8 +79,9 @@ under one base test instead of treating each id as a separate test.
 The same test on two browsers is two sets of evidence. A test that always fails on WebKit is not
 flaky because it passes on Chromium, so each variant keeps its own identity, score and history.
 
-- **Playwright** records the project as the variant whenever the config has more than one. A
-  single-project config records none, so its identities and history stay as they are.
+- **Playwright, Vitest and Jest** record the project as the variant whenever the config has more
+  than one, using the project's name, or `displayName` on Jest. A single-project config records
+  none, so its identities and history stay as they are.
 - **Anything else** sets it for the run:
 
 ```bash

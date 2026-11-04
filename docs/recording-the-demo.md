@@ -28,3 +28,14 @@ pnpm --filter flakemetry-public-demo record "$PWD/docs/demo.gif"
 A second argument records from another copy of the snapshot, such as one you have just built and are serving locally.
 
 Check that it reads at the size GitHub shows it, then commit it. Frame order and timing are at the top of [`record-gif.mjs`](../examples/public-demo/record-gif.mjs).
+
+## The video
+
+`apps/docs/public/flakemetry-demo.mp4` is a captioned walkthrough of about a minute, made the same way:
+
+```bash
+pnpm --filter flakemetry-public-demo record:video "$PWD/apps/docs/public/flakemetry-demo.mp4"
+```
+
+Captions and timing are in [`record-video.mjs`](../examples/public-demo/record-video.mjs). They name no numbers, so the video does not go stale as nights are added.
+

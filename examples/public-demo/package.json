@@ -10,7 +10,8 @@
     "load": "node load.mjs",
     "snapshot": "node snapshot.mjs",
     "test": "vitest run",
-    "record": "node record-gif.mjs"
+    "record": "node record-gif.mjs",
+    "record:video": "node record-video.mjs"
   },
   "dependencies": {
     "@flakemetry/contracts": "workspace:*",
