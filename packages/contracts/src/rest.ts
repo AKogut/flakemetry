@@ -214,7 +214,8 @@ export const TRPC_PROCEDURES: readonly TrpcProcedure[] = [
   },
   {
     name: 'health.metrics',
-    summary: 'Flaky MTTR, introduced-versus-resolved and quarantine backlog, optionally per team.',
+    summary:
+      'Tests that passed on a retry, tests crossing the quarantine bar and how long they stayed above it, and the quarantine backlog, optionally per team.',
     input: { name: 'TestHealthInput', schema: testHealthInputSchema },
   },
 ]

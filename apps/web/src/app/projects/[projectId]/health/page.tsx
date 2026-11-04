@@ -1,5 +1,9 @@
 import { getPrismaClient } from '@flakemetry/db'
-import { getTeamHealthLeaderboard, getTestHealthMetrics } from '@flakemetry/queries'
+import {
+  getEffectiveProjectPolicy,
+  getTeamHealthLeaderboard,
+  getTestHealthMetrics,
+} from '@flakemetry/queries'
 
 import { MiniTrend } from '@/components/mini-trend'
 import { requireProjectViewer } from '@/lib/viewer'
@@ -21,6 +25,15 @@ const duration = (ms: number | null): string => {
 const weekLabel = (date: Date): string =>
   date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 
+const testCount = (count: number): string => `${count} ${count === 1 ? 'test' : 'tests'}`
+
+const barSummary = (aboveBar: number, highestScore: number | null, bar: number): string => {
+  if (aboveBar > 0) return `${testCount(aboveBar)} ${aboveBar === 1 ? 'is' : 'are'} above it`
+  if (highestScore === null) return 'no test is above it'
+  if (highestScore >= bar) return 'no test with enough runs is above it'
+  return `the highest score here is ${highestScore.toFixed(2)}, so no test is above it`
+}
+
 export default async function TestHealthPage({
   params,
   searchParams,
@@ -36,17 +49,19 @@ export default async function TestHealthPage({
 
   const teams = await getTeamHealthLeaderboard(prisma, projectId, days)
   const owner = ownerParam && teams.some((team) => team.owner === ownerParam) ? ownerParam : null
-  const metrics = await getTestHealthMetrics(prisma, projectId, days, owner)
+  const [metrics, policy] = await Promise.all([
+    getTestHealthMetrics(prisma, projectId, days, owner),
+    getEffectiveProjectPolicy(prisma, projectId),
+  ])
+  const bar = policy.effective.flakyThreshold.value
   const scopeQuery = owner ? `&owner=${encodeURIComponent(owner)}` : ''
 
   const totalIntroduced = metrics.weekly.reduce((sum, week) => sum + week.introduced, 0)
   const totalResolved = metrics.weekly.reduce((sum, week) => sum + week.resolved, 0)
   const net = totalIntroduced - totalResolved
+  const crossedBar = totalIntroduced > 0 || totalResolved > 0
   const hasHistory =
-    totalIntroduced > 0 ||
-    totalResolved > 0 ||
-    metrics.quarantine.currentBacklog > 0 ||
-    metrics.reliabilityTrend.length > 0
+    crossedBar || metrics.quarantine.currentBacklog > 0 || metrics.reliabilityTrend.length > 0
 
   return (
     <>
@@ -56,8 +71,8 @@ export default async function TestHealthPage({
             Test health
           </h1>
           <p className="page-subtitle" style={{ marginBottom: 0 }}>
-            Is flakiness improving or degrading? Flaky MTTR and introduced-vs-resolved over the last{' '}
-            {days} days
+            Is flakiness improving or degrading? Tests that passed on a retry and tests that crossed
+            the quarantine bar over the last {days} days
             {owner ? (
               <>
                 {' '}
@@ -102,31 +117,41 @@ export default async function TestHealthPage({
       {!hasHistory ? (
         <div className="card">
           <div className="empty">
-            Not enough history yet. Health metrics appear once tests start flaking and stabilizing.
+            Not enough history yet. Health metrics appear once tests have run.
           </div>
         </div>
       ) : (
         <>
+          <p className="muted" style={{ fontSize: '0.85rem', marginBottom: '1rem' }}>
+            {metrics.passedOnRetry === 0
+              ? 'No test failed and then passed on a retry in this window.'
+              : `${testCount(metrics.passedOnRetry)} failed and then passed on a retry in this window.`}{' '}
+            The quarantine bar is a flaky score of {bar.toFixed(2)}, where a test becomes a
+            candidate for quarantine:{' '}
+            {barSummary(metrics.mttr.openCount, metrics.highestScore, bar)}. The{' '}
+            <a href={`/projects/${projectId}/flaky`}>flaky board</a> ranks every test.
+          </p>
+
           <div className="kpi-grid">
             <div className="card kpi">
-              <div className="rca-label">Median flaky MTTR</div>
-              <div className="kpi-value">{duration(metrics.mttr.medianMs)}</div>
-            </div>
-            <div className="card kpi">
-              <div className="rca-label">Mean flaky MTTR</div>
-              <div className="kpi-value">{duration(metrics.mttr.meanMs)}</div>
-            </div>
-            <div className="card kpi">
-              <div className="rca-label">Resolved in range</div>
-              <div className="kpi-value" style={{ color: 'var(--pass)' }}>
-                {metrics.mttr.resolvedCount}
+              <div className="rca-label">Passed on a retry</div>
+              <div className="kpi-value" style={{ color: 'var(--flaky)' }}>
+                {metrics.passedOnRetry}
               </div>
             </div>
             <div className="card kpi">
-              <div className="rca-label">Currently flaky</div>
+              <div className="rca-label">Above the quarantine bar</div>
               <div className="kpi-value" style={{ color: 'var(--flaky)' }}>
                 {metrics.mttr.openCount}
               </div>
+            </div>
+            <div className="card kpi">
+              <div className="rca-label">Median time above the bar</div>
+              <div className="kpi-value">{duration(metrics.mttr.medianMs)}</div>
+            </div>
+            <div className="card kpi">
+              <div className="rca-label">Mean time above the bar</div>
+              <div className="kpi-value">{duration(metrics.mttr.meanMs)}</div>
             </div>
             <div className="card kpi">
               <div className="rca-label">Quarantine backlog</div>
@@ -136,9 +161,9 @@ export default async function TestHealthPage({
 
           <div className="card">
             <div className="row-between" style={{ marginBottom: '0.6rem' }}>
-              <div className="rca-label">Flaky introduced vs resolved, per week</div>
+              <div className="rca-label">Flakiness per week</div>
               <div className="mono muted" style={{ fontSize: '0.78rem' }}>
-                {totalIntroduced} introduced · {totalResolved} resolved ·{' '}
+                {totalIntroduced} crossed the bar · {totalResolved} back under ·{' '}
                 <span style={{ color: net > 0 ? 'var(--fail)' : 'var(--pass)' }}>
                   net {net > 0 ? '+' : ''}
                   {net}
@@ -148,24 +173,38 @@ export default async function TestHealthPage({
             <div className="trend-grid">
               <div>
                 <div className="rca-label" style={{ marginBottom: '0.5rem' }}>
-                  Introduced
+                  Passed on a retry
                 </div>
                 <MiniTrend
-                  values={metrics.weekly.map((week) => week.introduced)}
+                  values={metrics.weekly.map((week) => week.passedOnRetry)}
                   tone="var(--flaky)"
-                  label="flaky tests introduced per week"
+                  label="tests that passed on a retry per week"
+                  flatMessage="No test passed on a retry in this window."
                 />
               </div>
               <div>
                 <div className="rca-label" style={{ marginBottom: '0.5rem' }}>
-                  Resolved
+                  Crossed the bar
                 </div>
                 <MiniTrend
-                  values={metrics.weekly.map((week) => week.resolved)}
-                  tone="var(--pass)"
-                  label="flaky tests resolved per week"
+                  values={metrics.weekly.map((week) => week.introduced)}
+                  tone="var(--flaky)"
+                  label="tests that crossed the quarantine bar per week"
+                  flatMessage="No test crossed the quarantine bar in this window."
                 />
               </div>
+              {crossedBar ? (
+                <div>
+                  <div className="rca-label" style={{ marginBottom: '0.5rem' }}>
+                    Back under the bar
+                  </div>
+                  <MiniTrend
+                    values={metrics.weekly.map((week) => week.resolved)}
+                    tone="var(--pass)"
+                    label="tests that came back under the quarantine bar per week"
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -189,6 +228,7 @@ export default async function TestHealthPage({
                 values={metrics.quarantine.trend.map((point) => point.count)}
                 tone="var(--flaky)"
                 label="quarantined test count per day"
+                flatMessage="No test was quarantined in this window."
               />
             </div>
           </div>
@@ -199,17 +239,17 @@ export default async function TestHealthPage({
                 Flaky backlog by team
               </div>
               <p className="muted" style={{ fontSize: '0.8rem', marginBottom: '0.6rem' }}>
-                Owners come from CODEOWNERS. A positive net means that team introduced more flaky
-                tests than it fixed in this window.
+                Owners come from CODEOWNERS. A positive net means more of that team's tests crossed
+                the quarantine bar than came back under it in this window.
               </p>
               <table>
                 <thead>
                   <tr>
                     <th>Team</th>
-                    <th style={{ textAlign: 'right' }}>Currently flaky</th>
+                    <th style={{ textAlign: 'right' }}>Above the bar</th>
                     <th style={{ textAlign: 'right' }}>Quarantined</th>
-                    <th style={{ textAlign: 'right' }}>Introduced</th>
-                    <th style={{ textAlign: 'right' }}>Resolved</th>
+                    <th style={{ textAlign: 'right' }}>Crossed the bar</th>
+                    <th style={{ textAlign: 'right' }}>Back under</th>
                     <th style={{ textAlign: 'right' }}>Net</th>
                   </tr>
                 </thead>
@@ -255,8 +295,9 @@ export default async function TestHealthPage({
                 <thead>
                   <tr>
                     <th>Week of</th>
-                    <th style={{ textAlign: 'right' }}>Introduced</th>
-                    <th style={{ textAlign: 'right' }}>Resolved</th>
+                    <th style={{ textAlign: 'right' }}>Passed on a retry</th>
+                    <th style={{ textAlign: 'right' }}>Crossed the bar</th>
+                    <th style={{ textAlign: 'right' }}>Back under</th>
                     <th style={{ textAlign: 'right' }}>Net</th>
                   </tr>
                 </thead>
@@ -266,6 +307,7 @@ export default async function TestHealthPage({
                     return (
                       <tr key={week.weekStart.toISOString()}>
                         <td className="mono">{weekLabel(week.weekStart)}</td>
+                        <td style={{ textAlign: 'right' }}>{week.passedOnRetry}</td>
                         <td style={{ textAlign: 'right', color: 'var(--flaky)' }}>
                           {week.introduced}
                         </td>

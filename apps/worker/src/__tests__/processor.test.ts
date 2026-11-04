@@ -236,7 +236,8 @@ describe.skipIf(!hasDb)('processJob', () => {
     })
     const kinds = healthEvents.map((event) => event.kind).sort()
     expect(kinds).toEqual(['flaked', 'quarantined'])
-    expect(healthEvents.every((event) => event.createdAt.getTime() === NOW.getTime())).toBe(true)
+    const newestExecution = new Date('2026-07-16T10:00:03Z').getTime()
+    expect(healthEvents.every((event) => event.createdAt.getTime() === newestExecution)).toBe(true)
   })
 
   it('does not re-quarantine a test a person released', async () => {

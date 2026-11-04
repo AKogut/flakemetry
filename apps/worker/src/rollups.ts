@@ -274,6 +274,14 @@ const writeFlakyTrend = async (
   })
 }
 
+const newestRunDay = async (prisma: PrismaClient, ctx: RollupContext, now: Date): Promise<Date> => {
+  const { _max: newest } = await prisma.run.aggregate({
+    where: { projectId: ctx.projectId },
+    _max: { startedAt: true },
+  })
+  return dayStart(newest.startedAt && newest.startedAt < now ? newest.startedAt : now)
+}
+
 export const updateRollups = async (
   prisma: PrismaClient,
   ctx: RollupContext,
@@ -296,5 +304,5 @@ export const updateRollups = async (
     await rollupDay(prisma, ctx, day, suites, identityIds)
   }
 
-  await writeFlakyTrend(prisma, ctx, dayStart(now))
+  await writeFlakyTrend(prisma, ctx, await newestRunDay(prisma, ctx, now))
 }

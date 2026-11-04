@@ -603,12 +603,36 @@ const writeScores = async (
   `
 }
 
+const latestEventTimes = async (
+  prisma: PrismaClient,
+  planned: readonly PlannedWrite[],
+): Promise<Map<string, Date>> => {
+  const identityIds = planned
+    .filter((plan) => plan.healthEvents.length > 0)
+    .map((plan) => plan.identityId)
+  if (identityIds.length === 0) return new Map()
+
+  const rows = await prisma.testHealthEvent.groupBy({
+    by: ['testIdentityId'],
+    where: { testIdentityId: { in: identityIds } },
+    _max: { createdAt: true },
+  })
+  return new Map(
+    rows.flatMap((row) => (row._max.createdAt ? [[row.testIdentityId, row._max.createdAt]] : [])),
+  )
+}
+
+const afterLatestEvent = (asOf: Date, latest: Date | undefined): Date =>
+  latest && latest >= asOf ? new Date(latest.getTime() + 1) : asOf
+
 const applyScores = async (
   prisma: PrismaClient,
   planned: readonly PlannedWrite[],
   ctx: ProcessContext,
 ): Promise<void> => {
   if (planned.length === 0) return
+
+  const latestEvents = await latestEventTimes(prisma, planned)
 
   const quarantining = planned
     .filter((p) => p.transition === 'quarantined')
@@ -621,7 +645,7 @@ const applyScores = async (
       testIdentityId: identityId,
       kind,
       score: scored.result.score,
-      createdAt: ctx.now,
+      createdAt: afterLatestEvent(scored.asOf, latestEvents.get(identityId)),
     })),
   )
 

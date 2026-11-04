@@ -100,6 +100,26 @@ describe.skipIf(!hasDb)('getTestHealthMetrics', () => {
       data: { ...tenant, day: dayOnly(1), flakyCount: 2, quarantinedCount: 1, avgScore: 0.4 },
     })
 
+    const dailyRow = (testIdentityId: string, daysAgo: number, flaky: number) => ({
+      ...tenant,
+      testIdentityId,
+      day: dayOnly(daysAgo),
+      total: 2,
+      passed: 2 - flaky,
+      failed: 0,
+      flaky,
+      skipped: 0,
+      avgDurationMs: 100,
+    })
+    await prisma.dailyTestStats.createMany({
+      data: [
+        dailyRow(resolved.id, 200, 1),
+        dailyRow(resolved.id, 3, 0),
+        dailyRow(open.id, 2, 1),
+        dailyRow(open.id, 1, 1),
+      ],
+    })
+
     const metrics = await getTestHealthMetrics(prisma, project.id, 90)
 
     expect(metrics.mttr.resolvedCount).toBe(1)
@@ -116,6 +136,11 @@ describe.skipIf(!hasDb)('getTestHealthMetrics', () => {
 
     expect(metrics.reliabilityTrend).toHaveLength(1)
     expect(metrics.reliabilityTrend[0]?.passRate).toBeCloseTo(0.8)
+
+    expect(metrics.passedOnRetry).toBe(1)
+    expect(metrics.highestScore).toBe(0.8)
+    const weeksWithRetries = metrics.weekly.reduce((sum, week) => sum + week.passedOnRetry, 0)
+    expect(weeksWithRetries).toBeGreaterThanOrEqual(1)
   })
 })
 

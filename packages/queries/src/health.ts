@@ -79,17 +79,23 @@ export const pairFlakeResolutions = (events: readonly HealthEventPoint[]): Paire
   return { resolutions, openCount }
 }
 
+export interface PassedOnRetryDay {
+  testIdentityId: string
+  day: Date
+}
+
 export const bucketWeekly = (
   events: readonly HealthEventPoint[],
   windowStart: Date,
   now: Date,
+  passedOnRetry: readonly PassedOnRetryDay[] = [],
 ): TestHealthResult['weekly'] => {
   const firstWeek = weekStartUtc(windowStart)
-  const weeks: { weekStart: Date; introduced: number; resolved: number }[] = []
+  const weeks: TestHealthResult['weekly'] = []
   const index = new Map<number, number>()
   for (let start = firstWeek.getTime(); start <= now.getTime(); start += WEEK_MS) {
     index.set(start, weeks.length)
-    weeks.push({ weekStart: new Date(start), introduced: 0, resolved: 0 })
+    weeks.push({ weekStart: new Date(start), introduced: 0, resolved: 0, passedOnRetry: 0 })
   }
 
   for (const event of events) {
@@ -98,6 +104,18 @@ export const bucketWeekly = (
     if (!bucket) continue
     if (event.kind === 'flaked') bucket.introduced += 1
     else if (event.kind === 'stabilized') bucket.resolved += 1
+  }
+
+  const testsByWeek = new Map<number, Set<string>>()
+  for (const { testIdentityId, day } of passedOnRetry) {
+    const week = weekStartUtc(day).getTime()
+    const tests = testsByWeek.get(week) ?? new Set<string>()
+    tests.add(testIdentityId)
+    testsByWeek.set(week, tests)
+  }
+  for (const [week, tests] of testsByWeek) {
+    const bucket = weeks[index.get(week) ?? -1]
+    if (bucket) bucket.passedOnRetry = tests.size
   }
 
   return weeks
@@ -179,6 +197,8 @@ export const getTestHealthMetrics = async (
       weekly: bucketWeekly([], windowStart, now),
       quarantine: { currentBacklog: 0, trend: [] },
       reliabilityTrend: [],
+      passedOnRetry: 0,
+      highestScore: null,
     }
   const identityFilter = scoped ? { in: scoped } : undefined
 
@@ -224,6 +244,22 @@ export const getTestHealthMetrics = async (
             orderBy: { day: 'asc' },
           }),
     ])
+
+  const [passedOnRetryDays, highest] = await Promise.all([
+    prisma.dailyTestStats.findMany({
+      where: {
+        projectId,
+        day: { gte: windowStart },
+        flaky: { gt: 0 },
+        ...(identityFilter ? { testIdentityId: identityFilter } : {}),
+      },
+      select: { testIdentityId: true, day: true },
+    }),
+    prisma.flakyScore.aggregate({
+      where: { projectId, ...(identityFilter ? { testIdentityId: identityFilter } : {}) },
+      _max: { score: true },
+    }),
+  ])
 
   const events: HealthEventPoint[] = rawEvents.map((event) => ({
     testIdentityId: event.testIdentityId,
@@ -285,7 +321,7 @@ export const getTestHealthMetrics = async (
   return {
     rangeDays: days,
     mttr: summarizeMttr(paired, windowStart, currentlyFlaky),
-    weekly: bucketWeekly(events, windowStart, now),
+    weekly: bucketWeekly(events, windowStart, now, passedOnRetryDays),
     quarantine: {
       currentBacklog,
       trend: scoped
@@ -293,6 +329,8 @@ export const getTestHealthMetrics = async (
         : quarantineDaily.map((row) => ({ day: row.day, count: row.quarantinedCount })),
     },
     reliabilityTrend,
+    passedOnRetry: new Set(passedOnRetryDays.map((row) => row.testIdentityId)).size,
+    highestScore: highest._max.score,
   }
 }
 

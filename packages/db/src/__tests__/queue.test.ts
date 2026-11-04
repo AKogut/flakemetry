@@ -157,6 +157,27 @@ describe.skipIf(!hasDb)('IngestionQueue', () => {
     expect(empty).toHaveLength(0)
   })
 
+  it('hands back a batch oldest first, so a replay is processed in the order it was sent', async () => {
+    const { orgId, projectId } = await seedProject()
+    const queue = new IngestionQueue(prisma)
+
+    const keys = Array.from({ length: 40 }, (_, index) => `run-${index}`)
+    for (const key of keys) {
+      await queue.enqueue({ orgId, projectId, idempotencyKey: key, payload: payload(key) })
+      await new Promise((resolve) => setTimeout(resolve, 3))
+    }
+
+    const processed: string[] = []
+    for (;;) {
+      const jobs = await queue.dequeue(5)
+      if (jobs.length === 0) break
+      expect(jobs.length).toBeLessThanOrEqual(5)
+      processed.push(...jobs.map((job) => job.idempotencyKey))
+    }
+
+    expect(processed).toEqual(keys)
+  })
+
   it('completes a job and reflects it in depth', async () => {
     const { orgId, projectId } = await seedProject()
     const queue = new IngestionQueue(prisma)

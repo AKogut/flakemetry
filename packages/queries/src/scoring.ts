@@ -24,6 +24,7 @@ export interface ScoredExecution {
 
 export interface ScoredIdentity {
   result: FlakyScoreResult
+  asOf: Date
   data: {
     orgId: string
     projectId: string
@@ -99,6 +100,11 @@ const loadWindows = async (
     byIdentity.set(row.test_identity_id, list)
   }
   return byIdentity
+}
+
+const asOfNewestExecution = (executions: readonly ScoredExecution[], now: Date): Date => {
+  const newest = executions.at(-1)?.startedAt
+  return newest && newest < now ? newest : now
 }
 
 /**
@@ -211,8 +217,9 @@ export const computeIdentityScores = async (
       inMassFailure: massFailureRunIds.has(execution.runId),
     }))
 
+    const asOf = asOfNewestExecution(executions, options.now)
     const result = computeFlakyScore(history, {
-      now: options.now,
+      now: asOf,
       threshold: options.threshold,
       minSamples: options.minSamples,
       windowSize: SCORING_WINDOW,
@@ -228,6 +235,7 @@ export const computeIdentityScores = async (
 
     scored.set(identityId, {
       result,
+      asOf,
       data: {
         orgId,
         projectId,

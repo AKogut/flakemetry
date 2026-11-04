@@ -120,12 +120,13 @@ export default async function SuiteHealthPage({
             </div>
             <div className="card">
               <div className="rca-label" style={{ marginBottom: '0.5rem' }}>
-                Flaky tests over time
+                Tests above the quarantine bar over time
               </div>
               <MiniTrend
                 values={flakyTrend.map((point) => point.flakyCount)}
                 tone="var(--flaky)"
-                label="flaky test count per day"
+                label="tests above the quarantine bar per day"
+                flatMessage="No test was above the quarantine bar in this window."
               />
             </div>
           </div>

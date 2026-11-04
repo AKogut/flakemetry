@@ -1,5 +1,5 @@
 import { getPrismaClient } from '@flakemetry/db'
-import { flakyBoard } from '@flakemetry/queries'
+import { flakyBoard, getEffectiveProjectPolicy } from '@flakemetry/queries'
 
 import { ScoreBadge, TrendArrow } from '@/components/score'
 import { requireProjectViewer } from '@/lib/viewer'
@@ -28,18 +28,30 @@ export default async function FlakyBoardPage({
   const { filter, owner } = await searchParams
   await requireProjectViewer(projectId)
 
-  const board = await flakyBoard(prisma, projectId, {
-    limit: BOARD_LIMIT,
-    minScore: 0,
-    includeQuarantined: true,
-    ...(owner ? { owner } : {}),
-  })
+  const [board, policy] = await Promise.all([
+    flakyBoard(prisma, projectId, {
+      limit: BOARD_LIMIT,
+      minScore: 0,
+      includeQuarantined: true,
+      ...(owner ? { owner } : {}),
+    }),
+    getEffectiveProjectPolicy(prisma, projectId),
+  ])
 
   const items = board.items.filter((item) => {
     if (filter === 'candidates') return item.quarantineCandidate
     if (filter === 'rising') return item.trend === 'rising'
     return true
   })
+
+  const bar = policy.effective.flakyThreshold.value
+  const highestScore = board.items[0]?.score ?? 0
+  const emptyFilterMessage =
+    filter === 'rising'
+      ? 'No test is failing noticeably more often than it used to.'
+      : highestScore >= bar
+        ? `No test with enough runs has reached the quarantine bar, a flaky score of ${bar.toFixed(2)}.`
+        : `No test has reached the quarantine bar, a flaky score of ${bar.toFixed(2)}. The highest score here is ${highestScore.toFixed(2)}.`
 
   const base = `/projects/${projectId}/flaky`
   const hrefWith = (patch: { filter?: string; owner?: string }): string => {
@@ -86,7 +98,7 @@ export default async function FlakyBoardPage({
           <div className="empty">
             {board.items.length === 0
               ? 'No scored tests yet — ingest a few runs to build history.'
-              : 'No tests match this filter.'}
+              : emptyFilterMessage}
           </div>
         ) : (
           <table>

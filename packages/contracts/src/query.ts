@@ -179,6 +179,7 @@ export const healthWeeklyPointSchema = z.object({
   weekStart: timestampSchema,
   introduced: z.number().int().nonnegative(),
   resolved: z.number().int().nonnegative(),
+  passedOnRetry: z.number().int().nonnegative(),
 })
 
 export const quarantineTrendPointSchema = z.object({
@@ -201,6 +202,8 @@ export const testHealthResultSchema = z.object({
     trend: z.array(quarantineTrendPointSchema),
   }),
   reliabilityTrend: z.array(reliabilityPointSchema),
+  passedOnRetry: z.number().int().nonnegative(),
+  highestScore: z.number().min(0).max(1).nullable(),
 })
 
 export type RunsListInput = z.infer<typeof runsListInputSchema>
