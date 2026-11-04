@@ -52,7 +52,7 @@ If every test execution is modelled as an **OpenTelemetry span**, then historica
 | **Cost of flakiness** | The CI minutes and engineer hours a flaky test is spending, in money |
 | **Acts on what it finds** | Auto-quarantine, tracker issues filed and closed as tests recover, README health badges |
 | **CI-native** | GitHub Action, sticky PR comment, and a quality gate that blocks only *new* failures — never your build |
-| **Any test runner** | Playwright, Vitest, Jest and pytest reporters, or JUnit XML from anything else |
+| **Any test runner** | Playwright, Vitest, Jest and pytest reporters, Allure results and XCUITest summaries with their retries, or JUnit XML from anything else |
 | **Public API** | Read-only REST with OpenAPI, signed outbound webhooks, and a CLI |
 | **Your data, yours** | One-command export, configurable retention, and hard deletion that verifies itself |
 | **Self-hostable** | One `docker compose up`, MIT-licensed core |

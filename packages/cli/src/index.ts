@@ -1,5 +1,6 @@
 import { Command } from 'commander'
 
+import { allureCommand } from './commands/allure'
 import { configCommand } from './commands/config'
 import { doctorCommand } from './commands/doctor'
 import { flakyCommand } from './commands/flaky'
@@ -8,6 +9,7 @@ import { junitCommand } from './commands/junit'
 import { quarantineCommand } from './commands/quarantine'
 import { runCommand } from './commands/run'
 import { uploadCommand } from './commands/upload'
+import { xcresultCommand } from './commands/xcresult'
 import { resolveConfig, resolveToken, tryResolveConfig } from './config-loader'
 import type { CommandContext } from './registry'
 import { CommandRegistry } from './registry'
@@ -21,7 +23,7 @@ export * from './commands/run'
 export * from './commands/upload'
 export * from './config-loader'
 export * from './registry'
-export { configCommand, importCommand, junitCommand, uploadCommand }
+export { allureCommand, configCommand, importCommand, junitCommand, uploadCommand, xcresultCommand }
 
 declare const __CLI_VERSION__: string | undefined
 
@@ -33,6 +35,8 @@ export const createDefaultRegistry = (): CommandRegistry =>
     .add(runCommand)
     .add(uploadCommand)
     .add(junitCommand)
+    .add(allureCommand)
+    .add(xcresultCommand)
     .add(importCommand)
     .add(flakyCommand)
     .add(quarantineCommand)
