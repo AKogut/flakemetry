@@ -36,8 +36,8 @@ cd flakemetry
 cp deploy/compose/.env.example deploy/compose/.env
 $EDITOR deploy/compose/.env          # nothing has a working default, by design
 
-docker compose -f deploy/compose/docker-compose.yml \
-  --env-file deploy/compose/.env up -d --build
+docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env pull
+docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env up -d
 ```
 
 The stack refuses to start with a secret missing rather than falling back to the
@@ -55,6 +55,28 @@ curl -sf https://api.flakemetry.example.com/health     # {"status":"ok","service
 
 Then open the dashboard and sign in with GitHub. **The first account to sign in becomes the
 owner** — do this yourself, immediately, before the host is discoverable.
+
+## Where the images come from
+
+`docker compose pull && docker compose up -d` is the normal path. Every push to `main`
+publishes `ghcr.io/akogut/flakemetry-api`, `-worker`, `-web` and `-migrate` for `linux/amd64`
+and `linux/arm64`, so the machine never runs the Next.js and TypeScript build, which is slow
+on 2 vCPU and can run out of memory on 4 GB. The clone is still what provides this compose
+file, the Caddyfile and the backup scripts.
+
+Each image is tagged `latest` and with its full commit sha. Set `FLAKEMETRY_IMAGE_TAG` in
+`.env` to a sha to stay on that build.
+
+To build from source instead, add `--build`. A later `pull` replaces what you built.
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env up -d --build
+```
+
+**A failed pull does not stop the stack.** These services keep their `build:` section, so
+Compose only warns and the next `up` compiles from source on the host, which is the slow path
+this exists to avoid. If `pull` prints `Some service image(s) must be built from source`,
+find out why before going on. `up -d --no-build` turns that into an error.
 
 ## Your first project and token
 
@@ -122,11 +144,12 @@ configurable from the environment.
 ```bash
 docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env logs -f worker
 docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env pull
-docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env up -d --build
+docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env up -d
 ```
 
 Migrations run as a one-shot `migrate` service before the apps start, and are additive, so an
-upgrade is a rebuild.
+upgrade is `git pull`, to keep this compose file in step with the images, then the last two
+commands above.
 
 **Back up Postgres.** It is the system of record — history, identities, scores, the queue.
 Artifacts are regenerable; the database is not.
@@ -154,6 +177,9 @@ This stack has been run end to end — not only `docker compose config`:
 | Both apps answer `/health` | `{"service":"api"}` and `{"service":"web"}` on their own hostnames, which is why they are separate hostnames |
 | Artifacts round-trip | presign → `PUT` → presigned `GET` returns the same bytes |
 | The object store refuses unsigned requests | `403 AccessDenied` on a plain `GET` |
+
+That run built the images from source. Pulling the published images has not been run end to
+end yet, on either architecture.
 
 **A presigned upload is bound to the size it was issued for.** A body larger than the
 declared `sizeBytes` is refused with `403`, so a grant for a screenshot cannot be spent on a

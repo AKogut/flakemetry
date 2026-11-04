@@ -1,0 +1,147 @@
+name: images
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.github/workflows/images.yml'
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: build for ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to the registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build web
+        id: web
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: web
+          platforms: linux/${{ matrix.arch }}
+          cache-from: type=gha,scope=images-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=images-${{ matrix.arch }},ignore-error=true
+          outputs: type=image,name=ghcr.io/akogut/flakemetry-web,push-by-digest=true,name-canonical=true,push=${{ github.event_name == 'push' }}
+
+      - name: Build api
+        id: api
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: api
+          platforms: linux/${{ matrix.arch }}
+          cache-from: type=gha,scope=images-${{ matrix.arch }}
+          outputs: type=image,name=ghcr.io/akogut/flakemetry-api,push-by-digest=true,name-canonical=true,push=${{ github.event_name == 'push' }}
+
+      - name: Build worker
+        id: worker
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: worker
+          platforms: linux/${{ matrix.arch }}
+          cache-from: type=gha,scope=images-${{ matrix.arch }}
+          outputs: type=image,name=ghcr.io/akogut/flakemetry-worker,push-by-digest=true,name-canonical=true,push=${{ github.event_name == 'push' }}
+
+      - name: Build migrate
+        id: migrate
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: migrate
+          platforms: linux/${{ matrix.arch }}
+          cache-from: type=gha,scope=images-${{ matrix.arch }}
+          outputs: type=image,name=ghcr.io/akogut/flakemetry-migrate,push-by-digest=true,name-canonical=true,push=${{ github.event_name == 'push' }}
+
+      - name: Record the digests
+        if: github.event_name == 'push'
+        env:
+          ARCH: ${{ matrix.arch }}
+          WEB: ${{ steps.web.outputs.digest }}
+          API: ${{ steps.api.outputs.digest }}
+          WORKER: ${{ steps.worker.outputs.digest }}
+          MIGRATE: ${{ steps.migrate.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          echo "$WEB" > "$RUNNER_TEMP/digests/web-$ARCH"
+          echo "$API" > "$RUNNER_TEMP/digests/api-$ARCH"
+          echo "$WORKER" > "$RUNNER_TEMP/digests/worker-$ARCH"
+          echo "$MIGRATE" > "$RUNNER_TEMP/digests/migrate-$ARCH"
+
+      - uses: actions/upload-artifact@v7
+        if: github.event_name == 'push'
+        with:
+          name: digests-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: publish the images
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to the registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Tag every image with the commit
+        run: |
+          for target in api worker web migrate; do
+            image="ghcr.io/akogut/flakemetry-$target"
+            docker buildx imagetools create \
+              --annotation "index:org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+              --tag "$image:$GITHUB_SHA" \
+              "$image@$(cat "digests/$target-amd64")" \
+              "$image@$(cat "digests/$target-arm64")"
+          done
+
+      - name: Move latest once every image has its commit tag
+        run: |
+          for target in api worker web migrate; do
+            image="ghcr.io/akogut/flakemetry-$target"
+            docker buildx imagetools create --tag "$image:latest" "$image:$GITHUB_SHA"
+          done
