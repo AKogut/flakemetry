@@ -18,8 +18,10 @@ import {
   getSuiteHealth,
   getTeamHealthLeaderboard,
   getTest,
+  getTestCaseMatrix,
   getTestHealthMetrics,
   getTestLeaderboards,
+  hasTestCaseComparison,
   listRuns,
 } from '@flakemetry/queries'
 
@@ -70,6 +72,8 @@ const queries = {
   'run summary by commit': () => getRunSummaryByCommit(prisma, PROJECT, latestRun.commitSha),
   'PR gate': () => getPrGate(prisma, PROJECT, latestRun.commitSha, { baseBranch: 'main' }),
   'retention count': () => storedExecutionCount(prisma, PROJECT),
+  'test cases across variants': () => getTestCaseMatrix(prisma, PROJECT),
+  'test cases in the sidebar': () => hasTestCaseComparison(prisma, PROJECT),
 }
 
 const percentile = (sorted, p) =>

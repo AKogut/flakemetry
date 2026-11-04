@@ -11,6 +11,7 @@ const file = (path) =>
 describe('pageFileFor', () => {
   it('maps the read pages', () => {
     expect(file(`${BASE}/flaky`)).toBe('mobile/flaky.html')
+    expect(file(`${BASE}/test-cases`)).toBe('mobile/test-cases.html')
     expect(file(`${BASE}/flaky?filter=rising`)).toBe('mobile/flaky-rising.html')
     expect(file(`${BASE}/runs?cursor=abcdefgh1234`)).toBe('mobile/runs-abcdefgh.html')
     expect(file(`${BASE}/tests/${TEST}`)).toBe('mobile/tests/abcdef.html')
@@ -24,6 +25,7 @@ describe('pageFileFor', () => {
     expect(file(`${BASE}/runs?branch=main`)).toBeNull()
     expect(file(`${BASE}/tests/${TEST}?execution=${EXECUTION}`)).toBeNull()
     expect(file(`${BASE}/flaky?owner=someone`)).toBeNull()
+    expect(file(`${BASE}/test-cases?variant=ios`)).toBeNull()
     expect(file('/projects')).toBeNull()
     expect(file('/sign-in')).toBeNull()
   })
