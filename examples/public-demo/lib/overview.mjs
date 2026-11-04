@@ -265,7 +265,7 @@ export const renderOverview = async (prisma, projects) => {
   </p>
   <div class="card">${topTests(restful, stats.get('restful-booker'))}</div>
 
-  <h2>One app, four runners</h2>
+  <h2 id="one-app-four-runners">One app, four runners</h2>
   <p>
     <a href="${mobile.slug}/flaky.html">${escapeHtml(mobile.name)}</a> runs the same catalogue of
     test cases through Appium on Android and iOS, XCUITest and Espresso. The same app and the same

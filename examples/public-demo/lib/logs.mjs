@@ -93,15 +93,28 @@ export const parseAppiumLog = (text, suiteByTitle = new Map()) => {
 
 const ESPRESSO_FAILURE = /^(\S+) > (\S+?)(?:\[[^\]]*\])? FAILED\s*$/
 
+const LOOK_AHEAD = 40
+
+const nextText = (lines, index) => {
+  for (let next = index + 1; next < Math.min(index + LOOK_AHEAD, lines.length); next += 1) {
+    const text = lines[next].trim()
+    if (text && !text.startsWith('FAIL ')) return text
+  }
+  return null
+}
+
+const errorOf = (message) => (message ? { type: null, message, stack: null } : null)
+
 export const parseEspressoLog = (text) => {
-  const failed = new Set()
+  const lines = cleanLines(text)
+  const failed = new Map()
   let finished = null
-  for (const line of cleanLines(text)) {
+  lines.forEach((line, index) => {
     const failure = ESPRESSO_FAILURE.exec(line)
-    if (failure) failed.add(failure[2])
+    if (failure) failed.set(failure[2], nextText(lines, index))
     const done = /^Finished (\d+) tests on /.exec(line)
     if (done) finished = Number(done[1])
-  }
+  })
   return { failed, finished }
 }
 
@@ -111,18 +124,16 @@ export const espressoExecutions = (universe, failed) =>
     status: failed.has(test.title) ? 'fail' : 'pass',
     attempt: 1,
     retryOfIndex: null,
-    error: failed.has(test.title)
-      ? { type: null, message: 'failed, per the CI log', stack: null }
-      : null,
+    error: failed.has(test.title) ? errorOf(failed.get(test.title)) : null,
   }))
 
 export const parseVitestLog = (text) => {
   const lines = cleanLines(text)
-  const failed = new Set()
-  for (const line of lines) {
+  const failed = new Map()
+  lines.forEach((line, index) => {
     const match = /^\s*FAIL\s+(tests\/\S+ > .*?)\s*$/.exec(line)
-    if (match) failed.add(match[1])
-  }
+    if (match) failed.set(match[1], nextText(lines, index))
+  })
   return {
     failed,
     stoppedAtGate: lines.some((line) => line.includes('is not ready after')),

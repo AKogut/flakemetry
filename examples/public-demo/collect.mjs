@@ -8,6 +8,8 @@ import {
   junitBatch,
   noTestsBatch,
   reporterBatch,
+  restfulReporterBatch,
+  withoutTargetIndependentTests,
   xcresultBatch,
 } from './lib/batches.mjs'
 import { knownSources, writeBatch } from './lib/history.mjs'
@@ -66,8 +68,14 @@ const COLLECTORS = {
       source: (artifact, match) => `r${artifact.workflow_run.id}-${match[1]}`,
       variant: (match) => match[1],
       build: (directory, meta, variant, source) => {
+        const recorded = globSync(join(directory, '**', 'flakemetry-run.json'))[0]
+        if (recorded) return restfulReporterBatch(readJson(recorded), meta, variant, source)
         const file = globSync(join(directory, '**', '*.xml'))[0]
-        return file ? junitBatch(readFileSync(file, 'utf8'), meta, variant, source) : null
+        return file
+          ? withoutTargetIndependentTests(
+              junitBatch(readFileSync(file, 'utf8'), meta, variant, source),
+            )
+          : null
       },
     },
   ],

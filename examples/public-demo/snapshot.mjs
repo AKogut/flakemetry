@@ -104,6 +104,13 @@ const snapshotProject = async (project) => {
       link.attr('href', relativeLink(file, target))
     }
 
+    for (const element of $('*').toArray()) {
+      const node = $(element)
+      if (node.children().length === 0 && node.text().trim().startsWith('Select a span')) {
+        node.text('This is a static snapshot. A running instance shows the details of a span here.')
+      }
+    }
+
     const home = relativeLink(file, 'index.html')
     $('.brand').wrapInner(`<a href="${home}" style="color:inherit;text-decoration:none"></a>`)
     $('.nav').prepend(`<a href="${home}">All projects</a>`)
