@@ -25,6 +25,7 @@ export interface VitestTask {
 
 export interface VitestFile extends VitestTask {
   filepath?: string
+  projectName?: string
 }
 
 const statusFromState = (state: string | undefined, retryCount: number): TestStatus => {
@@ -45,13 +46,19 @@ export const mapVitestFiles = (
   files: readonly VitestFile[],
   rootDir: string,
   fallbackStart: Date,
+  severalProjects = false,
 ): RecordedTest[] => {
   const out: RecordedTest[] = []
 
-  const walk = (tasks: readonly VitestTask[], suite: string[], filePath: string): void => {
+  const walk = (
+    tasks: readonly VitestTask[],
+    suite: string[],
+    filePath: string,
+    variant: string | undefined,
+  ): void => {
     for (const task of tasks) {
       if (task.type === 'suite') {
-        walk(task.tasks ?? [], task.name ? [...suite, task.name] : suite, filePath)
+        walk(task.tasks ?? [], task.name ? [...suite, task.name] : suite, filePath, variant)
         continue
       }
       const result = task.result ?? {}
@@ -62,6 +69,7 @@ export const mapVitestFiles = (
         filePath,
         suite: suite.join(' > '),
         title: task.name,
+        variant,
         status,
         attempt: 1,
         retryOfIndex: null,
@@ -80,7 +88,8 @@ export const mapVitestFiles = (
   }
 
   for (const file of files) {
-    walk(file.tasks ?? [], [], relativize(rootDir, file.filepath ?? ''))
+    const variant = severalProjects && file.projectName ? file.projectName : undefined
+    walk(file.tasks ?? [], [], relativize(rootDir, file.filepath ?? ''), variant)
   }
   return out
 }
