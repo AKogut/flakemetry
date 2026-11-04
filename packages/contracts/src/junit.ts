@@ -72,7 +72,8 @@ const errorFrom = (
 const mapCase = (testcase: XmlNode, suiteName: string): JunitExecution => {
   const name = attr(testcase, 'name') ?? 'unknown test'
   const classname = attr(testcase, 'classname') ?? suiteName
-  const file = attr(testcase, 'file') ?? classname.replace(/\./g, '/')
+  const file =
+    attr(testcase, 'file') ?? (classname.includes('/') ? classname : classname.replace(/\./g, '/'))
   const time = Number(attr(testcase, 'time') ?? '0')
   const durationMs = Number.isFinite(time) ? Math.max(0, Math.round(time * 1000)) : 0
 

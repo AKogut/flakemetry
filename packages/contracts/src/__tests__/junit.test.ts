@@ -20,6 +20,21 @@ const PYTEST = `<?xml version="1.0" encoding="utf-8"?>
 </testsuites>`
 
 describe('parseJunitXml', () => {
+  it.each([
+    {
+      classname: 'tests/smoke/bookings.test.ts',
+      file: undefined,
+      path: 'tests/smoke/bookings.test.ts',
+    },
+    { classname: 'com.acme.LoginTest', file: undefined, path: 'com/acme/LoginTest' },
+    { classname: 'com.acme.LoginTest', file: 'src/login.py', path: 'src/login.py' },
+  ])('derives the path $path from classname $classname', ({ classname, file, path }) => {
+    const run = parseJunitXml(
+      `<testsuite name="s"><testcase classname="${classname}"${file ? ` file="${file}"` : ''} name="t" time="1"/></testsuite>`,
+    )
+    expect(run.executions[0]?.filePath).toBe(path)
+  })
+
   it('maps pytest cases with file, classname, status and duration', () => {
     const run = parseJunitXml(PYTEST)
     expect(run.startedAt).toBe('2026-07-16T10:00:00')
