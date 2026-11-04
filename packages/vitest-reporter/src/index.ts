@@ -17,6 +17,7 @@ export default class FlakemetryVitestReporter {
   private rootDir = process.cwd()
   private reported = false
   private shard: ShardInfo | null = null
+  private startedAt: Date | null = null
 
   constructor(options: FlakemetryVitestReporterOptions = {}) {
     this.options = options
@@ -28,14 +29,17 @@ export default class FlakemetryVitestReporter {
     const shard = context?.config?.shard
     this.shard = shard ? { current: shard.index, total: shard.count } : null
     this.reported = false
+    this.startedAt = new Date()
   }
 
   onTestRunStart(): void {
     this.reported = false
+    this.startedAt = new Date()
   }
 
   onWatcherRerun(): void {
     this.reported = false
+    this.startedAt = new Date()
   }
 
   /**
@@ -59,7 +63,7 @@ export default class FlakemetryVitestReporter {
   private async report(files: VitestFile[]): Promise<void> {
     if (this.reported) return
     this.reported = true
-    const startedAt = new Date()
+    const startedAt = this.startedAt ?? new Date()
     const context = resolveRunContext(this.env, this.shard)
     const recorder = new TestRunRecorder(context)
     recorder.startRun(startedAt)
