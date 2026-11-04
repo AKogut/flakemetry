@@ -144,3 +144,27 @@ describe('a sharded Vitest run', () => {
     expect(await keyForShard(2)).toBe('github_actions-9000001-1-shard2')
   })
 })
+
+describe('when a run is recorded as starting', () => {
+  it('uses the moment Vitest started it, not the moment it finished', async () => {
+    const outputFile = join(tmpdir(), `flakemetry-vitest-start-${process.hrtime.bigint()}.json`)
+    const reporter = new FlakemetryVitestReporter({ outputFile })
+    const hooks = reporter as unknown as {
+      onTestRunStart: () => void
+      onTestRunEnd: (modules: unknown[]) => Promise<void>
+    }
+
+    const before = Date.now()
+    hooks.onTestRunStart()
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await hooks.onTestRunEnd([{ task: { filepath: '/repo/a.test.ts', tasks: [] } }])
+
+    const { run } = JSON.parse(readFileSync(outputFile, 'utf8')) as {
+      run: { startedAt: string; finishedAt: string }
+    }
+    expect(new Date(run.startedAt).getTime()).toBeLessThan(before + 30)
+    expect(
+      new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime(),
+    ).toBeGreaterThanOrEqual(50)
+  })
+})
