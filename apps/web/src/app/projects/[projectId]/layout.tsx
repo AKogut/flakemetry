@@ -1,7 +1,11 @@
+import { getPrismaClient } from '@flakemetry/db'
+import { hasTestCaseComparison } from '@flakemetry/queries'
 import type { ReactNode } from 'react'
 
 import { SignOutButton } from '@/components/sign-out-button'
 import { requireProjectViewer } from '@/lib/viewer'
+
+const prisma = getPrismaClient()
 
 export default async function ProjectLayout({
   children,
@@ -12,6 +16,7 @@ export default async function ProjectLayout({
 }) {
   const { projectId } = await params
   const { project, user, isMember } = await requireProjectViewer(projectId)
+  const showTestCases = await hasTestCaseComparison(prisma, projectId)
 
   return (
     <div className="shell">
@@ -33,6 +38,7 @@ export default async function ProjectLayout({
           <a href={`/projects/${projectId}/flaky`}>Flaky board</a>
           <a href={`/projects/${projectId}/suite-health`}>Suite health</a>
           <a href={`/projects/${projectId}/health`}>Test health</a>
+          {showTestCases ? <a href={`/projects/${projectId}/test-cases`}>Test cases</a> : null}
           <a href={`/projects/${projectId}/cost`}>Cost</a>
           {isMember ? (
             <>

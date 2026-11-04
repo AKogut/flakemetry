@@ -65,7 +65,7 @@ Removing someone from the workspace removes their grants with them.
 
 An open-source project can share the health of its tests: **Members → Access to this project →
 Public**. Anyone with the link can then read its runs, flaky board, suite health, test health,
-cost, test pages and traces without signing in.
+test cases, cost, test pages and traces without signing in.
 
 That includes error messages, stack traces, commit ids, screenshots and anything else your tests
 report, so only do this when none of it is sensitive.

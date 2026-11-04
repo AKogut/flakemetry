@@ -57,7 +57,9 @@ const snapshotProject = async (project) => {
     if (file && !queued.has(file)) queued.set(file, url.pathname + url.search)
     return file
   }
-  for (const page of ['runs', 'flaky', 'suite-health', 'health', 'cost']) enqueue(`${base}/${page}`)
+  for (const page of ['runs', 'flaky', 'suite-health', 'health', 'cost', 'test-cases']) {
+    enqueue(`${base}/${page}`)
+  }
 
   const done = new Set()
   const tracesByTest = new Map()

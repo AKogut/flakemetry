@@ -17,7 +17,7 @@ export const pageFileFor = (url, projectBase, slug, fingerprintById, limits = {}
   const rest = url.pathname.slice(projectBase.length + 1)
   const query = [...url.searchParams.keys()]
 
-  if (['suite-health', 'health', 'cost'].includes(rest) && query.length === 0) {
+  if (['suite-health', 'health', 'cost', 'test-cases'].includes(rest) && query.length === 0) {
     return `${slug}/${rest}.html`
   }
   if (rest === 'runs') {

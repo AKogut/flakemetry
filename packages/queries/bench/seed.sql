@@ -22,14 +22,15 @@ SELECT i,
        i % 20 = 0 AS flaky
 FROM generate_series(1, :tests) AS i;
 
-INSERT INTO test_identity (id, org_id, project_id, fingerprint, file_path, suite, title, aliases, first_seen_at, last_seen_at)
+INSERT INTO test_identity (id, org_id, project_id, fingerprint, file_path, suite, title, params, aliases, first_seen_at, last_seen_at)
 SELECT id,
        '00000000-0000-4000-8000-000000000001',
        '00000000-0000-4000-8000-000000000002',
        'fp-' || i,
        'tests/area-' || (i % 50) || '/spec-' || (i % 400) || '.spec.ts',
        'suite-' || (i % 40),
-       'behaves correctly in case ' || i,
+       'TC-BENCH-' || (i / 2) || ' behaves correctly in case ' || i,
+       jsonb_build_object('variant', CASE WHEN i % 2 = 0 THEN 'ios' ELSE 'android' END),
        '{}',
        now() - make_interval(days => :days),
        now()
@@ -108,6 +109,22 @@ INSERT INTO test_execution (id, org_id, project_id, run_id, test_identity_id, at
 SELECT gen_random_uuid(), org_id, project_id, run_id, test_identity_id, 2, id, 'pass', duration_ms, started_at + interval '10 seconds'
 FROM test_execution
 WHERE status = 'fail' AND attempt = 1;
+
+UPDATE run
+SET passed_count = counts.passed,
+    failed_count = counts.failed,
+    skipped_count = counts.skipped,
+    stored_executions = counts.stored
+FROM (
+  SELECT run_id,
+         count(*) FILTER (WHERE status = 'pass') AS passed,
+         count(*) FILTER (WHERE status = 'fail') AS failed,
+         count(*) FILTER (WHERE status = 'skip') AS skipped,
+         count(*) AS stored
+  FROM test_execution
+  GROUP BY run_id
+) AS counts
+WHERE run.id = counts.run_id;
 
 INSERT INTO flaky_score (test_identity_id, org_id, project_id, score, flip_rate, pass_on_rerun_rate, same_sha_variance, entropy, fail_isolation, reason_codes, quarantine_candidate, last_flaked_at, model_version, updated_at)
 SELECT id,

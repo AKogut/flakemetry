@@ -22,6 +22,7 @@ const PUBLIC_PAGES = [
   'suite-health/page.tsx',
   'health/page.tsx',
   'cost/page.tsx',
+  'test-cases/page.tsx',
   'tests/[testId]/page.tsx',
   'tests/[testId]/executions/[executionId]/page.tsx',
 ].map((page) => join(PROJECT, page))
