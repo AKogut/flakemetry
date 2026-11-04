@@ -218,6 +218,7 @@ export const renderOverview = async (prisma, projects) => {
   const playwright = of('playwright')
   const restful = of('restful-booker')
   const mobile = of('mobile')
+  const self = of('flakemetry')
   const generated = new Date().toISOString().slice(0, 16).replace('T', ' ')
 
   return `<!doctype html>
@@ -234,7 +235,7 @@ export const renderOverview = async (prisma, projects) => {
   <div class="brand">flake<span>metry</span></div>
   <h1 class="page-title" style="margin-top:1.5rem">Real test suites, real history</h1>
   <p class="page-subtitle">
-    Everything here comes from the CI of three public repositories and is rebuilt every night.
+    Everything here comes from the CI of public repositories and is rebuilt every night.
     Nothing is seeded. Each test execution went through the same API, worker and scoring as any
     other Flakemetry instance. Last built ${generated} UTC.
   </p>
@@ -276,6 +277,13 @@ export const renderOverview = async (prisma, projects) => {
 
   <h2>The top of the board</h2>
   <div class="card">${topTests(mobile, stats.get('mobile'))}</div>
+
+  <h2>Its own tests too</h2>
+  <p>
+    <a href="${self.slug}/flaky.html">${escapeHtml(self.name)}</a> runs its whole suite every day
+    against a real database and goes on the same board, under the same rules.
+  </p>
+  <div class="card">${topTests(self, stats.get('flakemetry'))}</div>
 
   <h2>What you are looking at</h2>
   <ul>

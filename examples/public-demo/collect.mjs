@@ -1,12 +1,13 @@
 import { execFileSync } from 'node:child_process'
 import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 
 import {
   allureBatch,
   junitBatch,
   noTestsBatch,
+  ownTestsBatch,
   reporterBatch,
   restfulReporterBatch,
   withoutTargetIndependentTests,
@@ -42,6 +43,22 @@ const downloadArtifact = (artifact) => {
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'))
 
 const COLLECTORS = {
+  flakemetry: [
+    {
+      match: /^own-test-results$/,
+      source: (artifact) => `r${artifact.workflow_run.id}`,
+      variant: () => undefined,
+      build: (directory, meta, _variant, source) =>
+        ownTestsBatch(
+          globSync(join(directory, '**', 'junit.xml')).map((file) => ({
+            directory: relative(directory, dirname(file)),
+            xml: readFileSync(file, 'utf8'),
+          })),
+          meta,
+          source,
+        ),
+    },
+  ],
   playwright: [
     {
       match: /^flakemetry-\w+-(chromium|firefox|webkit)$/,

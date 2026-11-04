@@ -1,7 +1,7 @@
 # Public demo
 
 The [public demo](https://akogut.github.io/flakemetry/demo/) runs Flakemetry on the real CI history
-of three public test suites. Nothing is seeded, and those repositories need no secret and no
+of public test suites, its own included. Nothing is seeded, and those repositories need no secret and no
 change to how they run, because this job reads what they already upload.
 
 | Suite | Runners | What it reads |
@@ -9,6 +9,7 @@ change to how they run, because this job reads what they already upload.
 | [playwright-ecommerce-framework](https://github.com/AKogut/playwright-ecommerce-framework) | Playwright on three browsers | The batches its reporter writes |
 | [restful-booker-api-testing](https://github.com/AKogut/restful-booker-api-testing) | Vitest, hosted and local targets | JUnit reports |
 | [mobile-task-manager-automation](https://github.com/AKogut/mobile-task-manager-automation) | Appium, XCUITest, Espresso | Allure results, `xcresulttool` summaries, JUnit reports |
+| [flakemetry](https://github.com/AKogut/flakemetry) | Vitest | JUnit reports from the daily [`dogfood.yml`](../../.github/workflows/dogfood.yml) |
 
 ## How it is built
 

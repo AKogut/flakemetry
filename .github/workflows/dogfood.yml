@@ -1,0 +1,71 @@
+name: dogfood
+
+on:
+  schedule:
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dogfood
+  cancel-in-progress: false
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+
+jobs:
+  own-tests:
+    name: run our own tests for the public demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: flakemetry
+          POSTGRES_PASSWORD: flakemetry
+          POSTGRES_DB: flakemetry
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U flakemetry -d flakemetry"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://flakemetry:flakemetry@localhost:5432/flakemetry?schema=public
+      REQUIRE_DB: '1'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations for test schemas
+        run: |
+          for schema in flakemetry_test_db flakemetry_test_api flakemetry_test_worker flakemetry_test_queries; do
+            DATABASE_URL="postgresql://flakemetry:flakemetry@localhost:5432/flakemetry?schema=$schema" \
+              pnpm --filter @flakemetry/db exec prisma migrate deploy
+          done
+
+      - name: Run every test, with per-test results
+        run: pnpm turbo run test --force --continue --env-mode=loose -- --reporter=default --reporter=junit --outputFile.junit=junit.xml
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: own-test-results
+          path: |
+            packages/*/junit.xml
+            apps/*/junit.xml
+            examples/*/junit.xml
+          if-no-files-found: warn
+          retention-days: 90
