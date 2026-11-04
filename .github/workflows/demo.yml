@@ -66,6 +66,7 @@ jobs:
         run: pnpm --filter flakemetry-public-demo collect "$RUNNER_TEMP/history"
 
       - name: Keep them
+        continue-on-error: true
         working-directory: ${{ runner.temp }}/history
         run: |
           git add -A
@@ -76,7 +77,12 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit --quiet -m "data: add the results of $(date -u +%F)"
-          git push --quiet origin HEAD:demo-history
+          for attempt in 1 2 3; do
+            git push --quiet origin HEAD:demo-history && exit 0
+            sleep 30
+          done
+          echo '::warning::Could not keep the new results. They stay in the artifacts, so the next night collects them again.'
+          exit 1
 
       - name: Start the API, the worker and the dashboard
         env:
