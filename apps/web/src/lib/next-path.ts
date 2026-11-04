@@ -1,4 +1,3 @@
-// eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f]/
 
 /**
