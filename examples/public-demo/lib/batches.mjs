@@ -28,12 +28,13 @@ const keyOf = (meta, source) => `demo-${meta.slug}-${source}`.slice(0, MAX_KEY_L
 
 export const parsedRunBatch = (run, meta, variant, source) => {
   if (run.executions.length === 0) return null
-  return junitToIngestBatch(run, {
+  const batch = junitToIngestBatch(run, {
     idempotencyKey: keyOf(meta, source),
     resource: resourceOf(meta, variant),
     startedAt: new Date(meta.startedAt),
     variant,
   })
+  return { ...batch, run: { ...batch.run, finishedAt: null } }
 }
 
 export const junitBatch = (xml, meta, variant, source) =>
@@ -68,6 +69,32 @@ export const reporterBatch = (batch, meta, variant, source) => {
     })),
   }
 }
+
+const isIndependentOfTarget = (execution) =>
+  execution.filePath.startsWith('tests/unit/') || execution.filePath.startsWith('tests/pact/')
+
+export const withoutTargetIndependentTests = (batch) =>
+  batch && {
+    ...batch,
+    executions: batch.executions.filter((execution) => !isIndependentOfTarget(execution)),
+  }
+
+export const restfulReporterBatch = (batch, meta, variant, source) =>
+  reporterBatch(
+    {
+      ...batch,
+      executions: batch.executions
+        .filter((execution) => !isIndependentOfTarget(execution))
+        .map((execution) => ({
+          ...execution,
+          suite: execution.filePath,
+          title: execution.suite ? `${execution.suite} > ${execution.title}` : execution.title,
+        })),
+    },
+    meta,
+    variant,
+    source,
+  )
 
 export const noTestsBatch = (meta, variant, source) => ({
   contractVersion: '0.1.0',

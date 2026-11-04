@@ -67,6 +67,8 @@ const eventsOf = (root) => {
   return events
 }
 
+const errorOf = (message) => (message ? { type: null, message, stack: null } : null)
+
 const counts = {}
 const save = (slug, batch, source, kind) => {
   if (!batch) return false
@@ -158,12 +160,10 @@ const backfillRestfulBooker = () => {
       attempt: 1,
       retryOfIndex: null,
       durationMs: 0,
-      error: failed.has(key)
-        ? { type: null, message: 'failed, per the CI log', stack: null }
-        : null,
+      error: errorOf(failed.get(key)),
     }))
     const known = new Set(universe.keys())
-    for (const key of failed) {
+    for (const key of failed.keys()) {
       if (known.has(key)) continue
       const [filePath, ...rest] = key.split(' > ')
       executions.push({
@@ -174,7 +174,7 @@ const backfillRestfulBooker = () => {
         attempt: 1,
         retryOfIndex: null,
         durationMs: 0,
-        error: { type: null, message: 'failed, per the CI log', stack: null },
+        error: errorOf(failed.get(key)),
       })
     }
     save(

@@ -105,10 +105,16 @@ describe('parseEspressoLog', () => {
     const { failed, finished } = parseEspressoLog(
       stamped([
         'com.mobiletaskmanager.TaskDeletionTest > TC_TASK_018_confirmingDeleteRemovesTask[emulator-5554 - 15] FAILED ',
+        'Test instrumentation process crashed. Check the log.',
         'Finished 49 tests on emulator-5554 - 15',
       ]),
     )
-    expect([...failed]).toEqual(['TC_TASK_018_confirmingDeleteRemovesTask'])
+    expect([...failed]).toEqual([
+      [
+        'TC_TASK_018_confirmingDeleteRemovesTask',
+        'Test instrumentation process crashed. Check the log.',
+      ],
+    ])
     expect(finished).toBe(49)
   })
 
@@ -117,8 +123,9 @@ describe('parseEspressoLog', () => {
       { filePath: 'a', suite: 'a', title: 'one', durationMs: 1 },
       { filePath: 'a', suite: 'a', title: 'two', durationMs: 1 },
     ]
-    const executions = espressoExecutions(universe, new Set(['two']))
+    const executions = espressoExecutions(universe, new Map([['two', 'it crashed']]))
     expect(executions.map((execution) => execution.status)).toEqual(['pass', 'fail'])
+    expect(executions[1].error.message).toBe('it crashed')
   })
 })
 
@@ -127,10 +134,14 @@ describe('parseVitestLog', () => {
     const { failed, stoppedAtGate } = parseVitestLog(
       stamped([
         ' FAIL  tests/smoke/rooms.test.ts > room service @smoke > returns a created room by id',
+        'AssertionError: expected 500 to be 200',
       ]),
     )
     expect([...failed]).toEqual([
-      'tests/smoke/rooms.test.ts > room service @smoke > returns a created room by id',
+      [
+        'tests/smoke/rooms.test.ts > room service @smoke > returns a created room by id',
+        'AssertionError: expected 500 to be 200',
+      ],
     ])
     expect(stoppedAtGate).toBe(false)
   })
@@ -144,5 +155,31 @@ describe('parseVitestLog', () => {
       parseVitestLog(stamped(['The hosted platform failed its health checks, so this report']))
         .usedLocalTarget,
     ).toBe(true)
+  })
+})
+
+describe('several failures sharing one error', () => {
+  it('gives each of them that error, not the next failure line', () => {
+    const { failed } = parseVitestLog(
+      stamped([
+        ' FAIL  tests/a.test.ts > suite > first',
+        ' FAIL  tests/a.test.ts > suite > second',
+        'AssertionError: expected 500 to be 200',
+      ]),
+    )
+    expect([...failed.values()]).toEqual([
+      'AssertionError: expected 500 to be 200',
+      'AssertionError: expected 500 to be 200',
+    ])
+  })
+})
+
+describe('a failure whose log says nothing about why', () => {
+  it('records no error rather than inventing one', () => {
+    const { failed } = parseVitestLog(' FAIL  tests/a.test.ts > suite > test')
+    const universe = [{ filePath: 'a', suite: 'a', title: 'test', durationMs: 1 }]
+
+    expect([...failed.values()]).toEqual([null])
+    expect(espressoExecutions(universe, new Map([['test', null]]))[0].error).toBeNull()
   })
 })
