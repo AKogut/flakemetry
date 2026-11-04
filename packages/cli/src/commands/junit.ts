@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 
-import { type JunitRun, parseJunitXml } from '@flakemetry/contracts'
+import { type JunitRun, parseJunitXml, runHasFailure } from '@flakemetry/contracts'
 import {
   buildIdempotencyKey,
   IngestClient,
@@ -41,8 +41,7 @@ export const uploadParsedRun = async (params: UploadRunParams): Promise<UploadOu
       error: execution.error ?? null,
     })
   }
-  const failed = run.executions.some((execution) => execution.status === 'fail')
-  recorder.finishRun(failed ? 'failed' : 'passed', new Date())
+  recorder.finishRun(runHasFailure(run.executions) ? 'failed' : 'passed', new Date())
 
   const batch = recorder.toIngestBatch(buildIdempotencyKey(context, params.env))
   const client = new IngestClient({

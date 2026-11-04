@@ -1,0 +1,121 @@
+name: demo
+
+on:
+  schedule:
+    - cron: '30 14 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: demo
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build the demo from real CI results
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: flakemetry
+          POSTGRES_PASSWORD: flakemetry
+          POSTGRES_DB: flakemetry
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U flakemetry"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://flakemetry:flakemetry@localhost:5432/flakemetry?schema=public
+      FLAKEMETRY_ENDPOINT: http://localhost:4000
+      DEMO_WEB_URL: http://localhost:3000
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations
+        run: pnpm --filter @flakemetry/db exec prisma migrate deploy
+
+      - name: Build the API, the worker and the dashboard
+        run: pnpm turbo run build --filter @flakemetry/api... --filter @flakemetry/worker... --filter @flakemetry/web...
+
+      - name: Fetch the history
+        run: |
+          git fetch --quiet --depth 1 origin demo-history
+          git worktree add --quiet --detach "$RUNNER_TEMP/history" FETCH_HEAD
+
+      - name: Collect new results
+        run: pnpm --filter flakemetry-public-demo collect "$RUNNER_TEMP/history"
+
+      - name: Keep them
+        working-directory: ${{ runner.temp }}/history
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'nothing new'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit --quiet -m "data: add the results of $(date -u +%F)"
+          git push --quiet origin HEAD:demo-history
+
+      - name: Start the API, the worker and the dashboard
+        env:
+          AUTH_SECRET: not-a-secret-nobody-signs-in-during-this-job
+          AUTH_TRUST_HOST: 'true'
+        run: |
+          PORT=4000 pnpm --filter @flakemetry/api start > "$RUNNER_TEMP/api.log" 2>&1 &
+          pnpm --filter @flakemetry/worker start > "$RUNNER_TEMP/worker.log" 2>&1 &
+          pnpm --filter @flakemetry/web start > "$RUNNER_TEMP/web.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf http://localhost:4000/health > /dev/null && curl -sf http://localhost:3000/sign-in > /dev/null; then
+              echo 'ready'
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'the stack never became healthy'
+          cat "$RUNNER_TEMP/api.log" "$RUNNER_TEMP/web.log"
+          exit 1
+
+      - name: Replay the history
+        run: pnpm --filter flakemetry-public-demo load "$RUNNER_TEMP/history" "$RUNNER_TEMP/provisioned.json"
+
+      - name: Write the static site
+        run: pnpm --filter flakemetry-public-demo snapshot "$RUNNER_TEMP/provisioned.json" "$RUNNER_TEMP/site"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: demo-site
+          path: ${{ runner.temp }}/site
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Service logs
+        if: failure()
+        run: |
+          echo '--- api ---'; cat "$RUNNER_TEMP/api.log" || true
+          echo '--- worker ---'; cat "$RUNNER_TEMP/worker.log" || true
+          echo '--- web ---'; cat "$RUNNER_TEMP/web.log" || true
+
+      - name: Publish with the docs
+        run: gh workflow run docs.yml --ref main --repo "$GITHUB_REPOSITORY"

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { type AllureResult, parseAllureResults } from '../allure'
+import { junitToIngestBatch, runHasFailure } from '../junit'
 
 const result = (overrides: Partial<AllureResult> = {}): AllureResult => ({
   name: 'TC-TASK-021 — Edit task title and save',
@@ -49,6 +50,25 @@ describe('parseAllureResults', () => {
     ])
     expect(run.executions[1]?.retryOfIndex).toBe(0)
     expect(run.executions[0]?.error?.message).toBe('boom')
+  })
+
+  it('does not call a run failed when a retry recovered the only failure', () => {
+    const recovered = parseAllureResults([
+      result({ status: 'failed', start: 1000 }),
+      result({ status: 'passed', start: 2000 }),
+    ])
+    const stillFailing = parseAllureResults([
+      result({ status: 'failed', start: 1000 }),
+      result({ status: 'failed', start: 2000 }),
+    ])
+
+    expect(runHasFailure(recovered.executions)).toBe(false)
+    expect(runHasFailure(stillFailing.executions)).toBe(true)
+    const batch = junitToIngestBatch(recovered, {
+      idempotencyKey: 'allure-run-1',
+      resource: { ciProvider: 'local', commitSha: 'abc1234', branch: 'main', trigger: 'manual' },
+    })
+    expect(batch.run.status).toBe('passed')
   })
 
   it('points every retry at the first attempt of its own test', () => {

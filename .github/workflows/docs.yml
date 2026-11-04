@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -53,6 +54,15 @@ jobs:
       - name: Add the release snapshots
         if: steps.snapshots.outputs.labels != ''
         run: cp -R "$RUNNER_TEMP/snapshots/v" apps/docs/.vitepress/dist/v
+
+      - name: Add the public demo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh run list --workflow demo.yml --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -n "$run_id" ]; then
+            gh run download "$run_id" --name demo-site --dir apps/docs/.vitepress/dist/demo
+          fi
 
       - uses: actions/configure-pages@v6
         with:

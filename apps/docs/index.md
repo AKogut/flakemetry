@@ -10,6 +10,9 @@ hero:
       text: Get started
       link: /guide/introduction
     - theme: alt
+      text: Live demo on real suites
+      link: https://akogut.github.io/flakemetry/demo/
+    - theme: alt
       text: Self-host
       link: /guide/self-hosting
     - theme: alt

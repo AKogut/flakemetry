@@ -1,0 +1,47 @@
+.overview {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+}
+.overview h2 {
+  margin-top: 2.5rem;
+}
+.overview .project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+.overview .project-card h3 {
+  margin: 0 0 0.25rem;
+}
+.overview .stat-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem 1rem;
+  margin: 0.9rem 0;
+}
+.overview .stat-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.overview .stat-label {
+  font-size: 0.78rem;
+}
+.overview td.numeric,
+.overview th.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.overview td.bad {
+  color: var(--danger, #c2410c);
+  font-weight: 600;
+}
+.overview td.warn {
+  color: var(--warning, #a16207);
+  font-weight: 600;
+}
+.overview .table-scroll {
+  overflow-x: auto;
+}
