@@ -31,13 +31,31 @@ const rebuildDailyStats = async (
 
   const executions = await tx.testExecution.findMany({
     where: { projectId, testIdentityId: identityId },
-    select: { status: true, durationMs: true, startedAt: true },
+    select: { runId: true, status: true, attempt: true, durationMs: true, startedAt: true },
   })
   if (executions.length === 0) return
 
+  const runIds = [...new Set(executions.map((execution) => execution.runId))]
+  const timedRunDays = await tx.$queryRaw<{ run_id: string; day: Date }[]>`
+    SELECT DISTINCT run_id::text AS run_id, date_trunc('day', started_at) AS day
+    FROM test_execution
+    WHERE run_id = ANY(${runIds}::uuid[]) AND status <> 'skip' AND duration_ms > 0
+  `
+  const timed = new Set(timedRunDays.map((row) => `${row.run_id}:${row.day.getTime()}`))
+
   const byDay = new Map<
     number,
-    { total: number; passed: number; failed: number; flaky: number; skipped: number; ms: number }
+    {
+      total: number
+      passed: number
+      failed: number
+      flaky: number
+      skipped: number
+      samples: number
+      ms: number
+      firstAttemptRuns: Set<string>
+      firstAttemptFailedRuns: Set<string>
+    }
   >()
   for (const execution of executions) {
     const key = dayStart(execution.startedAt).getTime()
@@ -47,10 +65,20 @@ const rebuildDailyStats = async (
       failed: 0,
       flaky: 0,
       skipped: 0,
+      samples: 0,
       ms: 0,
+      firstAttemptRuns: new Set<string>(),
+      firstAttemptFailedRuns: new Set<string>(),
     }
     bucket.total += 1
-    bucket.ms += execution.durationMs
+    if (execution.status !== 'skip' && timed.has(`${execution.runId}:${key}`)) {
+      bucket.samples += 1
+      bucket.ms += execution.durationMs
+    }
+    if (execution.attempt === 1 && execution.status !== 'skip') {
+      bucket.firstAttemptRuns.add(execution.runId)
+      if (execution.status !== 'pass') bucket.firstAttemptFailedRuns.add(execution.runId)
+    }
     if (execution.status === 'pass') bucket.passed += 1
     else if (execution.status === 'fail') bucket.failed += 1
     else if (execution.status === 'flaky') bucket.flaky += 1
@@ -69,7 +97,10 @@ const rebuildDailyStats = async (
       failed: bucket.failed,
       flaky: bucket.flaky,
       skipped: bucket.skipped,
-      avgDurationMs: Math.round(bucket.ms / bucket.total),
+      avgDurationMs: bucket.samples > 0 ? Math.round(bucket.ms / bucket.samples) : 0,
+      durationSamples: bucket.samples,
+      firstAttemptRuns: bucket.firstAttemptRuns.size,
+      firstAttemptFailedRuns: bucket.firstAttemptFailedRuns.size,
     })),
   })
 }

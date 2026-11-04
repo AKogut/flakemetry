@@ -138,7 +138,7 @@ FROM bench_identity
 CROSS JOIN (VALUES ('flaked', 20), ('stabilized', 12), ('flaked', 5)) AS event(kind, days_ago)
 WHERE flaky;
 
-INSERT INTO daily_test_stats (project_id, org_id, test_identity_id, day, total, passed, failed, flaky, skipped, avg_duration_ms, rerun_count, rerun_ms, updated_at)
+INSERT INTO daily_test_stats (project_id, org_id, test_identity_id, day, total, passed, failed, flaky, skipped, avg_duration_ms, duration_samples, first_attempt_runs, first_attempt_failed_runs, rerun_count, rerun_ms, updated_at)
 SELECT project_id, org_id, test_identity_id, started_at::date,
        count(*) FILTER (WHERE attempt = 1),
        count(*) FILTER (WHERE status = 'pass' AND attempt = 1),
@@ -146,14 +146,17 @@ SELECT project_id, org_id, test_identity_id, started_at::date,
        count(*) FILTER (WHERE status = 'fail' AND attempt = 1),
        count(*) FILTER (WHERE status = 'skip'),
        avg(duration_ms)::int,
+       count(*),
+       count(DISTINCT run_id) FILTER (WHERE attempt = 1),
+       count(DISTINCT run_id) FILTER (WHERE attempt = 1 AND status = 'fail'),
        count(*) FILTER (WHERE attempt > 1),
        coalesce(sum(duration_ms) FILTER (WHERE attempt > 1), 0),
        now()
 FROM test_execution
 GROUP BY project_id, org_id, test_identity_id, started_at::date;
 
-INSERT INTO suite_daily (project_id, org_id, suite, day, total, passed, failed, flaky, skipped, avg_duration_ms, rerun_count, rerun_ms, updated_at)
-SELECT s.project_id, s.org_id, i.suite, s.day, sum(s.total), sum(s.passed), sum(s.failed), sum(s.flaky), sum(s.skipped), avg(s.avg_duration_ms)::int, sum(s.rerun_count), sum(s.rerun_ms), now()
+INSERT INTO suite_daily (project_id, org_id, suite, day, total, passed, failed, flaky, skipped, avg_duration_ms, duration_samples, rerun_count, rerun_ms, updated_at)
+SELECT s.project_id, s.org_id, i.suite, s.day, sum(s.total), sum(s.passed), sum(s.failed), sum(s.flaky), sum(s.skipped), avg(s.avg_duration_ms)::int, sum(s.duration_samples), sum(s.rerun_count), sum(s.rerun_ms), now()
 FROM daily_test_stats s
 JOIN test_identity i ON i.id = s.test_identity_id
 GROUP BY s.project_id, s.org_id, i.suite, s.day;

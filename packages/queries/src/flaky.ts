@@ -44,12 +44,13 @@ const trendByIdentity = async (
   const rows = await prisma.dailyTestStats.findMany({
     where: { projectId, testIdentityId: { in: identityIds } },
     orderBy: { day: 'asc' },
-    select: { testIdentityId: true, total: true, failed: true, flaky: true },
+    select: { testIdentityId: true, total: true, skipped: true, failed: true, flaky: true },
   })
 
   const grouped = new Map<string, number[]>()
   for (const row of rows) {
-    const badness = row.total > 0 ? (row.failed + row.flaky) / row.total : 0
+    const ran = row.total - row.skipped
+    const badness = ran > 0 ? (row.failed + row.flaky) / ran : 0
     const list = grouped.get(row.testIdentityId) ?? []
     list.push(badness)
     grouped.set(row.testIdentityId, list)

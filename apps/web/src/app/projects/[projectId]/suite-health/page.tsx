@@ -10,14 +10,12 @@ import {
 } from '@flakemetry/queries'
 
 import { MiniTrend } from '@/components/mini-trend'
+import { formatPercent, formatTestDuration } from '@/lib/format'
 import { requireProjectViewer } from '@/lib/viewer'
 
 const prisma = getPrismaClient()
 
 const WINDOWS = [7, 14, 30]
-
-const percent = (value: number): string => `${Math.round(value * 100)}%`
-const seconds = (ms: number): string => `${(ms / 1000).toFixed(1)}s`
 
 export default async function SuiteHealthPage({
   params,
@@ -78,18 +76,23 @@ export default async function SuiteHealthPage({
             <div className="card kpi">
               <div className="rca-label">Pass rate</div>
               <div className="kpi-value" style={{ color: 'var(--pass)' }}>
-                {percent(kpis.passRate)}
+                {formatPercent(kpis.passRate)}
               </div>
+              {kpis.skipped > 0 ? (
+                <div className="muted" style={{ fontSize: '0.8rem' }}>
+                  {kpis.skipped.toLocaleString()} skipped, not counted
+                </div>
+              ) : null}
             </div>
             <div className="card kpi">
               <div className="rca-label">Flaky rate</div>
               <div className="kpi-value" style={{ color: 'var(--flaky)' }}>
-                {percent(kpis.flakyRate)}
+                {formatPercent(kpis.flakyRate)}
               </div>
             </div>
             <div className="card kpi">
               <div className="rca-label">Avg test duration</div>
-              <div className="kpi-value">{seconds(kpis.avgDurationMs)}</div>
+              <div className="kpi-value">{formatTestDuration(kpis.avgDurationMs)}</div>
             </div>
             <div className="card kpi">
               <div className="rca-label">Executions</div>
@@ -144,12 +147,17 @@ export default async function SuiteHealthPage({
                       <tr key={test.testIdentityId}>
                         <td>
                           <a href={testHref(test.testIdentityId)}>{test.title}</a>
+                          {test.variant ? (
+                            <span className="pill" style={{ marginLeft: '0.4rem' }}>
+                              {test.variant}
+                            </span>
+                          ) : null}
                           <div className="mono muted" style={{ fontSize: '0.72rem' }}>
                             {test.suite}
                           </div>
                         </td>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>
-                          {seconds(test.avgDurationMs)}
+                          {formatTestDuration(test.avgDurationMs)}
                         </td>
                       </tr>
                     ))}
@@ -162,8 +170,11 @@ export default async function SuiteHealthPage({
               <div className="rca-label" style={{ marginBottom: '0.6rem' }}>
                 Most failing tests
               </div>
+              <p className="muted" style={{ fontSize: '0.8rem', margin: '-0.3rem 0 0.6rem' }}>
+                Runs that failed on the first attempt.
+              </p>
               {leaderboards.mostFailing.length === 0 ? (
-                <div className="empty">No failures in this window.</div>
+                <div className="empty">No test failed a first attempt in this window.</div>
               ) : (
                 <table>
                   <tbody>
@@ -171,18 +182,33 @@ export default async function SuiteHealthPage({
                       <tr key={test.testIdentityId}>
                         <td>
                           <a href={testHref(test.testIdentityId)}>{test.title}</a>
+                          {test.variant ? (
+                            <span className="pill" style={{ marginLeft: '0.4rem' }}>
+                              {test.variant}
+                            </span>
+                          ) : null}
                           <div className="mono muted" style={{ fontSize: '0.72rem' }}>
                             {test.suite}
                           </div>
                         </td>
                         <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--fail)' }}>
-                          {percent(test.failRate)}
+                          {formatPercent(test.failRate)}
+                          <div className="muted" style={{ fontSize: '0.72rem', fontWeight: 400 }}>
+                            {test.failedRuns} of {test.runs}
+                          </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               )}
+              {leaderboards.failingHooks > 0 ? (
+                <p className="muted" style={{ fontSize: '0.8rem', margin: '0.6rem 0 0' }}>
+                  {leaderboards.failingHooks} failing{' '}
+                  {leaderboards.failingHooks === 1 ? 'hook' : 'hooks'} not listed: a hook is only
+                  reported when it fails, so it has no rate.
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -225,16 +251,18 @@ export default async function SuiteHealthPage({
                           color: suite.failRate > 0 ? 'var(--fail)' : undefined,
                         }}
                       >
-                        {percent(suite.failRate)}
+                        {formatPercent(suite.failRate)}
                       </td>
-                      <td style={{ textAlign: 'right' }}>{seconds(suite.avgDurationMs)}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        {formatTestDuration(suite.avgDurationMs)}
+                      </td>
                       <td style={{ textAlign: 'right' }} className="muted">
                         {suite.total}
                       </td>
                       <td>
                         <MiniTrend
                           values={suite.days.map((point) =>
-                            point.total > 0 ? (point.failed + point.flaky) / point.total : 0,
+                            point.ran > 0 ? (point.failed + point.flaky) / point.ran : null,
                           )}
                           max={1}
                           tone="var(--fail)"

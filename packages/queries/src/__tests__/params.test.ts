@@ -110,6 +110,33 @@ describe.skipIf(!hasDb)('getParamBuckets', () => {
     expect(group?.totals.passRate).toBeCloseTo(0.8)
   })
 
+  it('leaves skipped tests out of the combined pass rate', async () => {
+    const s = await seed()
+    await prisma.dailyTestStats.updateMany({
+      where: { testIdentityId: s.chromeId },
+      data: { total: 15, skipped: 5 },
+    })
+
+    const group = await getParamBuckets(prisma, s.projectId, s.chromeId)
+
+    expect(group?.totals.total).toBe(25)
+    expect(group?.totals.ran).toBe(20)
+    expect(group?.totals.skipped).toBe(5)
+    expect(group?.totals.passRate).toBeCloseTo(0.8)
+  })
+
+  it('has no combined pass rate when every test was skipped', async () => {
+    const s = await seed()
+    await prisma.dailyTestStats.updateMany({
+      where: { projectId: s.projectId },
+      data: { total: 10, passed: 0, failed: 0, skipped: 10 },
+    })
+
+    const group = await getParamBuckets(prisma, s.projectId, s.chromeId)
+
+    expect(group?.totals.passRate).toBeNull()
+  })
+
   it('returns null for a test that is not parameterized', async () => {
     const org = await prisma.org.create({ data: { name: 'Solo', slug: `solo-${Date.now()}` } })
     const project = await prisma.project.create({

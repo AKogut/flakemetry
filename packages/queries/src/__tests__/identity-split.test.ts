@@ -153,6 +153,17 @@ describe.skipIf(!hasDb)('splitIdentity', () => {
     })
     expect(sourceDaily).toHaveLength(1)
     expect(sourceDaily[0]?.passed).toBe(1)
+    expect(sourceDaily[0]?.avgDurationMs).toBe(1000)
+    expect(sourceDaily[0]?.durationSamples).toBe(1)
+    expect(sourceDaily[0]?.firstAttemptRuns).toBe(1)
+    expect(sourceDaily[0]?.firstAttemptFailedRuns).toBe(0)
+
+    const targetDaily = await prisma.dailyTestStats.findMany({
+      where: { testIdentityId: outcome.targetIdentityId },
+    })
+    expect(targetDaily[0]?.durationSamples).toBe(1)
+    expect(targetDaily[0]?.firstAttemptRuns).toBe(1)
+    expect(targetDaily[0]?.firstAttemptFailedRuns).toBe(1)
   })
 
   it('rejects a fingerprint that is not stitched into the test', async () => {
