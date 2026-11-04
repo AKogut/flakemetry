@@ -442,7 +442,7 @@ export const updateProjectRepository = async (formData: FormData): Promise<void>
   const project = await requireProjectAccess(user.id, projectId)
   if (!canManage(project.role)) throw new Error('only owners and admins can set the repository')
   if (raw && !isValidRepository(raw)) {
-    throw new Error('repository must look like owner/name')
+    throw new Error('repository must look like owner/name or gitlab:group/name')
   }
 
   await prisma.project.update({

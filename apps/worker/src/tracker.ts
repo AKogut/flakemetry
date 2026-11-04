@@ -1,6 +1,6 @@
 import { matchCodeowners, parseCodeowners } from '@flakemetry/core'
 import type { PrismaClient } from '@flakemetry/db'
-import { createGithubTracker, resolveTrackerToken, type TrackerProvider } from '@flakemetry/notify'
+import { createTrackerFor, resolveTrackerToken, type TrackerProvider } from '@flakemetry/notify'
 import {
   collectTrackerCandidates,
   getEffectiveProjectPolicy,
@@ -180,7 +180,7 @@ export const syncProjectTracker = async (
   if (!provider) {
     const token = resolveTrackerToken(env)
     if (!token || !project.repository) return result
-    provider = createGithubTracker({ repository: project.repository, token })
+    provider = createTrackerFor({ repository: project.repository, token, env })
   }
 
   const candidates = await collectTrackerCandidates(prisma, projectId)

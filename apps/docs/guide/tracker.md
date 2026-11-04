@@ -14,9 +14,23 @@ instance without credentials must never half-file a ticket.
 
 1. **A token on the instance.** `FLAKEMETRY_TRACKER_TOKEN` — for GitHub, a fine-grained PAT
    with **Issues: write** on the repositories your projects point at.
-2. **A repository on the project.** Settings → Policy → Repository, as `owner/name`.
+2. **A repository on the project.** Settings → Policy → Repository, as `owner/name` for GitHub or `gitlab:group/name` for GitLab, where subgroups are fine: `gitlab:group/subgroup/name`.
 
 Then set **Open tracker issues for flakes** to *On* in the same page.
+
+### GitLab
+
+Use a project or group access token, or a personal one, with the **api** scope and at least the Reporter role, as `FLAKEMETRY_TRACKER_TOKEN`. Closing and reopening issues needs Reporter or above.
+
+On a self-managed instance, set the host on the worker:
+
+```bash
+FLAKEMETRY_TRACKER_GITLAB_URL=https://gitlab.acme.com
+```
+
+The host is set by whoever runs Flakemetry and not on the project, because the token belongs to the whole instance. Anyone who can edit a project must not be able to send it somewhere else.
+
+One instance holds one tracker token, so its projects file into one provider unless the token is valid for both.
 
 ## When an issue is opened
 

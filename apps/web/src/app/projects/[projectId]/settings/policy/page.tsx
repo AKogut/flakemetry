@@ -120,7 +120,7 @@ export default async function PolicyPage({
               <input
                 id="repository"
                 name="repository"
-                placeholder="owner/name"
+                placeholder="owner/name or gitlab:group/name"
                 defaultValue={repository?.repository ?? ''}
                 disabled={!canEdit}
               />

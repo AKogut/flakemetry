@@ -78,6 +78,7 @@ Unknown keys are rejected with an error naming the offending path — typos fail
 | `FLAKEMETRY_DEVELOPER_HOUR_COST` | `cost.developerHour` |
 | `FLAKEMETRY_INVESTIGATION_MINUTES` | `cost.investigationMinutes` |
 | `FLAKEMETRY_TRACKER_TOKEN` | Tracker credentials (no default — the feature is off without it) |
+| `FLAKEMETRY_TRACKER_GITLAB_URL` | Base URL of a self-managed GitLab (default `https://gitlab.com`) |
 | `FLAKEMETRY_TRACKER_ENABLED` | `tracker.enabled` |
 | `FLAKEMETRY_TRACKER_AFTER_DAYS` | `tracker.afterDays` |
 | `FLAKEMETRY_TRACKER_RECOVERY_DAYS` | `tracker.recoveryDays` |
