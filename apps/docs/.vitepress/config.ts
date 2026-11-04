@@ -51,6 +51,7 @@ export default defineConfigWithTheme<ThemeConfig>({
       { text: 'Guide', link: '/guide/introduction' },
       { text: 'Concepts', link: '/concepts/test-identity' },
       { text: 'Reference', link: '/reference/configuration' },
+      { text: 'Blog', link: '/blog/tests-are-telemetry' },
       { text: 'Contributing', link: '/contributing/development' },
       { text: 'Roadmap', link: 'https://github.com/users/AKogut/projects/14' },
       ...versionNav(version, snapshots, site),
