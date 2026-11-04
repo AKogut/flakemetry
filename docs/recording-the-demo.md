@@ -2,7 +2,7 @@
 
 `docs/demo.gif` is a slideshow of the [public demo](https://akogut.github.io/flakemetry/demo/), so what it shows is real CI history:
 
-1. the three suites and what they add up to
+1. the suites and what they add up to
 2. one app on four runners, with the retries a job status hides
 3. the flaky board
 4. one test: its score, its reasons and its history

@@ -86,7 +86,7 @@ export const reporterBatch = (batch, meta, variant, source) => {
   }
 }
 
-const isIndependentOfTarget = (execution) =>
+export const isIndependentOfTarget = (execution) =>
   execution.filePath.startsWith('tests/unit/') || execution.filePath.startsWith('tests/pact/')
 
 export const withoutTargetIndependentTests = (batch) =>
@@ -111,6 +111,15 @@ export const restfulReporterBatch = (batch, meta, variant, source) =>
     variant,
     source,
   )
+
+const RUN_STATUS_OF_JOB = { success: 'passed', failure: 'failed', cancelled: 'canceled' }
+
+export const runStatusOfJob = (conclusion) => RUN_STATUS_OF_JOB[conclusion] ?? null
+
+export const withJobConclusion = (batch, conclusion) => {
+  const status = runStatusOfJob(conclusion)
+  return batch && status ? { ...batch, run: { ...batch.run, status } } : batch
+}
 
 export const noTestsBatch = (meta, variant, source) => ({
   contractVersion: '0.1.0',
