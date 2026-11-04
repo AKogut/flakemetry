@@ -25,7 +25,10 @@ export default defineConfigWithTheme<ThemeConfig>({
   srcExclude: version ? ['README.md', 'versions.md'] : ['README.md'],
   ignoreDeadLinks: [/^https?:\/\/localhost/],
   head: [
-    ['meta', { name: 'theme-color', content: '#5319e7' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo.svg` }],
+    ['meta', { name: 'theme-color', content: '#0d1117' }],
+    ['meta', { property: 'og:image', content: `${site}social-preview.png` }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ['meta', { property: 'og:title', content: 'Flakemetry Documentation' }],
     [
       'meta',
@@ -47,6 +50,7 @@ export default defineConfigWithTheme<ThemeConfig>({
       : []),
   ],
   themeConfig: {
+    logo: '/logo.svg',
     nav: [
       { text: 'Guide', link: '/guide/introduction' },
       { text: 'Concepts', link: '/concepts/test-identity' },
