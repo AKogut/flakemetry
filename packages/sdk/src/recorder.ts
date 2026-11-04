@@ -163,6 +163,7 @@ export class TestRunRecorder {
         trigger: this.context.trigger,
         shardIndex: this.context.shardIndex ?? undefined,
         shardTotal: this.context.shardTotal ?? undefined,
+        variant: this.context.variant ?? undefined,
       },
       run: {
         status: this.runStatus,

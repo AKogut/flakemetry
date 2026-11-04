@@ -20,6 +20,7 @@ export const ingestResourceSchema = z.object({
   trigger: runTriggerSchema,
   shardIndex: z.number().int().min(1).nullish(),
   shardTotal: z.number().int().min(1).nullish(),
+  variant: z.string().min(1).max(100).nullish(),
 })
 
 export const ingestErrorSchema = z.object({

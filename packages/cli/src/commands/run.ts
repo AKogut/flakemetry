@@ -1,6 +1,13 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 
+import {
+  buildIdempotencyKey,
+  IngestClient,
+  resolveRunContext,
+  TestRunRecorder,
+} from '@flakemetry/sdk'
+
 import type { CommandModule } from '../registry'
 import { DEFAULT_RESULTS_FILE, runUpload, type UploadOutcome } from './upload'
 
@@ -43,8 +50,28 @@ export interface RunParams {
   token?: string | null
   spawner?: Spawner
   upload?: (file: string) => Promise<UploadOutcome>
+  reportNoTests?: () => Promise<boolean>
   fileExists?: (path: string) => boolean
   onNotice?: (message: string) => void
+  env?: Record<string, string | undefined>
+  fetchImpl?: typeof fetch
+}
+
+const reportRunWithoutTests = async (params: RunParams): Promise<boolean> => {
+  if (!params.endpoint || !params.token) return false
+  const env = params.env ?? process.env
+  const context = resolveRunContext(env)
+  const recorder = new TestRunRecorder(context)
+  const now = new Date()
+  recorder.startRun(now)
+  recorder.finishRun('failed', now)
+  const client = new IngestClient({
+    endpoint: params.endpoint,
+    token: params.token,
+    fetchImpl: params.fetchImpl,
+  })
+  const result = await client.send(recorder.toIngestBatch(buildIdempotencyKey(context, env)))
+  return result.ok
 }
 
 /**
@@ -67,6 +94,12 @@ export const runWrapped = async (params: RunParams): Promise<RunResult> => {
   if (!exists(file)) {
     const skipped: UploadOutcome = { status: 'skipped', reason: `no results file at ${file}` }
     notice(`flakemetry: nothing to upload — ${skipped.reason}`)
+    if (exitCode !== 0) {
+      const reported = await (
+        params.reportNoTests ?? (() => reportRunWithoutTests(params))
+      )().catch(() => false)
+      if (reported) notice('flakemetry: reported a failed run with no tests')
+    }
     return { exitCode, upload: skipped }
   }
 

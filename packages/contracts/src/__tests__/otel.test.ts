@@ -109,6 +109,20 @@ describe('otlpToIngestBatch', () => {
     expect(batch.executions[1]?.params).toBeUndefined()
   })
 
+  it('reads the variant of the run from the resource', () => {
+    const payload = request()
+    ;(
+      payload.resourceSpans[0]!.resource.attributes as {
+        key: string
+        value: { stringValue?: string; intValue?: string }
+      }[]
+    ).push({ key: RESOURCE_ATTR.variant, value: s('ios') })
+
+    const batch = otlpToIngestBatch(otlpTraceRequestSchema.parse(payload))
+
+    expect(batch.resource.variant).toBe('ios')
+  })
+
   it('ignores params it cannot read rather than failing the whole run', () => {
     const payload = request()
     const caseSpan = payload.resourceSpans[0]!.scopeSpans[0]!.spans[1]!

@@ -51,6 +51,20 @@ const batch = (overrides: Partial<IngestRunBatch> = {}): IngestRunBatch => ({
   ...overrides,
 })
 
+const noTestsBatch = (idempotencyKey: string): IngestRunBatch =>
+  batch({
+    idempotencyKey,
+    resource: {
+      ciProvider: 'github_actions',
+      commitSha: 'abc1234',
+      branch: 'main',
+      trigger: 'schedule',
+      variant: 'ios',
+    },
+    run: { status: 'failed', startedAt: new Date('2026-07-16T12:00:00Z') },
+    executions: [],
+  })
+
 const greenBatch = (idempotencyKey: string): IngestRunBatch =>
   batch({
     idempotencyKey,
@@ -102,6 +116,18 @@ describe.skipIf(!hasDb)('processJob', () => {
     expect(score.failIsolation).toBe(1)
     expect(Array.isArray(score.reasonCodes)).toBe(true)
     expect((score.reasonCodes as { code: string }[]).length).toBeGreaterThan(0)
+  })
+
+  it('stores a run in which no test executed, and scores nothing', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    const result = await processJob(prisma, noTestsBatch('no-tests-run-1'), ctx)
+
+    expect(result.executions).toBe(0)
+    expect(result.scoredIdentities).toBe(0)
+    const run = await prisma.run.findFirstOrThrow({ where: { projectId: ctx.projectId } })
+    expect(run.status).toBe('failed')
+    expect(run.variant).toBe('ios')
+    expect(await prisma.flakyScore.count({ where: { projectId: ctx.projectId } })).toBe(0)
   })
 
   it('is idempotent: re-processing keeps stable execution ids and occurrence counts', async () => {

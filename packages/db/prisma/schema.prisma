@@ -369,6 +369,7 @@ model Run {
   ciRunId        String?    @map("ci_run_id")
   shardIndex     Int?       @map("shard_index")
   shardTotal     Int?       @map("shard_total")
+  variant        String?
   trigger        RunTrigger
   status         RunStatus
   startedAt      DateTime   @map("started_at")

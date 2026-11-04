@@ -27,6 +27,7 @@ export const runListItemSchema = z.object({
   prNumber: z.number().int().positive().nullable(),
   ciProvider: ciProviderSchema,
   status: runStatusSchema,
+  variant: z.string().nullable(),
   startedAt: timestampSchema,
   durationMs: z.number().int().nonnegative().nullable(),
   counts: runCountsSchema,
