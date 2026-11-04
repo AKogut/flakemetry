@@ -1,14 +1,15 @@
 # Configuration
 
-Flakemetry is configured through `flakemetry.yml` at the repository root (config-as-code, reviewable in PRs), with two override layers on top.
+Flakemetry reads its configuration in two places, and which one applies depends on the setting.
 
-## Precedence
+- **On the server:** thresholds, quarantine, AI, cost, tracker and storage come from the project's **Policy** page and from environment variables on the web and worker services. An environment variable wins over the Policy page, which wins over the default.
+- **In the repository:** the CLI and the reporters read `flakemetry.yml` at the repository root.
 
-```
-flakemetry.yml  <  project settings (dashboard)  <  environment variables
-```
+## What `flakemetry.yml` changes
 
-Later layers win per key; nested objects merge deep, arrays replace.
+Two keys take effect from the file: `endpoint`, and `notifications.channels`, which the reporter syncs to the server on each run.
+
+The file's other keys are validated, so a typo fails fast, but they are not sent to the server. Setting `flaky.threshold` here does not change the threshold a project is scored against. Use the Policy page or the environment variable for that.
 
 ## flakemetry.yml
 
