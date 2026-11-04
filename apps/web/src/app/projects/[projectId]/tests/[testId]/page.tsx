@@ -24,6 +24,7 @@ import {
   unmergeTestIdentity,
   updateClusterKnownIssue,
 } from '@/lib/actions'
+import { formatPercent } from '@/lib/format'
 import { requireProjectViewer } from '@/lib/viewer'
 
 const prisma = getPrismaClient()
@@ -252,9 +253,12 @@ export default async function TestDetailPage({
           <div className="row-between" style={{ marginBottom: '0.6rem' }}>
             <div className="rca-label">Parameterized variants</div>
             <span className="muted" style={{ fontSize: '0.8rem' }}>
-              {paramBuckets.buckets.length} variants ·{' '}
-              {Math.round(paramBuckets.totals.passRate * 100)}% pass across{' '}
-              {paramBuckets.totals.total.toLocaleString()} executions
+              {paramBuckets.buckets.length} variants · {formatPercent(paramBuckets.totals.passRate)}{' '}
+              pass across {paramBuckets.totals.ran.toLocaleString()}{' '}
+              {paramBuckets.totals.ran === 1 ? 'execution' : 'executions'}
+              {paramBuckets.totals.skipped > 0
+                ? `, ${paramBuckets.totals.skipped.toLocaleString()} skipped`
+                : ''}
             </span>
           </div>
           <p className="muted" style={{ fontSize: '0.8rem', marginBottom: '0.6rem' }}>

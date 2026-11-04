@@ -61,6 +61,7 @@ const drow = (day: string, total: number, avgDurationMs: number): SuiteDayRow =>
   failed: 0,
   flaky: 0,
   avgDurationMs,
+  durationSamples: total,
 })
 
 describe('detectDurationRegressions', () => {
@@ -88,6 +89,15 @@ describe('detectDurationRegressions', () => {
 
   it('ignores a latest day below the minimum sample size', () => {
     const rows = [drow('2026-07-28', 40, 1000), drow('2026-07-29', 5, 3000)]
+    expect(detectDurationRegressions(rows, '2026-07-29')).toHaveLength(0)
+  })
+
+  it('does not let a day without durations lower the baseline', () => {
+    const rows = [
+      drow('2026-07-27', 40, 1000),
+      { ...drow('2026-07-28', 141, 0), durationSamples: 0 },
+      drow('2026-07-29', 40, 1100),
+    ]
     expect(detectDurationRegressions(rows, '2026-07-29')).toHaveLength(0)
   })
 })
@@ -121,5 +131,33 @@ describe.skipIf(!hasDb)('detectSuiteRegressions', () => {
     const regressions = await detectSuiteRegressions(prisma, project.id, at('2026-07-29'))
     expect(regressions).toHaveLength(1)
     expect(regressions[0]?.suite).toBe('checkout')
+  })
+
+  it('leaves skipped tests out of the fail rate', async () => {
+    const org = await prisma.org.create({ data: { name: 'Acme', slug: `acme-${Date.now()}` } })
+    const project = await prisma.project.create({
+      data: { orgId: org.id, name: 'Web', slug: 'web' },
+    })
+    const tenant = { orgId: org.id, projectId: project.id }
+    const at = (iso: string) => new Date(`${iso}T00:00:00Z`)
+    await prisma.suiteDaily.createMany({
+      data: [
+        { ...tenant, suite: 'checkout', day: at('2026-07-28'), total: 40, passed: 40 },
+        {
+          ...tenant,
+          suite: 'checkout',
+          day: at('2026-07-29'),
+          total: 60,
+          passed: 20,
+          failed: 10,
+          skipped: 30,
+        },
+      ],
+    })
+
+    const regressions = await detectSuiteRegressions(prisma, project.id, at('2026-07-29'))
+    expect(regressions).toHaveLength(1)
+    expect(regressions[0]?.failRate).toBeCloseTo(1 / 3)
+    expect(regressions[0]?.total).toBe(30)
   })
 })

@@ -121,7 +121,8 @@ async function materializeRollups() {
   await prisma.$executeRawUnsafe(`
     INSERT INTO daily_test_stats (
       project_id, org_id, test_identity_id, day,
-      total, passed, failed, flaky, skipped, avg_duration_ms, rerun_count, rerun_ms, updated_at
+      total, passed, failed, flaky, skipped, avg_duration_ms, duration_samples,
+      first_attempt_runs, first_attempt_failed_runs, rerun_count, rerun_ms, updated_at
     )
     SELECT e.project_id, e.org_id, e.test_identity_id, date_trunc('day', e.started_at)::date,
       COUNT(*)::int,
@@ -129,7 +130,10 @@ async function materializeRollups() {
       COUNT(*) FILTER (WHERE e.status = 'fail')::int,
       COUNT(*) FILTER (WHERE e.status = 'flaky')::int,
       COUNT(*) FILTER (WHERE e.status = 'skip')::int,
-      COALESCE(ROUND(AVG(e.duration_ms)), 0)::int,
+      COALESCE(ROUND(AVG(e.duration_ms) FILTER (WHERE e.status <> 'skip')), 0)::int,
+      COUNT(*) FILTER (WHERE e.status <> 'skip')::int,
+      COUNT(DISTINCT e.run_id) FILTER (WHERE e.attempt = 1 AND e.status <> 'skip')::int,
+      COUNT(DISTINCT e.run_id) FILTER (WHERE e.attempt = 1 AND e.status IN ('fail', 'flaky'))::int,
       COUNT(*) FILTER (WHERE e.attempt > 1)::int,
       COALESCE(SUM(e.duration_ms) FILTER (WHERE e.attempt > 1), 0)::int,
       now()
@@ -141,7 +145,8 @@ async function materializeRollups() {
   await prisma.$executeRawUnsafe(`
     INSERT INTO suite_daily (
       project_id, org_id, suite, day,
-      total, passed, failed, flaky, skipped, avg_duration_ms, rerun_count, rerun_ms, updated_at
+      total, passed, failed, flaky, skipped, avg_duration_ms, duration_samples,
+      rerun_count, rerun_ms, updated_at
     )
     SELECT e.project_id, e.org_id, i.suite, date_trunc('day', e.started_at)::date,
       COUNT(*)::int,
@@ -149,7 +154,8 @@ async function materializeRollups() {
       COUNT(*) FILTER (WHERE e.status = 'fail')::int,
       COUNT(*) FILTER (WHERE e.status = 'flaky')::int,
       COUNT(*) FILTER (WHERE e.status = 'skip')::int,
-      COALESCE(ROUND(AVG(e.duration_ms)), 0)::int,
+      COALESCE(ROUND(AVG(e.duration_ms) FILTER (WHERE e.status <> 'skip')), 0)::int,
+      COUNT(*) FILTER (WHERE e.status <> 'skip')::int,
       COUNT(*) FILTER (WHERE e.attempt > 1)::int,
       COALESCE(SUM(e.duration_ms) FILTER (WHERE e.attempt > 1), 0)::int,
       now()

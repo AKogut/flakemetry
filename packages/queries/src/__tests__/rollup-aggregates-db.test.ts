@@ -31,7 +31,11 @@ interface Row {
   passed: number
   failed: number
   flaky: number
+  skipped: number
   avgDurationMs: number
+  durationSamples: number
+  firstAttemptRuns: number
+  firstAttemptFailedRuns: number
   rerunCount: number
   rerunMs: number
 }
@@ -79,7 +83,10 @@ describe.skipIf(!hasDb)('rollup panels aggregated in SQL', () => {
         const total = 1 + random(40)
         const failed = random(3) === 0 ? random(Math.min(total, 4) + 1) : 0
         const flaky = random(4) === 0 ? random(Math.min(total - failed, 3) + 1) : 0
+        const skipped = random(4) === 0 ? random(total - failed - flaky + 1) : 0
+        const durationSamples = random(5) === 0 ? 0 : total - skipped
         const rerunCount = flaky + random(2)
+        const firstAttemptRuns = Math.max(total - skipped - rerunCount, 0)
         rows.push({
           testIdentityId: identity.id,
           title: identity.title,
@@ -88,10 +95,14 @@ describe.skipIf(!hasDb)('rollup panels aggregated in SQL', () => {
           quarantined: identity.quarantined,
           day: utcDay(daysAgo),
           total,
-          passed: total - failed - flaky,
+          passed: total - failed - flaky - skipped,
           failed,
           flaky,
-          avgDurationMs: 50 + random(9000),
+          skipped,
+          avgDurationMs: durationSamples > 0 ? 50 + random(9000) : 0,
+          durationSamples,
+          firstAttemptRuns,
+          firstAttemptFailedRuns: Math.min(firstAttemptRuns, failed),
           rerunCount,
           rerunMs: rerunCount * (100 + random(20_000)),
         })
@@ -108,8 +119,11 @@ describe.skipIf(!hasDb)('rollup panels aggregated in SQL', () => {
         passed: row.passed,
         failed: row.failed,
         flaky: row.flaky,
-        skipped: 0,
+        skipped: row.skipped,
         avgDurationMs: row.avgDurationMs,
+        durationSamples: row.durationSamples,
+        firstAttemptRuns: row.firstAttemptRuns,
+        firstAttemptFailedRuns: row.firstAttemptFailedRuns,
         rerunCount: row.rerunCount,
         rerunMs: row.rerunMs,
         updatedAt: new Date(),
@@ -137,6 +151,9 @@ describe.skipIf(!hasDb)('rollup panels aggregated in SQL', () => {
         failed: 1000,
         flaky: 0,
         avgDurationMs: 60_000,
+        durationSamples: 1000,
+        firstAttemptRuns: 1000,
+        firstAttemptFailedRuns: 1000,
         rerunCount: 1000,
         rerunMs: 60_000_000,
         updatedAt: new Date(),
@@ -151,14 +168,18 @@ describe.skipIf(!hasDb)('rollup panels aggregated in SQL', () => {
   it('reports the same KPIs as adding the rows up one by one', async () => {
     const window = rows.filter(inWindow(14))
     const total = sum(window.map((row) => row.total))
-    const duration = sum(window.map((row) => row.avgDurationMs * row.total))
+    const skipped = sum(window.map((row) => row.skipped))
+    const ran = total - skipped
+    const samples = sum(window.map((row) => row.durationSamples))
+    const duration = sum(window.map((row) => row.avgDurationMs * row.durationSamples))
 
     expect(await getProjectHealthKpis(prisma, projectId, 14)).toEqual({
       totalExecutions: total,
-      passRate: sum(window.map((row) => row.passed)) / total,
-      flakyRate: sum(window.map((row) => row.flaky)) / total,
-      failRate: sum(window.map((row) => row.failed)) / total,
-      avgDurationMs: Math.round(duration / total),
+      skipped,
+      passRate: sum(window.map((row) => row.passed)) / ran,
+      flakyRate: sum(window.map((row) => row.flaky)) / ran,
+      failRate: sum(window.map((row) => row.failed)) / ran,
+      avgDurationMs: Math.round(duration / samples),
       totalDurationMs: duration,
     })
   })
@@ -169,12 +190,16 @@ describe.skipIf(!hasDb)('rollup panels aggregated in SQL', () => {
     const expected = days.map((day) => {
       const onDay = window.filter((row) => row.day.toISOString().slice(0, 10) === day)
       const total = sum(onDay.map((row) => row.total))
+      const ran = total - sum(onDay.map((row) => row.skipped))
       return {
         day,
         total,
-        passRate: sum(onDay.map((row) => row.passed)) / total,
-        flakyRate: sum(onDay.map((row) => row.flaky)) / total,
-        avgDurationMs: Math.round(sum(onDay.map((row) => row.avgDurationMs * row.total)) / total),
+        passRate: sum(onDay.map((row) => row.passed)) / ran,
+        flakyRate: sum(onDay.map((row) => row.flaky)) / ran,
+        avgDurationMs: Math.round(
+          sum(onDay.map((row) => row.avgDurationMs * row.durationSamples)) /
+            sum(onDay.map((row) => row.durationSamples)),
+        ),
       }
     })
 
@@ -187,32 +212,46 @@ describe.skipIf(!hasDb)('rollup panels aggregated in SQL', () => {
       byTest.set(row.testIdentityId, [...(byTest.get(row.testIdentityId) ?? []), row])
     }
     const tests = [...byTest.entries()].map(([testIdentityId, own]) => {
-      const total = sum(own.map((row) => row.total))
-      const failed = sum(own.map((row) => row.failed))
-      const flaky = sum(own.map((row) => row.flaky))
+      const runs = sum(own.map((row) => row.firstAttemptRuns))
+      const failedRuns = sum(own.map((row) => row.firstAttemptFailedRuns))
+      const samples = sum(own.map((row) => row.durationSamples))
+      const duration = sum(own.map((row) => row.avgDurationMs * row.durationSamples))
       return {
         testIdentityId,
         title: own[0]!.title,
+        variant: null,
         suite: own[0]!.suite,
         filePath: own[0]!.filePath,
-        total,
-        failed,
-        flaky,
-        failRate: (failed + flaky) / total,
-        avgDurationMs: Math.round(sum(own.map((row) => row.avgDurationMs * row.total)) / total),
+        runs,
+        failedRuns,
+        failRate: runs > 0 ? failedRuns / runs : 0,
+        avgDurationMs: samples > 0 ? Math.round(duration / samples) : 0,
+        samples,
       }
     })
     const byId = (left: { testIdentityId: string }, right: { testIdentityId: string }) =>
       left.testIdentityId < right.testIdentityId ? -1 : 1
 
+    const withoutSamples = ({ samples: _samples, ...test }: (typeof tests)[number]) => test
+
     expect(await getTestLeaderboards(prisma, projectId, 14, 8)).toEqual({
-      slowest: [...tests]
+      slowest: tests
+        .filter((test) => test.samples > 0)
         .sort((a, b) => b.avgDurationMs - a.avgDurationMs || byId(a, b))
-        .slice(0, 8),
+        .slice(0, 8)
+        .map(withoutSamples),
       mostFailing: tests
-        .filter((test) => test.failed + test.flaky > 0)
-        .sort((a, b) => b.failRate - a.failRate || b.failed - a.failed || byId(a, b))
-        .slice(0, 8),
+        .filter((test) => test.failedRuns > 0)
+        .sort(
+          (a, b) =>
+            Number(b.runs >= 3) - Number(a.runs >= 3) ||
+            b.failRate - a.failRate ||
+            b.failedRuns - a.failedRuns ||
+            byId(a, b),
+        )
+        .slice(0, 8)
+        .map(withoutSamples),
+      failingHooks: 0,
     })
   })
 
