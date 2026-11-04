@@ -24,7 +24,13 @@ Rebuilding from nothing every night means a scoring change reaches all of the hi
 
 ## Where older runs come from
 
-Runs from before those suites kept their results were reconstructed once with `backfill.mjs`, from the CI logs of the time. Which test passed or failed on which night is real, and so are XCUITest and Appium retries. Durations and error text can be missing, and a green `restful-booker` night is taken as every test having passed, because its log only lists failures.
+Runs from before those suites kept their results were reconstructed once with `backfill.mjs`, from the CI logs of the time.
+
+- A mobile run's status is its job's conclusion in CI. A job that failed is red even if every test it recorded passed, and a cancelled job is recorded as cancelled, with the tests it got through, and is neither red nor green.
+- XCUITest and Appium logs name every attempt, so those are real, retries included.
+- `restful-booker` and Espresso logs name failures and count the rest. On a green night each test's pass is therefore inferred, which the overview says too.
+- A `restful-booker` night takes its test list from the nearest earlier `local` artifact on `main`, including tests skipped locally, and moves to the next artifact if the log contradicts that list. The list is checked against the night's log: tests per file, failed and skipped counts per file, and every test the log names. `backfill.mjs` prints any night that disagrees.
+- Durations and error text can be missing.
 
 ## Running it yourself
 

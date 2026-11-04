@@ -10,6 +10,8 @@ import {
   noTestsBatch,
   parsedRunBatch,
   reporterBatch,
+  runStatusOfJob,
+  withJobConclusion,
 } from './lib/batches.mjs'
 import { writeBatch } from './lib/history.mjs'
 import {
@@ -19,6 +21,7 @@ import {
   parseVitestLog,
   parseXcuitestLog,
 } from './lib/logs.mjs'
+import { nightExecutions, testListFor } from './lib/test-list.mjs'
 import { MOBILE_JOBS } from './projects.mjs'
 
 const [archive, history] = process.argv.slice(2)
@@ -66,8 +69,6 @@ const eventsOf = (root) => {
   }
   return events
 }
-
-const errorOf = (message) => (message ? { type: null, message, stack: null } : null)
 
 const counts = {}
 const save = (slug, batch, source, kind) => {
@@ -122,18 +123,17 @@ const backfillRestfulBooker = () => {
   const slug = 'restful-booker'
   const root = join(archive, REPOSITORY[slug])
   const events = eventsOf(root)
-  const universe = new Map()
+  const lists = []
 
   for (const artifact of artifactsOf(root, 'junit-local-target')) {
     const file = globSync(join(artifact.directory, '*.xml'))[0]
     if (!file) continue
-    const xml = readFileSync(file, 'utf8')
-    for (const execution of parseJunitXml(xml).executions) {
-      if (execution.status !== 'skip') {
-        universe.set(`${execution.suite} > ${execution.title}`, execution)
-      }
-    }
     if (artifact.meta.branch !== 'main') continue
+    const xml = readFileSync(file, 'utf8')
+    lists.push({
+      time: Date.parse(artifact.meta.created),
+      tests: parseJunitXml(xml).executions,
+    })
     const meta = metaOfArtifact(slug, artifact, events)
     const source = `a${artifact.id}`
     save(slug, junitBatch(xml, meta, 'local', source), source, 'junit local')
@@ -142,44 +142,37 @@ const backfillRestfulBooker = () => {
   for (const run of runsOf(root, 'Report')) {
     if (run.headBranch !== 'main' || run.conclusion === 'cancelled') continue
     const job = jobsOf(root, run.databaseId)[0]
-    const log = job ? readLog(root, job.id) : null
-    if (!log) continue
-    const { failed, stoppedAtGate, usedLocalTarget } = parseVitestLog(log)
-    if (usedLocalTarget) continue
+    const text = job ? readLog(root, job.id) : null
+    if (!text) continue
+    const log = parseVitestLog(text)
+    if (log.usedLocalTarget) continue
     const meta = metaOfRun(slug, run)
     const source = `r${run.databaseId}-live`
-    if (stoppedAtGate) {
+    if (log.stoppedAtGate) {
       save(slug, noTestsBatch(meta, 'live', source), source, 'gate, no tests')
       continue
     }
-    if (run.conclusion === 'failure' && failed.size === 0) continue
+    if (run.conclusion === 'failure' && log.failed.size === 0) continue
 
-    const executions = [...universe.entries()].map(([key, execution]) => ({
-      ...execution,
-      status: failed.has(key) ? 'fail' : 'pass',
-      attempt: 1,
-      retryOfIndex: null,
-      durationMs: 0,
-      error: errorOf(failed.get(key)),
-    }))
-    const known = new Set(universe.keys())
-    for (const key of failed.keys()) {
-      if (known.has(key)) continue
-      const [filePath, ...rest] = key.split(' > ')
-      executions.push({
-        filePath,
-        suite: filePath,
-        title: rest.join(' > '),
-        status: 'fail',
-        attempt: 1,
-        retryOfIndex: null,
-        durationMs: 0,
-        error: errorOf(failed.get(key)),
-      })
+    const { tests, problems } = testListFor(lists, Date.parse(run.createdAt), log)
+    for (const problem of problems) {
+      process.stdout.write(`disagrees ${run.createdAt} r${run.databaseId}: ${problem}\n`)
+    }
+    if (problems.length > 0) {
+      counts[`${slug} live, disagrees with its log`] =
+        (counts[`${slug} live, disagrees with its log`] ?? 0) + 1
     }
     save(
       slug,
-      parsedRunBatch({ startedAt: null, executions }, meta, 'live', source),
+      withJobConclusion(
+        parsedRunBatch(
+          { startedAt: null, executions: nightExecutions(tests, log) },
+          meta,
+          'live',
+          source,
+        ),
+        job.conclusion,
+      ),
       source,
       'live, from logs',
     )
@@ -224,23 +217,25 @@ const backfillMobile = () => {
   }
 
   for (const run of runsOf(root, 'Nightly_E2E')) {
-    if (run.headBranch !== 'main' || run.conclusion === 'cancelled') continue
+    if (run.headBranch !== 'main') continue
     const meta = metaOfRun(slug, run)
     for (const job of jobsOf(root, run.databaseId)) {
       const runner = MOBILE_JOBS.find((candidate) => job.name.startsWith(candidate.match))
-      if (!runner || !['success', 'failure'].includes(job.conclusion)) continue
+      if (!runner || !runStatusOfJob(job.conclusion)) continue
       const variant = runner.variant
       const source = `r${run.databaseId}-${variant}`
       const log = readLog(root, job.id)
+      const keep = (batch, kind) =>
+        save(slug, withJobConclusion(batch, job.conclusion), source, `${variant} ${kind}`)
 
       const allure = allureByRun.get(`${run.databaseId} ${variant}`)
       if (allure) {
-        save(slug, allureBatch(allure.results, meta, variant, source), source, `${variant} allure`)
+        keep(allureBatch(allure.results, meta, variant, source), 'allure')
         continue
       }
       const junit = variant === 'espresso' ? junitByRun.get(run.databaseId) : null
       if (junit) {
-        save(slug, junitBatch(junit.xml, meta, variant, source), source, `${variant} junit`)
+        keep(junitBatch(junit.xml, meta, variant, source), 'junit')
         continue
       }
       if (!log) continue
@@ -255,14 +250,9 @@ const backfillMobile = () => {
       }
 
       if (executions.length > 0) {
-        save(
-          slug,
-          parsedRunBatch({ startedAt: null, executions }, meta, variant, source),
-          source,
-          `${variant} logs`,
-        )
-      } else if (job.conclusion === 'failure') {
-        save(slug, noTestsBatch(meta, variant, source), source, `${variant} no tests`)
+        keep(parsedRunBatch({ startedAt: null, executions }, meta, variant, source), 'logs')
+      } else if (job.conclusion !== 'success') {
+        keep(noTestsBatch(meta, variant, source), 'no tests')
       }
     }
   }

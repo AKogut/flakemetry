@@ -158,6 +158,82 @@ describe('parseVitestLog', () => {
   })
 })
 
+describe('the file results of a vitest log', () => {
+  const FLAT = stamped([
+    ' ❯ tests/smoke/bookings.test.ts (11 tests | 1 failed) 6602ms',
+    '   ✓ booking service @smoke > creates a booking 186ms',
+    '   × booking service @smoke > returns a booking by id 337ms',
+    '     → expected 403 to be 200 // Object.is equality',
+    'If this is a long-running test, pass a timeout value',
+    '   ✓ booking service @smoke > rejects a deletion  412ms',
+    ' ❯ tests/data-driven/bookings.data.test.ts (8 tests | 8 skipped) 322ms',
+    '   ↓ booking creation dataset @data-driven > booking case: deposit not paid',
+    ' ✓ tests/unit/config.test.ts (11 tests) 10ms',
+    '  Test Files  1 failed | 2 passed (3)',
+    '       Tests  1 failed | 21 passed | 8 skipped (30)',
+    ' ❯ tests/smoke/bookings.test.ts:103:29',
+    '   ✓ not a test line',
+  ])
+
+  const TREE = stamped([
+    ' ❯ tests/security/authorization.security.test.ts (17 tests | 1 failed) 6807ms',
+    '   ❯ function-level authorization (BFLA) @security (15)',
+    '     ✓ denies room.create to an anonymous caller 311ms',
+    '     × denies booking.delete to an anonymous caller 325ms',
+    '   ✓ object-level authorization (IDOR) @security (2)',
+    '     ✓ does not serve a booking by id (BUG-001) 128ms',
+    ' ✓ tests/property/room.property.test.ts (1 test) 4593ms',
+    '  Test Files  1 failed | 1 passed (2)',
+    '       Tests  1 failed | 17 passed (18)',
+  ])
+
+  it('counts each file, with its failures and skips', () => {
+    const { files, total } = parseVitestLog(FLAT)
+    expect([...files]).toEqual([
+      ['tests/smoke/bookings.test.ts', { total: 11, failed: 1, skipped: 0 }],
+      ['tests/data-driven/bookings.data.test.ts', { total: 8, failed: 0, skipped: 8 }],
+      ['tests/unit/config.test.ts', { total: 11, failed: 0, skipped: 0 }],
+    ])
+    expect(total).toBe(30)
+  })
+
+  it('reads the flat format of older runs, without what follows the file results', () => {
+    const { named, skipped } = parseVitestLog(FLAT)
+    expect([...named]).toEqual([
+      'tests/smoke/bookings.test.ts > booking service @smoke > creates a booking',
+      'tests/smoke/bookings.test.ts > booking service @smoke > returns a booking by id',
+      'tests/smoke/bookings.test.ts > booking service @smoke > rejects a deletion',
+      'tests/data-driven/bookings.data.test.ts > booking creation dataset @data-driven > booking case: deposit not paid',
+    ])
+    expect([...skipped]).toEqual([
+      'tests/data-driven/bookings.data.test.ts > booking creation dataset @data-driven > booking case: deposit not paid',
+    ])
+  })
+
+  it('reads the tree format of newer runs into the same names', () => {
+    const { named, files, total } = parseVitestLog(TREE)
+    expect([...named]).toEqual([
+      'tests/security/authorization.security.test.ts > function-level authorization (BFLA) @security > denies room.create to an anonymous caller',
+      'tests/security/authorization.security.test.ts > function-level authorization (BFLA) @security > denies booking.delete to an anonymous caller',
+      'tests/security/authorization.security.test.ts > object-level authorization (IDOR) @security > does not serve a booking by id (BUG-001)',
+    ])
+    expect(files.get('tests/property/room.property.test.ts')).toEqual({
+      total: 1,
+      failed: 0,
+      skipped: 0,
+    })
+    expect(total).toBe(18)
+  })
+
+  it('has no total when the suite never ran', () => {
+    const { total, files } = parseVitestLog(
+      stamped(['Restful Booker Platform is not ready after 29 attempts']),
+    )
+    expect(total).toBeNull()
+    expect(files.size).toBe(0)
+  })
+})
+
 describe('several failures sharing one error', () => {
   it('gives each of them that error, not the next failure line', () => {
     const { failed } = parseVitestLog(

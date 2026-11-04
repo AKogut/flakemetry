@@ -4,6 +4,7 @@ import { MOBILE_RUNNERS } from '../projects.mjs'
 import { escapeHtml, testCaseIdOf } from './site.mjs'
 
 const number = (value) => new Intl.NumberFormat('en').format(value)
+const plural = (count, one, many = `${one}s`) => (count === 1 ? one : many)
 const day = (date) =>
   new Intl.DateTimeFormat('en', {
     month: 'short',
@@ -12,15 +13,28 @@ const day = (date) =>
     timeZone: 'UTC',
   }).format(date)
 
+const shortDay = (date) =>
+  new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(date)
+
+const PARTIAL_OUTAGE_DAY = new Date('2026-08-31T00:00:00Z')
+
+const dateRange = (first, last) => {
+  const [from, to] = [day(first), day(last)]
+  return from === to ? `${from}.` : `${from} to ${to}.`
+}
+
 const statsOf = async (prisma, project) => {
   const where = { projectId: project.projectId }
-  const [runs, executions, tests, failedRuns, noTestRuns, first, last, flaky, failing, scores] =
+  const [runs, executions, tests, failedRuns, noTestRows, first, last, flaky, failing, scores] =
     await Promise.all([
       prisma.run.count({ where }),
       prisma.testExecution.count({ where }),
       prisma.testIdentity.count({ where }),
       prisma.run.count({ where: { ...where, status: 'failed' } }),
-      prisma.run.count({ where: { ...where, status: 'failed', storedExecutions: 0 } }),
+      prisma.run.findMany({
+        where: { ...where, status: 'failed', storedExecutions: 0 },
+        select: { startedAt: true },
+      }),
       prisma.run.findFirst({ where, orderBy: { startedAt: 'asc' }, select: { startedAt: true } }),
       prisma.run.findFirst({ where, orderBy: { startedAt: 'desc' }, select: { startedAt: true } }),
       prisma.testExecution.count({ where: { ...where, status: 'flaky' } }),
@@ -36,7 +50,19 @@ const statsOf = async (prisma, project) => {
         },
       }),
     ])
-  return { runs, executions, tests, failedRuns, noTestRuns, first, last, flaky, failing, scores }
+  return {
+    runs,
+    executions,
+    tests,
+    failedRuns,
+    noTestRuns: noTestRows.length,
+    noTestNights: new Set(noTestRows.map((row) => row.startedAt.toISOString().slice(0, 10))).size,
+    first,
+    last,
+    flaky,
+    failing,
+    scores,
+  }
 }
 
 const testHref = (project, fingerprint) =>
@@ -47,13 +73,13 @@ const projectCard = (project, stats) => `
     <h3><a href="${project.slug}/flaky.html">${escapeHtml(project.name)}</a></h3>
     <p class="muted" style="margin:0">${escapeHtml(project.summary)}</p>
     <div class="stat-row">
-      <div><div class="stat-value">${number(stats.runs)}</div><div class="muted stat-label">runs</div></div>
-      <div><div class="stat-value">${number(stats.executions)}</div><div class="muted stat-label">test executions</div></div>
-      <div><div class="stat-value">${number(stats.failing)}</div><div class="muted stat-label">failed attempts</div></div>
+      <div><div class="stat-value">${number(stats.runs)}</div><div class="muted stat-label">${plural(stats.runs, 'run')}</div></div>
+      <div><div class="stat-value">${number(stats.executions)}</div><div class="muted stat-label">${plural(stats.executions, 'test execution')}</div></div>
+      <div><div class="stat-value">${number(stats.failing)}</div><div class="muted stat-label">${plural(stats.failing, 'failed attempt')}</div></div>
       <div><div class="stat-value">${number(stats.flaky)}</div><div class="muted stat-label">passed on retry</div></div>
     </div>
     <p class="muted" style="font-size:0.8rem;margin:0">
-      ${stats.first ? `${day(stats.first.startedAt)} to ${day(stats.last.startedAt)}.` : ''}
+      ${stats.first ? dateRange(stats.first.startedAt, stats.last.startedAt) : ''}
       <a href="https://github.com/${project.repo}">Repository</a>
     </p>
   </div>`
@@ -75,6 +101,51 @@ const topTests = (project, stats) => {
     ? `<table><thead><tr><th class="numeric">Score</th><th>Test</th><th>Why</th></tr></thead><tbody>${rows}</tbody></table>`
     : '<p class="muted">No test scores above 0.10.</p>'
 }
+
+const partialOutageOf = async (prisma, project) => {
+  const run = await prisma.run.findFirst({
+    where: {
+      projectId: project.projectId,
+      variant: 'live',
+      startedAt: {
+        gte: PARTIAL_OUTAGE_DAY,
+        lt: new Date(PARTIAL_OUTAGE_DAY.getTime() + 86_400_000),
+      },
+    },
+    select: { id: true, passedCount: true, failedCount: true, flakyCount: true },
+  })
+  if (!run) return null
+  const failures = await prisma.testExecution.findMany({
+    where: { runId: run.id, status: 'fail' },
+    select: { testIdentityId: true },
+  })
+  const failedAgain = await prisma.testExecution.findMany({
+    where: {
+      testIdentityId: { in: failures.map((failure) => failure.testIdentityId) },
+      status: 'fail',
+      runId: { not: run.id },
+    },
+    distinct: ['testIdentityId'],
+    select: { testIdentityId: true },
+  })
+  return {
+    failed: run.failedCount,
+    ran: run.passedCount + run.failedCount + run.flakyCount,
+    onlyThatNight: failures.length - failedAgain.length,
+  }
+}
+
+const outageParagraph = (project, outage) =>
+  outage
+    ? `<p>
+    A partial outage gets past that gate. On ${shortDay(PARTIAL_OUTAGE_DAY)} the hosted platform failed
+    ${number(outage.failed)} of the ${number(outage.ran)} tests that ran. A run is only set aside when
+    most of it fails, so those count as failures of each test. For ${number(outage.onlyThatNight)} of
+    them it is the only failure on record, and they stay on
+    <a href="${project.slug}/flaky.html">the board</a> as last flaked on that day, though one bad
+    night is all they show.
+  </p>`
+    : ''
 
 const mobileMatrix = async (prisma, project) => {
   const identities = await prisma.testIdentity.findMany({
@@ -145,6 +216,7 @@ const mobileMatrix = async (prisma, project) => {
   const massRuns = (runner) => massFailures.filter((run) => run.variant === runner).length
   const rescuedRuns = (runner) =>
     runsOf(runner).filter((run) => run.status === 'passed' && run.flakyCount > 0).length
+  const canceledRuns = (runner) => runsOf(runner).filter((run) => run.status === 'canceled').length
 
   const noisy = [...rows.entries()]
     .map(([caseId, row]) => ({
@@ -174,6 +246,7 @@ const mobileMatrix = async (prisma, project) => {
     ['Went red', redRuns],
     ['of which no test ran', noTestRuns],
     ['of which most of the suite failed', massRuns],
+    ['Cancelled before it finished', canceledRuns],
     ['Green only because a retry rescued it', rescuedRuns],
     ['Test cases seen', (runner) => totals[runner].cases.size],
     ['Failed attempts in the other runs', (runner) => totals[runner].fail],
@@ -202,13 +275,19 @@ const mobileMatrix = async (prisma, project) => {
       ${number(xcuitestRescued)} of the runs it reported green a test had failed and only a retry
       saved it. Nobody would have seen those without per-attempt history.
     </p>
-    <div class="card table-scroll"><table><thead><tr><th></th>${head}</tr></thead><tbody>${summary}</tbody></table></div>
+    <div class="card"><table><thead><tr><th></th>${head}</tr></thead><tbody>${summary}</tbody></table></div>
+    <p class="muted">
+      Red and green are the job's own conclusion in CI, so a job can go red with every recorded test
+      passing, for example when it could not start a session for the rest. A cancelled job was
+      stopped before it finished, so it is neither: the tests it got through are kept, and it does
+      not count as red.
+    </p>
     <p class="muted">
       The test cases with the most trouble. Runs where most of the suite failed together are left
       out, because they say nothing about one test. A red cell is a failed attempt, and "retried"
       means the same test then passed.
     </p>
-    <div class="card table-scroll"><table><thead><tr><th>Test case</th>${head}</tr></thead><tbody>${body}</tbody></table></div>`
+    <div class="card"><table><thead><tr><th>Test case</th>${head}</tr></thead><tbody>${body}</tbody></table></div>`
 }
 
 export const renderOverview = async (prisma, projects) => {
@@ -219,6 +298,7 @@ export const renderOverview = async (prisma, projects) => {
   const restful = of('restful-booker')
   const mobile = of('mobile')
   const self = of('flakemetry')
+  const restfulStats = stats.get('restful-booker')
   const generated = new Date().toISOString().slice(0, 16).replace('T', ' ')
 
   return `<!doctype html>
@@ -227,9 +307,9 @@ export const renderOverview = async (prisma, projects) => {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Flakemetry on real test suites</title>
-  <meta name="description" content="Flakemetry running on the real CI history of three public test suites.">
+  <meta name="description" content="Flakemetry running on the real CI history of public test suites, its own included.">
   <meta property="og:title" content="Flakemetry on real test suites">
-  <meta property="og:description" content="Flakemetry running on the real CI history of three public test suites.">
+  <meta property="og:description" content="Flakemetry running on the real CI history of public test suites, its own included.">
   <meta property="og:image" content="https://akogut.github.io/flakemetry/social-preview.png">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="stylesheet" href="assets/style.css">
@@ -253,23 +333,27 @@ export const renderOverview = async (prisma, projects) => {
   <p>
     <a href="${playwright.slug}/flaky.html">${escapeHtml(playwright.name)}</a> runs on three
     browsers, and each browser is scored on its own, so a failure on WebKit alone reads as a
-    failure there and not as a flake everywhere. Open any
-    <a href="${playwright.slug}/runs.html">run</a> and then a test to see its steps as a trace.
+    failure there and not as a flake everywhere. Open any test on
+    <a href="${playwright.slug}/flaky.html">the board</a>, then a trace to see its steps.
   </p>
   <div class="card">${topTests(playwright, stats.get('playwright'))}</div>
 
-  <h2>An outage is not a flake</h2>
+  <h2>A run that never started is not a flake</h2>
   <p>
     <a href="${restful.slug}/runs.html">${escapeHtml(restful.name)}</a> tests a hosted demo it does
     not run. In late October that demo
     <a href="https://github.com/${restful.repo}/issues/162">started answering 500 on every per-id route</a>,
-    and the suite's readiness gate stopped the run before any test started. Those nights appear as
-    <em>no tests ran</em> rather than as gaps, ${number(stats.get('restful-booker').noTestRuns)} of
-    them so far. The tests that did fail on the hosted platform earlier are below. The
-    <code>live</code> and <code>local</code> variants are scored apart, because a local copy says
-    nothing about the hosted one.
+    and the suite's readiness gate stopped the run before any test started. Those runs appear as
+    <em>no tests ran</em> rather than as gaps, and no test is marked down for them:
+    ${number(restfulStats.noTestRuns)} ${plural(restfulStats.noTestRuns, 'run')} on
+    ${number(restfulStats.noTestNights)} ${plural(restfulStats.noTestNights, 'night')} so far.
   </p>
-  <div class="card">${topTests(restful, stats.get('restful-booker'))}</div>
+  ${outageParagraph(restful, await partialOutageOf(prisma, restful))}
+  <p>
+    The top of that board is below. The <code>live</code> and <code>local</code> variants are scored
+    apart, because a local copy says nothing about the hosted one.
+  </p>
+  <div class="card">${topTests(restful, restfulStats)}</div>
 
   <h2 id="one-app-four-runners">One app, four runners</h2>
   <p>
@@ -293,7 +377,8 @@ export const renderOverview = async (prisma, projects) => {
   <h2>What you are looking at</h2>
   <ul>
     <li>This is a static snapshot, so it has no search or controls and the trace view does not expand. A running instance has them.</li>
-    <li>Recent runs are the artifacts those suites uploaded. Older runs were reconstructed from their CI logs: which test passed or failed on which night is real, while durations and error text can be missing.</li>
+    <li>Recent runs are the artifacts those suites uploaded. Older runs were reconstructed from their CI logs, where durations and error text can be missing.</li>
+    <li>On a reconstructed green night, the pass of each test is inferred. The <code>live</code> runs of ${escapeHtml(restful.name)} and the Espresso runs of ${escapeHtml(mobile.name)} log how many tests passed and name only the failures, so the other tests are taken as passed. Failures, skips and the XCUITest and Appium attempts are named in the logs.</li>
     <li>Only the <code>main</code> branch is included.</li>
     <li>AI root-cause analysis needs a model key, so it is not part of this snapshot.</li>
   </ul>

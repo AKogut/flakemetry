@@ -127,6 +127,44 @@ export const espressoExecutions = (universe, failed) =>
     error: failed.has(test.title) ? errorOf(failed.get(test.title)) : null,
   }))
 
+const VITEST_FILE =
+  /^\s*[✓❯×↓]\s+(tests\/\S+\.test\.ts)\s+\((\d+) tests?(?: \| (\d+) failed)?(?: \| (\d+) skipped)?\)/
+const VITEST_CASE = /^(\s+)([✓❯×↓])\s+(.*?)(\s+\d+ms)?$/
+const VITEST_GROUP = /\s\(\d+\)$/
+const VITEST_END_OF_FILES = /^\s*(?:⎯|Test Files\s)/
+const VITEST_TOTAL = /^\s*Tests\s.*\((\d+)\)\s*$/
+
+const readVitestFiles = (lines) => {
+  const files = new Map()
+  const named = new Map()
+  let file = null
+  let groups = []
+  for (const line of lines) {
+    const header = VITEST_FILE.exec(line)
+    if (header) {
+      file = header[1]
+      groups = []
+      files.set(file, {
+        total: Number(header[2]),
+        failed: Number(header[3] ?? 0),
+        skipped: Number(header[4] ?? 0),
+      })
+      continue
+    }
+    if (VITEST_END_OF_FILES.test(line)) file = null
+    const entry = file ? VITEST_CASE.exec(line) : null
+    if (!entry) continue
+    const [, { length: indent }, mark, text, duration] = entry
+    groups = groups.filter((group) => group.indent < indent)
+    if (!duration && VITEST_GROUP.test(text)) {
+      groups.push({ indent, name: text.replace(VITEST_GROUP, '') })
+      continue
+    }
+    named.set([file, ...groups.map((group) => group.name), text].join(' > '), mark)
+  }
+  return { files, named }
+}
+
 export const parseVitestLog = (text) => {
   const lines = cleanLines(text)
   const failed = new Map()
@@ -134,8 +172,14 @@ export const parseVitestLog = (text) => {
     const match = /^\s*FAIL\s+(tests\/\S+ > .*?)\s*$/.exec(line)
     if (match) failed.set(match[1], nextText(lines, index))
   })
+  const { files, named } = readVitestFiles(lines)
+  const total = lines.map((line) => VITEST_TOTAL.exec(line)).find(Boolean)?.[1]
   return {
     failed,
+    skipped: new Set([...named].filter(([, mark]) => mark === '↓').map(([key]) => key)),
+    named: new Set(named.keys()),
+    files,
+    total: total === undefined ? null : Number(total),
     stoppedAtGate: lines.some((line) => line.includes('is not ready after')),
     usedLocalTarget: lines.some((line) => line.includes('failed its health checks')),
   }
