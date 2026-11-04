@@ -58,7 +58,8 @@ npx flakemetry allure allure-results
 ```
 
 A test that failed and then passed on retry is recorded as flaky, and failed and broken results
-both count as failures.
+both count as failures. A test Allure reports as skipped because a hook failed is recorded as
+skipped, since it never ran.
 
 ## XCUITest
 

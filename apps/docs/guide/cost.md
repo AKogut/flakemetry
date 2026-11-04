@@ -9,9 +9,11 @@ Open it at **Cost** in the project nav.
 
 The distinction matters, because a number nobody can defend is worse than no number.
 
-**Measured.** An attempt after the first exists only because an earlier one failed. Its
+**Measured.** An attempt counts as a retry when an earlier attempt of the same test failed. Its
 wall-clock is CI time a reliable suite would not have spent, and Flakemetry records it per
-test per day as runs arrive. Nothing is modelled or extrapolated.
+test per day as runs arrive. Nothing is modelled or extrapolated. A second attempt with no failure
+before it, such as a test that passed and ran again because its whole spec file was retried, does
+not count.
 
 **Assumed.** Turning that time into money needs rates, and how long a red build costs
 somebody is not observable from test data. Three settings supply it, all under

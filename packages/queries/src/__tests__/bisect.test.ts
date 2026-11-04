@@ -70,6 +70,12 @@ describe('findFlakeOnset', () => {
     expect(findFlakeOnset(history)?.firstBadRun.commitSha).toBe('c9')
   })
 
+  it('takes the last green run from a pass, not from a skip that followed it', () => {
+    const history = [...greenThen(6), point(6, 'skip', 'skipped'), point(7, 'fail', 'skipped')]
+
+    expect(findFlakeOnset(history)?.lastGoodRun?.commitSha).toBe('c5')
+  })
+
   it('returns nothing for a test that has never failed', () => {
     expect(findFlakeOnset(greenThen(10))).toBeNull()
   })
@@ -114,6 +120,12 @@ describe('rankSuspects', () => {
     expect(suspects.map((suspect) => suspect.commitSha)).not.toContain('later')
   })
 
+  it('excludes the last green commit even when it ran again inside the window', () => {
+    const suspects = rankSuspects(window, [point(8, 'pass', 'good'), point(10, 'pass', 'bad')])
+
+    expect(suspects.map((suspect) => suspect.commitSha)).toEqual(['bad'])
+  })
+
   it('counts a commit once however many runs it produced', () => {
     const suspects = rankSuspects(window, [
       point(8, 'pass', 'b'),
@@ -142,6 +154,20 @@ describe('explainBisect', () => {
     expect(explainBisect(window, [suspect('bad', 0)], true, true).verdict).toBe('identified')
   })
 
+  it('names no suspect when the first failure is on the last green commit', () => {
+    const sameCommit = {
+      firstBadRun: point(10, 'fail', 'same'),
+      lastGoodRun: point(9, 'pass', 'same'),
+      stableRunsBefore: 9,
+    }
+
+    const result = explainBisect(sameCommit, [suspect('other', 0)], true, true)
+
+    expect(result.verdict).toBe('no-code-change')
+    expect(result.suspects).toEqual([])
+    expect(result.reason).toContain('same commit')
+  })
+
   it('says narrowed for a handful', () => {
     const result = explainBisect(window, [suspect('a', 0), suspect('b', 1)], true, true)
 
@@ -162,6 +188,14 @@ describe('explainBisect', () => {
   it('distinguishes never-failed from always-flaky', () => {
     expect(explainBisect(null, [], false, true).reason).toContain('not failed')
     expect(explainBisect(null, [], true, true).reason).toContain('unreliable')
+  })
+
+  it('does not say a test never failed when its failures were set aside', () => {
+    const result = explainBisect(null, [], false, true, 3)
+
+    expect(result.verdict).toBe('inconclusive')
+    expect(result.reason).toContain('set aside')
+    expect(result.reason).not.toContain('not failed')
   })
 })
 
@@ -214,6 +248,113 @@ describe.skipIf(!hasDb)('getFlakeBisect', () => {
     expect(bisect.suspects[0]?.commitSha).toBe('commit8')
     expect(bisect.window?.lastGoodRun?.commitSha).toBe('commit7')
     expect(bisect.reason).toContain('8 run(s) in a row')
+  })
+
+  const seedHistory = async (
+    commits: {
+      sha: string
+      status: 'pass' | 'fail'
+      othersFailing?: number
+      othersPassing?: number
+    }[],
+  ) => {
+    const slug = `bisect-${randomUUID().slice(0, 8)}`
+    const org = await prisma.org.create({ data: { name: slug, slug } })
+    const project = await prisma.project.create({ data: { orgId: org.id, name: slug, slug } })
+    const tenant = { orgId: org.id, projectId: project.id }
+    const createIdentity = (title: string) =>
+      prisma.testIdentity.create({
+        data: { ...tenant, fingerprint: randomUUID(), filePath: 'a.spec.ts', suite: 's', title },
+      })
+    const identity = await createIdentity('t')
+
+    for (const [index, commit] of commits.entries()) {
+      const startedAt = new Date(START.getTime() + index * HOUR)
+      const run = await prisma.run.create({
+        data: {
+          ...tenant,
+          idempotencyKey: `${slug}-${index}`,
+          commitSha: commit.sha,
+          branch: 'main',
+          ciProvider: 'local',
+          trigger: 'manual',
+          status: commit.status === 'pass' ? 'passed' : 'failed',
+          startedAt,
+          passedCount: (commit.status === 'pass' ? 1 : 0) + (commit.othersPassing ?? 0),
+        },
+      })
+      const execution = { ...tenant, runId: run.id, attempt: 1, durationMs: 100, startedAt }
+      await prisma.testExecution.create({
+        data: { ...execution, ordinal: 0, testIdentityId: identity.id, status: commit.status },
+      })
+      for (let other = 0; other < (commit.othersFailing ?? 0); other += 1) {
+        const sibling = await createIdentity(`sibling-${index}-${other}`)
+        await prisma.testExecution.create({
+          data: { ...execution, ordinal: other + 1, testIdentityId: sibling.id, status: 'fail' },
+        })
+      }
+    }
+
+    return { projectId: project.id, identityId: identity.id }
+  }
+
+  const green = (count: number, sha: (index: number) => string) =>
+    Array.from({ length: count }, (_, index) => ({ sha: sha(index), status: 'pass' as const }))
+
+  it('names no commit when the test failed on the commit that last passed', async () => {
+    const { projectId, identityId } = await seedHistory([
+      ...green(6, () => 'nightly'),
+      { sha: 'nightly', status: 'fail' },
+    ])
+
+    const bisect = await getFlakeBisect(prisma, projectId, identityId)
+
+    expect(bisect.verdict).toBe('no-code-change')
+    expect(bisect.suspects).toEqual([])
+    expect(bisect.window?.lastGoodRun?.commitSha).toBe('nightly')
+    expect(bisect.window?.firstBadRun.commitSha).toBe('nightly')
+  })
+
+  it('names no onset when the only failure came in a mass failure', async () => {
+    const { projectId, identityId } = await seedHistory([
+      ...green(6, (index) => `commit${index}`),
+      { sha: 'outage', status: 'fail', othersFailing: 5 },
+    ])
+
+    const bisect = await getFlakeBisect(prisma, projectId, identityId)
+
+    expect(bisect.verdict).toBe('inconclusive')
+    expect(bisect.window).toBeNull()
+    expect(bisect.suspects).toEqual([])
+    expect(bisect.reason).toContain('set aside')
+  })
+
+  it('looks past a mass failure to a later failure of the test itself', async () => {
+    const { projectId, identityId } = await seedHistory([
+      ...green(6, (index) => `commit${index}`),
+      { sha: 'outage', status: 'fail', othersFailing: 5 },
+      { sha: 'recovered', status: 'pass' },
+      { sha: 'culprit', status: 'fail', othersPassing: 20 },
+    ])
+
+    const bisect = await getFlakeBisect(prisma, projectId, identityId)
+
+    expect(bisect.verdict).toBe('identified')
+    expect(bisect.suspects.map((suspect) => suspect.commitSha)).toEqual(['culprit'])
+    expect(bisect.window?.lastGoodRun?.commitSha).toBe('recovered')
+    expect(bisect.window?.stableRunsBefore).toBe(7)
+  })
+
+  it('still names a commit when a failure among many passes is not a mass failure', async () => {
+    const { projectId, identityId } = await seedHistory([
+      ...green(6, (index) => `commit${index}`),
+      { sha: 'culprit', status: 'fail', othersFailing: 5, othersPassing: 20 },
+    ])
+
+    const bisect = await getFlakeBisect(prisma, projectId, identityId)
+
+    expect(bisect.verdict).toBe('identified')
+    expect(bisect.suspects[0]?.commitSha).toBe('culprit')
   })
 
   it('stays silent for a test that was always flaky', async () => {

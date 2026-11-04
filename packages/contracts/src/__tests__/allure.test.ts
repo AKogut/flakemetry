@@ -94,6 +94,69 @@ describe('parseAllureResults', () => {
     expect(run.executions.map((execution) => execution.status)).toEqual(['fail', 'skip', 'skip'])
   })
 
+  describe('a test skipped because a hook failed', () => {
+    const skippedByHook = {
+      message: 'Test skipped due to failure in hook ""before all" hook: wrappedHook for "TC-1"',
+      trace: 'invalid argument: WebDriverError',
+    }
+
+    it.each(['failed', 'broken'])('is skipped when Allure says %s', (status) => {
+      const [execution] = parseAllureResults([
+        result({ status, statusDetails: skippedByHook, start: 1, stop: 1 }),
+      ]).executions
+
+      expect(execution?.status).toBe('skip')
+      expect(execution?.error).toBeNull()
+    })
+
+    it('does not turn the pass on the retried spec file into a flaky result', () => {
+      const run = parseAllureResults([
+        result({ status: 'broken', statusDetails: skippedByHook, start: 1 }),
+        result({ status: 'passed', start: 2 }),
+      ])
+
+      expect(run.executions.map((execution) => [execution.attempt, execution.status])).toEqual([
+        [1, 'skip'],
+        [2, 'pass'],
+      ])
+      expect(runHasFailure(run.executions)).toBe(false)
+    })
+
+    it('still calls a real failure a failure, whatever else the message says', () => {
+      const [execution] = parseAllureResults([
+        result({
+          status: 'failed',
+          statusDetails: { message: 'expected "Test skipped due to failure in hook" to be gone' },
+        }),
+      ]).executions
+
+      expect(execution?.status).toBe('fail')
+    })
+  })
+
+  it('keeps hooks with an empty history id apart instead of calling one a retry of another', () => {
+    const hook = (name: string, start: number): AllureResult => ({
+      name,
+      historyId: '',
+      status: 'broken',
+      statusDetails: {},
+      start,
+      stop: start + 30_000,
+      labels: [],
+    })
+
+    const run = parseAllureResults([
+      hook('"before all" hook for Tasks — Status filter', 1),
+      hook('"before all" hook for Tasks — Priority filter', 2),
+    ])
+
+    expect(run.executions.map((execution) => [execution.title, execution.attempt])).toEqual([
+      ['"before all" hook for Tasks — Status filter', 1],
+      ['"before all" hook for Tasks — Priority filter', 1],
+    ])
+    expect(run.executions.every((execution) => execution.retryOfIndex === null)).toBe(true)
+  })
+
   it('keeps parameters, leaving out the ones Allure marks as excluded', () => {
     const [execution] = parseAllureResults([
       result({
