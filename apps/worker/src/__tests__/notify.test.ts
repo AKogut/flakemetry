@@ -78,6 +78,34 @@ describe('startNotifications', () => {
     expect(urls.filter((url) => url === 'https://discord.test')).toHaveLength(1)
   })
 
+  it('names a test with no suite properly and sends Discord no empty field', async () => {
+    const calls: { body: { embeds: { description: string; fields?: { value: string }[] }[] } }[] =
+      []
+    global.fetch = vi.fn(async (_url: unknown, init: unknown) => {
+      calls.push({ body: JSON.parse((init as { body?: string }).body ?? '{}') })
+      return { ok: true, status: 204 } as Response
+    }) as unknown as typeof fetch
+
+    const events = createEventBus()
+    startNotifications(events, {
+      FLAKEMETRY_DISCORD_WEBHOOK: 'https://discord.test/api/webhooks/1',
+    })
+    events.emit('flaky.detected', {
+      testIdentityId: 't1',
+      projectId: 'p1',
+      suite: '',
+      title: 'user can add a product to cart',
+      filePath: 'smoke/add-product-to-cart.spec.ts',
+      score: 0.9,
+    })
+    await vi.waitFor(() => expect(calls).toHaveLength(1))
+
+    const embed = calls[0]!.body.embeds[0]!
+    expect(embed.description).toContain('`user can add a product to cart`')
+    expect(embed.description).not.toContain('›')
+    expect(embed.fields?.every((field) => field.value.length > 0)).toBe(true)
+  })
+
   it('is disabled when no channels are configured', () => {
     const events = createEventBus()
     expect(startNotifications(events, {})).toBe(false)

@@ -41,6 +41,9 @@ const buildChannels = (env: Record<string, string | undefined>): Channel[] => {
 
 export type ProjectChannelLoader = (projectId: string) => Promise<Channel[]>
 
+const testName = (test: { suite: string; title: string }): string =>
+  test.suite ? `${test.suite} › ${test.title}` : test.title
+
 export const startNotifications = (
   events: EventBus,
   env: Record<string, string | undefined> = process.env,
@@ -74,10 +77,10 @@ export const startNotifications = (
       type: 'flaky_detected',
       projectId: payload.projectId,
       heading: 'New flaky test detected',
-      summary: `\`${payload.suite} › ${payload.title}\` is now flaky (score ${payload.score.toFixed(2)})`,
+      summary: `\`${testName(payload)}\` is now flaky (score ${payload.score.toFixed(2)})`,
       url: testUrl(payload.projectId, payload.testIdentityId),
       fields: [
-        { label: 'Suite', value: payload.suite },
+        ...(payload.suite ? [{ label: 'Suite', value: payload.suite }] : []),
         { label: 'File', value: payload.filePath },
         { label: 'Score', value: payload.score.toFixed(2) },
       ],
@@ -107,7 +110,7 @@ export const startNotifications = (
       type: 'quarantine_changed',
       projectId: payload.projectId,
       heading: payload.quarantined ? 'Test quarantined' : 'Test released from quarantine',
-      summary: `\`${payload.suite} › ${payload.title}\` was ${
+      summary: `\`${testName(payload)}\` was ${
         payload.quarantined ? 'quarantined' : 'released from quarantine'
       }${payload.reason ? ` — ${payload.reason}` : ''}`,
       url: testUrl(payload.projectId, payload.testIdentityId),
