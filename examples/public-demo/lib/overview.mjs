@@ -228,7 +228,12 @@ export const renderOverview = async (prisma, projects) => {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Flakemetry on real test suites</title>
   <meta name="description" content="Flakemetry running on the real CI history of three public test suites.">
+  <meta property="og:title" content="Flakemetry on real test suites">
+  <meta property="og:description" content="Flakemetry running on the real CI history of three public test suites.">
+  <meta property="og:image" content="https://akogut.github.io/flakemetry/social-preview.png">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="stylesheet" href="assets/style.css">
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
 </head>
 <body>
 <div class="overview">
