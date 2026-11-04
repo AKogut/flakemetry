@@ -122,6 +122,7 @@ services:
     build:
       context: ../..
       target: migrate
+    command: ['sh', '-c', 'corepack pnpm exec prisma migrate deploy']
     depends_on:
       postgres:
         condition: service_healthy

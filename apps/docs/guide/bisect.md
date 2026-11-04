@@ -19,6 +19,11 @@ told plainly that it has been unreliable for as long as its history goes back.
 Retries are ignored. A retry is the same commit run again, so counting one would make every
 retried failure look like an onset of its own.
 
+Mass failures are left out too, by the same rule the [score](/concepts/flaky-scoring) uses: a run
+with at least five failing tests that are at least half of what it executed says the suite could
+not run, not that this test broke. If those are a test's only failures, it has no onset and the
+panel does not appear.
+
 ## How suspects are ranked
 
 The commits in the window are those the **project** ran between the test's last green run and
@@ -33,16 +38,21 @@ needs diffs, and Flakemetry ingests test results, not source control. Proximity 
 signal; file attribution would be invented, so it is not offered.
 :::
 
-## The three answers
+## The four answers
 
 | Verdict | Meaning |
 | --- | --- |
-| **Identified** | Exactly one commit ran between the last green run and the first failure |
+| **Identified** | Exactly one new commit ran between the last green run and the first failure |
 | **Narrowed** | A handful did — they are listed, newest first |
+| **No code change** | The first failure is on the same commit as the last green run, so no commit is named |
 | **Inconclusive** | Either no onset exists, or the window is too wide to name anyone |
 
 An inconclusive verdict is a real answer, not a failure. Thirty-nine wrong suspects and one
 right one is not an answer.
+
+No code change is common on a nightly schedule, where one commit runs many times. The commit
+that passed cannot be what broke the test, so look at what can differ between runs of one commit:
+timing, test data, the environment or a dependency.
 
 ## Making it sharper
 

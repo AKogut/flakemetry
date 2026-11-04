@@ -110,6 +110,87 @@ describe.skipIf(!hasDb)('trend rollups', () => {
     expect(trend.flakyCount).toBeGreaterThanOrEqual(0)
   })
 
+  it('counts a retry only when an earlier attempt of the same test failed', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    const attempt = (
+      title: string,
+      status: 'pass' | 'fail' | 'flaky' | 'skip',
+      number: number,
+    ) => ({
+      filePath: 'e2e/filters.spec.ts',
+      suite: 'filters',
+      title,
+      status,
+      attempt: number,
+      startedAt: new Date(`2026-07-16T10:0${number}:00Z`),
+      durationMs: 1000 * number,
+      ...(status === 'fail' ? { error: { message: 'Timeout 30000ms exceeded' } } : {}),
+    })
+
+    await processJob(
+      prisma,
+      batch({
+        executions: [
+          attempt('spec file rerun', 'pass', 1),
+          attempt('spec file rerun', 'pass', 2),
+          attempt('skipped by a hook', 'skip', 1),
+          attempt('skipped by a hook', 'pass', 2),
+          attempt('other test failed first', 'fail', 1),
+          attempt('real retry', 'fail', 1),
+          attempt('real retry', 'fail', 2),
+          attempt('real retry', 'flaky', 3),
+          attempt('retry never ran', 'fail', 1),
+          attempt('retry never ran', 'skip', 2),
+        ],
+      }),
+      ctx,
+    )
+
+    const reruns = await prisma.dailyTestStats.findMany({
+      select: { rerunCount: true, rerunMs: true, identity: { select: { title: true } } },
+    })
+    const byTitle = Object.fromEntries(
+      reruns.map((row) => [row.identity.title, [row.rerunCount, row.rerunMs]]),
+    )
+
+    expect(byTitle).toEqual({
+      'spec file rerun': [0, 0],
+      'skipped by a hook': [0, 0],
+      'other test failed first': [0, 0],
+      'real retry': [2, 5000],
+      'retry never ran': [0, 0],
+    })
+
+    const suite = await prisma.suiteDaily.findFirstOrThrow({ where: { suite: 'filters' } })
+    expect(suite.rerunCount).toBe(2)
+    expect(suite.rerunMs).toBe(5000)
+  })
+
+  it('counts a flaky row as a retry even when the earlier attempt was never reported', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(
+      prisma,
+      batch({
+        executions: [
+          {
+            filePath: 'e2e/login.spec.ts',
+            suite: 'auth',
+            title: 'logs in',
+            status: 'flaky',
+            attempt: 2,
+            startedAt: new Date('2026-07-16T10:00:03Z'),
+            durationMs: 1400,
+          },
+        ],
+      }),
+      ctx,
+    )
+
+    const daily = await prisma.dailyTestStats.findFirstOrThrow()
+    expect(daily.rerunCount).toBe(1)
+    expect(daily.rerunMs).toBe(1400)
+  })
+
   it('serves the rollups through the query api', async () => {
     const ctx = { ...(await seedProject()), now: NOW }
     await processJob(prisma, batch(), ctx)

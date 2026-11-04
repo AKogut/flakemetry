@@ -25,6 +25,7 @@ import {
   updateClusterKnownIssue,
 } from '@/lib/actions'
 import { formatPercent } from '@/lib/format'
+import { describeRelatedFailures } from '@/lib/related-failures'
 import { requireProjectViewer } from '@/lib/viewer'
 
 const prisma = getPrismaClient()
@@ -166,45 +167,65 @@ export default async function TestDetailPage({
       {bisect.window ? (
         <div className="card" style={{ marginBottom: '1.25rem' }}>
           <div className="rca-label">Introduced by</div>
-          {bisect.verdict === 'identified' && bisect.suspects[0] ? (
-            <p style={{ margin: '0.4rem 0' }}>
-              Likely <span className="mono">{bisect.suspects[0].commitSha.slice(0, 10)}</span>
-            </p>
+          {bisect.verdict === 'no-code-change' ? (
+            <>
+              <p style={{ margin: '0.4rem 0' }}>
+                No commit. It passed and then failed on{' '}
+                <span className="mono">{bisect.window.firstBadRun.commitSha.slice(0, 10)}</span>, so
+                the code did not change between those runs.
+              </p>
+              <p className="muted" style={{ fontSize: '0.82rem', marginBottom: 0 }}>
+                It first failed on {formatWhen(bisect.window.firstBadRun.startedAt)}, after{' '}
+                {bisect.window.stableRunsBefore} green runs in a row. Look at what can differ
+                between runs of one commit: timing, test data, the environment or a dependency.
+              </p>
+            </>
           ) : (
-            <p style={{ margin: '0.4rem 0' }}>
-              {bisect.verdict === 'narrowed'
-                ? 'Narrowed to a handful of commits.'
-                : 'Could not narrow this down.'}
-            </p>
-          )}
-          <p className="muted" style={{ fontSize: '0.82rem' }}>
-            {bisect.reason}. Last green was{' '}
-            <span className="mono">
-              {bisect.window.lastGoodRun?.commitSha.slice(0, 10) ?? 'unknown'}
-            </span>
-            ; first failure on{' '}
-            <span className="mono">{bisect.window.firstBadRun.commitSha.slice(0, 10)}</span>.
-          </p>
-          {bisect.suspects.length > 1 ? (
-            <p className="muted" style={{ fontSize: '0.8rem' }}>
-              Suspects, newest first:{' '}
-              {bisect.suspects.map((suspect, index) => (
-                <span key={suspect.commitSha}>
-                  {index > 0 ? ', ' : ''}
-                  <span className="mono">{suspect.commitSha.slice(0, 10)}</span>
+            <>
+              {bisect.verdict === 'identified' && bisect.suspects[0] ? (
+                <p style={{ margin: '0.4rem 0' }}>
+                  If a commit caused this, it was{' '}
+                  <span className="mono">{bisect.suspects[0].commitSha.slice(0, 10)}</span>.
+                </p>
+              ) : (
+                <p style={{ margin: '0.4rem 0' }}>
+                  {bisect.verdict === 'narrowed'
+                    ? 'Narrowed to a handful of commits.'
+                    : 'Could not narrow this down.'}
+                </p>
+              )}
+              <p className="muted" style={{ fontSize: '0.82rem' }}>
+                {bisect.reason}. Last green was{' '}
+                <span className="mono">
+                  {bisect.window.lastGoodRun?.commitSha.slice(0, 10) ?? 'unknown'}
                 </span>
-              ))}
-            </p>
-          ) : null}
-          <p className="muted" style={{ fontSize: '0.78rem' }}>
-            Ranked by how close each commit ran to the failure. Flakemetry ingests test results, not
-            source control, so it cannot tell which commit touched this file.
-          </p>
+                ; first failure on{' '}
+                <span className="mono">{bisect.window.firstBadRun.commitSha.slice(0, 10)}</span>.
+              </p>
+              {bisect.suspects.length > 1 ? (
+                <p className="muted" style={{ fontSize: '0.8rem' }}>
+                  Suspects, newest first:{' '}
+                  {bisect.suspects.map((suspect, index) => (
+                    <span key={suspect.commitSha}>
+                      {index > 0 ? ', ' : ''}
+                      <span className="mono">{suspect.commitSha.slice(0, 10)}</span>
+                    </span>
+                  ))}
+                </p>
+              ) : null}
+              <p className="muted" style={{ fontSize: '0.78rem' }}>
+                Ranked by how close each commit ran to the failure. Flakemetry ingests test results,
+                not source control, so it cannot tell which commit touched this file.
+              </p>
+            </>
+          )}
         </div>
       ) : null}
 
       <div className="card" style={{ marginBottom: '1.25rem' }}>
-        <div className="rca-label">Last {timeline.length} executions</div>
+        <div className="rca-label">
+          {timeline.length === 1 ? 'Last execution' : `Last ${timeline.length} executions`}
+        </div>
         <Sparkline points={test.history} />
         <div className="muted" style={{ fontSize: '0.78rem', marginTop: '0.4rem' }}>
           oldest → newest
@@ -529,6 +550,7 @@ export default async function TestDetailPage({
             report={rcaReport}
             errorMessage={selected.errorMessage}
             feedback={rcaFeedback}
+            readOnly={!isMember}
           />
         </div>
       ) : null}
@@ -575,10 +597,7 @@ export default async function TestDetailPage({
             </span>
           </div>
           <p className="muted" style={{ marginBottom: '0.6rem' }}>
-            This failure clusters with {cluster.tests.length} other test
-            {cluster.tests.length === 1 ? '' : 's'} — likely one root cause, not{' '}
-            {cluster.tests.length === 1 ? 'an isolated' : 'many isolated'} bug
-            {cluster.tests.length === 1 ? '' : 's'}.
+            {describeRelatedFailures(cluster)}
           </p>
           <ul className="reasons">
             {cluster.tests.map((related) => (
@@ -589,6 +608,7 @@ export default async function TestDetailPage({
                 <span className="mono muted" style={{ fontSize: '0.8rem' }}>
                   {' '}
                   · {related.suite} · {related.filePath}
+                  {related.failedInSameRun ? ' · this run' : ''}
                 </span>
               </li>
             ))}

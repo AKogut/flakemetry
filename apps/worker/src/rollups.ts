@@ -95,6 +95,18 @@ interface FirstAttemptRow {
   failed_runs: bigint
 }
 
+const IS_RETRY_AFTER_FAILURE = Prisma.sql`
+  e.attempt > 1 AND e.status <> 'skip' AND (
+    e.status = 'flaky' OR EXISTS (
+      SELECT 1 FROM test_execution earlier
+      WHERE earlier.run_id = e.run_id
+        AND earlier.test_identity_id = e.test_identity_id
+        AND earlier.attempt < e.attempt
+        AND earlier.status = 'fail'
+    )
+  )
+`
+
 const bucketsFrom = (rows: readonly StatusRow[]): Map<string, Bucket> => {
   const byKey = new Map<string, Bucket>()
   for (const row of rows) {
@@ -157,12 +169,12 @@ const rollupDay = async (
       GROUP BY 1, 2
     `,
       prisma.$queryRaw<RerunRow[]>`
-      SELECT test_identity_id::text AS key, count(*) AS count, sum(duration_ms) AS duration
-      FROM test_execution
-      WHERE project_id = ${ctx.projectId}::uuid
-        AND started_at >= ${day} AND started_at < ${end}
-        AND attempt > 1
-        AND test_identity_id = ANY(${ids}::uuid[])
+      SELECT e.test_identity_id::text AS key, count(*) AS count, sum(e.duration_ms) AS duration
+      FROM test_execution e
+      WHERE e.project_id = ${ctx.projectId}::uuid
+        AND e.started_at >= ${day} AND e.started_at < ${end}
+        AND ${IS_RETRY_AFTER_FAILURE}
+        AND e.test_identity_id = ANY(${ids}::uuid[])
       GROUP BY 1
     `,
       prisma.$queryRaw<FirstAttemptRow[]>`
@@ -203,7 +215,7 @@ const rollupDay = async (
       JOIN test_identity i ON i.id = e.test_identity_id
       WHERE e.project_id = ${ctx.projectId}::uuid
         AND e.started_at >= ${day} AND e.started_at < ${end}
-        AND e.attempt > 1
+        AND ${IS_RETRY_AFTER_FAILURE}
         AND i.suite = ANY(${suiteNames}::text[])
       GROUP BY 1
     `,

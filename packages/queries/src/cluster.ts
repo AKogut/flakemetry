@@ -5,12 +5,14 @@ export interface ClusterImpactTest {
   title: string
   suite: string
   filePath: string
+  failedInSameRun: boolean
 }
 
 export interface ClusterImpact {
   clusterId: string
   signatureCount: number
   occurrenceCount: number
+  sameRunTestCount: number
   tests: ClusterImpactTest[]
 }
 
@@ -66,7 +68,11 @@ export const getClusterImpact = async (
 ): Promise<ClusterImpact | null> => {
   const execution = await prisma.testExecution.findFirst({
     where: { id: executionId, projectId },
-    select: { testIdentityId: true, errorSignature: { select: { clusterId: true } } },
+    select: {
+      testIdentityId: true,
+      run: { select: { id: true, ciRunId: true } },
+      errorSignature: { select: { clusterId: true } },
+    },
   })
   const clusterId = execution?.errorSignature?.clusterId
   if (!clusterId) return null
@@ -94,15 +100,29 @@ export const getClusterImpact = async (
   })
   if (relatedTests.length === 0) return null
 
+  const sameRunTests = await prisma.testExecution.findMany({
+    where: {
+      projectId,
+      errorSignatureId: { in: signatureIds },
+      testIdentityId: { not: execution.testIdentityId },
+      run: execution.run.ciRunId ? { ciRunId: execution.run.ciRunId } : { id: execution.run.id },
+    },
+    distinct: ['testIdentityId'],
+    select: { testIdentityId: true },
+  })
+  const sameRunTestIds = new Set(sameRunTests.map((row) => row.testIdentityId))
+
   return {
     clusterId,
     signatureCount: siblings.length,
     occurrenceCount,
+    sameRunTestCount: sameRunTestIds.size,
     tests: relatedTests.map((row) => ({
       testIdentityId: row.testIdentityId,
       title: row.identity.title,
       suite: row.identity.suite,
       filePath: row.identity.filePath,
+      failedInSameRun: sameRunTestIds.has(row.testIdentityId),
     })),
   }
 }
