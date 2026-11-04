@@ -2,8 +2,7 @@ import { getPrismaClient } from '@flakemetry/db'
 import { flakyBoard } from '@flakemetry/queries'
 
 import { ScoreBadge, TrendArrow } from '@/components/score'
-import { requireUser } from '@/lib/session'
-import { requireProjectAccess } from '@/lib/tenant'
+import { requireProjectViewer } from '@/lib/viewer'
 
 const prisma = getPrismaClient()
 
@@ -27,8 +26,7 @@ export default async function FlakyBoardPage({
 }) {
   const { projectId } = await params
   const { filter, owner } = await searchParams
-  const user = await requireUser()
-  await requireProjectAccess(user.id, projectId)
+  await requireProjectViewer(projectId)
 
   const board = await flakyBoard(prisma, projectId, {
     limit: BOARD_LIMIT,

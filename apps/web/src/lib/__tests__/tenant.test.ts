@@ -1,7 +1,7 @@
 import { createPrismaClient } from '@flakemetry/db'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { listAccessibleProjects, requireProjectAccess } from '../tenant'
+import { listAccessibleProjects, requireProjectAccess, resolveProjectViewer } from '../tenant'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
 const prisma = createPrismaClient()
@@ -191,5 +191,87 @@ describe.skipIf(!hasDb)('tenant isolation', () => {
         /NEXT_REDIRECT/,
       )
     })
+  })
+})
+
+describe.skipIf(!hasDb)('public projects', () => {
+  beforeEach(async () => {
+    await prisma.projectGrant.deleteMany()
+    await prisma.membership.deleteMany()
+    await prisma.project.deleteMany()
+    await prisma.org.deleteMany()
+    await prisma.user.deleteMany()
+  })
+
+  const publish = (projectId: string, data = { public: true }) =>
+    prisma.project.update({ where: { id: projectId }, data })
+
+  it('shows a private project to nobody outside it', async () => {
+    const alice = await seedWorkspace('alice')
+    const bob = await seedWorkspace('bob')
+
+    expect(await resolveProjectViewer(null, alice.projectId)).toBeNull()
+    expect(await resolveProjectViewer(bob.userId, alice.projectId)).toBeNull()
+  })
+
+  it('shows a public project to a visitor as a viewer who is not a member', async () => {
+    const alice = await seedWorkspace('alice')
+    await publish(alice.projectId)
+
+    const viewer = await resolveProjectViewer(null, alice.projectId)
+
+    expect(viewer?.isMember).toBe(false)
+    expect(viewer?.project.role).toBe('viewer')
+    expect(viewer?.project.orgRole).toBe('viewer')
+  })
+
+  it('gives someone signed in from another workspace nothing more than a visitor', async () => {
+    const alice = await seedWorkspace('alice')
+    const bob = await seedWorkspace('bob')
+    await publish(alice.projectId)
+
+    const viewer = await resolveProjectViewer(bob.userId, alice.projectId)
+
+    expect(viewer?.isMember).toBe(false)
+    expect(viewer?.project.role).toBe('viewer')
+  })
+
+  it('keeps a member on their own role when the project is public', async () => {
+    const alice = await seedWorkspace('alice')
+    await publish(alice.projectId)
+
+    const viewer = await resolveProjectViewer(alice.userId, alice.projectId)
+
+    expect(viewer?.isMember).toBe(true)
+    expect(viewer?.project.role).toBe('owner')
+  })
+
+  it('fails closed when a project is somehow both public and restricted', async () => {
+    const alice = await seedWorkspace('alice')
+    await prisma.project.update({
+      where: { id: alice.projectId },
+      data: { public: true, restricted: true },
+    })
+
+    expect(await resolveProjectViewer(null, alice.projectId)).toBeNull()
+  })
+
+  it('leaves the other projects of the workspace private', async () => {
+    const alice = await seedWorkspace('alice')
+    const other = await prisma.project.create({
+      data: { orgId: alice.orgId, name: 'other', slug: 'other' },
+    })
+    await publish(alice.projectId)
+
+    expect(await resolveProjectViewer(null, other.id)).toBeNull()
+  })
+
+  it('does not add a public project to the list of someone outside it', async () => {
+    const alice = await seedWorkspace('alice')
+    const bob = await seedWorkspace('bob')
+    await publish(alice.projectId)
+
+    const listed = await listAccessibleProjects(bob.userId)
+    expect(listed.map((project) => project.id)).not.toContain(alice.projectId)
   })
 })

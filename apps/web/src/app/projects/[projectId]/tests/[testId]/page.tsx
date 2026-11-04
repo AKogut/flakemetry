@@ -24,8 +24,7 @@ import {
   unmergeTestIdentity,
   updateClusterKnownIssue,
 } from '@/lib/actions'
-import { requireUser } from '@/lib/session'
-import { requireProjectAccess } from '@/lib/tenant'
+import { requireProjectViewer } from '@/lib/viewer'
 
 const prisma = getPrismaClient()
 
@@ -56,9 +55,8 @@ export default async function TestDetailPage({
 }) {
   const { projectId, testId } = await params
   const { execution: selectedExecutionId, split: splitError } = await searchParams
-  const user = await requireUser()
-  const access = await requireProjectAccess(user.id, projectId)
-  const canSplit = access.role === 'owner' || access.role === 'admin'
+  const { project: access, user, isMember } = await requireProjectViewer(projectId)
+  const canSplit = isMember && (access.role === 'owner' || access.role === 'admin')
 
   const test = await getTest(prisma, projectId, testId, HISTORY_LIMIT)
   const bisect = await getFlakeBisect(prisma, projectId, testId)
@@ -86,15 +84,16 @@ export default async function TestDetailPage({
   const selected =
     failures.find((point) => point.executionId === selectedExecutionId) ?? failures[0] ?? null
   const rcaReport = selected ? await getRca(prisma, projectId, selected.executionId) : null
-  const rcaFeedback = rcaReport
-    ? await getRcaFeedback(prisma, rcaReport.id, user.id).then((existing) => ({
-        reportId: rcaReport.id,
-        projectId,
-        testId,
-        verdict: existing?.verdict ?? null,
-        correction: existing?.correction ?? null,
-      }))
-    : null
+  const rcaFeedback =
+    rcaReport && user && isMember
+      ? await getRcaFeedback(prisma, rcaReport.id, user.id).then((existing) => ({
+          reportId: rcaReport.id,
+          projectId,
+          testId,
+          verdict: existing?.verdict ?? null,
+          correction: existing?.correction ?? null,
+        }))
+      : null
   const cluster = selected ? await getClusterImpact(prisma, projectId, selected.executionId) : null
   const executionCluster = selected
     ? await getExecutionCluster(prisma, projectId, selected.executionId)
@@ -339,39 +338,41 @@ export default async function TestDetailPage({
             ) : null}
           </p>
 
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-            {test.quarantined ? (
-              <form action={setTestQuarantine} style={{ display: 'flex', gap: '0.5rem' }}>
-                <input type="hidden" name="projectId" value={projectId} />
-                <input type="hidden" name="testId" value={testId} />
-                <input type="hidden" name="decision" value="released" />
-                <button className="btn" type="submit">
-                  Release
-                </button>
-              </form>
-            ) : (
-              <form action={setTestQuarantine} style={{ display: 'flex', gap: '0.5rem' }}>
-                <input type="hidden" name="projectId" value={projectId} />
-                <input type="hidden" name="testId" value={testId} />
-                <input type="hidden" name="decision" value="quarantined" />
-                <input name="reason" placeholder="Why (optional)" />
-                <button className="btn btn-danger" type="submit" style={{ whiteSpace: 'nowrap' }}>
-                  Quarantine
-                </button>
-              </form>
-            )}
+          {canSplit ? (
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              {test.quarantined ? (
+                <form action={setTestQuarantine} style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input type="hidden" name="projectId" value={projectId} />
+                  <input type="hidden" name="testId" value={testId} />
+                  <input type="hidden" name="decision" value="released" />
+                  <button className="btn" type="submit">
+                    Release
+                  </button>
+                </form>
+              ) : (
+                <form action={setTestQuarantine} style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input type="hidden" name="projectId" value={projectId} />
+                  <input type="hidden" name="testId" value={testId} />
+                  <input type="hidden" name="decision" value="quarantined" />
+                  <input name="reason" placeholder="Why (optional)" />
+                  <button className="btn btn-danger" type="submit" style={{ whiteSpace: 'nowrap' }}>
+                    Quarantine
+                  </button>
+                </form>
+              )}
 
-            {test.quarantineOverride ? (
-              <form action={setTestQuarantine}>
-                <input type="hidden" name="projectId" value={projectId} />
-                <input type="hidden" name="testId" value={testId} />
-                <input type="hidden" name="decision" value="auto" />
-                <button className="btn" type="submit">
-                  Hand back to the scorer
-                </button>
-              </form>
-            ) : null}
-          </div>
+              {test.quarantineOverride ? (
+                <form action={setTestQuarantine}>
+                  <input type="hidden" name="projectId" value={projectId} />
+                  <input type="hidden" name="testId" value={testId} />
+                  <input type="hidden" name="decision" value="auto" />
+                  <button className="btn" type="submit">
+                    Hand back to the scorer
+                  </button>
+                </form>
+              ) : null}
+            </div>
+          ) : null}
 
           {test.quarantineOverride ? (
             <p className="muted" style={{ fontSize: '0.82rem', marginBottom: 0 }}>

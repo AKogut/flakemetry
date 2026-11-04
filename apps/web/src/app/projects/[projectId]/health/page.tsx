@@ -2,8 +2,7 @@ import { getPrismaClient } from '@flakemetry/db'
 import { getTeamHealthLeaderboard, getTestHealthMetrics } from '@flakemetry/queries'
 
 import { MiniTrend } from '@/components/mini-trend'
-import { requireUser } from '@/lib/session'
-import { requireProjectAccess } from '@/lib/tenant'
+import { requireProjectViewer } from '@/lib/viewer'
 
 const prisma = getPrismaClient()
 
@@ -31,8 +30,7 @@ export default async function TestHealthPage({
 }) {
   const { projectId } = await params
   const { days: daysParam, owner: ownerParam } = await searchParams
-  const user = await requireUser()
-  await requireProjectAccess(user.id, projectId)
+  await requireProjectViewer(projectId)
 
   const days = WINDOWS.includes(Number(daysParam)) ? Number(daysParam) : 90
 

@@ -19,6 +19,12 @@ export interface AccessibleProject {
   role: string
   orgRole: string
   restricted: boolean
+  public: boolean
+}
+
+export interface ProjectViewer {
+  project: AccessibleProject
+  isMember: boolean
 }
 
 export const listAccessibleProjects = async (userId: string): Promise<AccessibleProject[]> => {
@@ -39,6 +45,7 @@ export const listAccessibleProjects = async (userId: string): Promise<Accessible
               name: true,
               slug: true,
               restricted: true,
+              public: true,
               grants: grantsReaching(userId),
             },
           },
@@ -66,6 +73,7 @@ export const listAccessibleProjects = async (userId: string): Promise<Accessible
           role,
           orgRole: membership.role,
           restricted: project.restricted,
+          public: project.public,
         },
       ]
     }),
@@ -83,6 +91,7 @@ export const findProjectAccess = async (
       name: true,
       slug: true,
       restricted: true,
+      public: true,
       grants: grantsReaching(userId),
       org: {
         select: {
@@ -115,7 +124,44 @@ export const findProjectAccess = async (
     role,
     orgRole,
     restricted: project.restricted,
+    public: project.public,
   }
+}
+
+export const findPublicProject = async (projectId: string): Promise<AccessibleProject | null> => {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, public: true, restricted: false },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      org: { select: { id: true, name: true, slug: true } },
+    },
+  })
+  if (!project) return null
+
+  return {
+    id: project.id,
+    name: project.name,
+    slug: project.slug,
+    orgId: project.org.id,
+    orgName: project.org.name,
+    orgSlug: project.org.slug,
+    role: 'viewer',
+    orgRole: 'viewer',
+    restricted: false,
+    public: true,
+  }
+}
+
+export const resolveProjectViewer = async (
+  userId: string | null,
+  projectId: string,
+): Promise<ProjectViewer | null> => {
+  const membership = userId ? await findProjectAccess(userId, projectId) : null
+  if (membership) return { project: membership, isMember: true }
+  const project = await findPublicProject(projectId)
+  return project ? { project, isMember: false } : null
 }
 
 export const requireProjectAccess = async (

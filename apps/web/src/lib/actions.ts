@@ -832,12 +832,34 @@ export const setProjectRestricted = async (formData: FormData): Promise<void> =>
   const project = await requireProjectAccess(user.id, projectId)
   if (!canManage(project.orgRole)) throw new Error('only owners and admins can restrict a project')
 
-  await prisma.project.update({ where: { id: projectId }, data: { restricted } })
+  await prisma.project.update({
+    where: { id: projectId },
+    data: restricted ? { restricted, public: false } : { restricted },
+  })
   await recordAudit(prisma, {
     orgId: project.orgId,
     projectId,
     actorId: user.id,
     action: restricted ? 'project.restricted' : 'project.opened',
+  })
+
+  revalidatePath(`/projects/${projectId}/settings/members`)
+}
+
+export const setProjectPublic = async (formData: FormData): Promise<void> => {
+  const user = await requireUser()
+  const projectId = String(formData.get('projectId') ?? '')
+  const isPublic = formData.get('public') === 'on'
+  const project = await requireProjectAccess(user.id, projectId)
+  if (!canManage(project.orgRole)) throw new Error('only owners and admins can publish a project')
+  if (isPublic && project.restricted) throw new Error('a restricted project cannot be public')
+
+  await prisma.project.update({ where: { id: projectId }, data: { public: isPublic } })
+  await recordAudit(prisma, {
+    orgId: project.orgId,
+    projectId,
+    actorId: user.id,
+    action: isPublic ? 'project.published' : 'project.unpublished',
   })
 
   revalidatePath(`/projects/${projectId}/settings/members`)

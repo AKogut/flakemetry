@@ -61,6 +61,20 @@ open everything.
 
 Removing someone from the workspace removes their grants with them.
 
+## Public projects
+
+An open-source project can share the health of its tests: **Members → Access to this project →
+Public**. Anyone with the link can then read its runs, flaky board, suite health, test health,
+cost, test pages and traces without signing in.
+
+That includes error messages, stack traces, commit ids, screenshots and anything else your tests
+report, so only do this when none of it is sensitive.
+
+Nothing else opens up. Settings, tokens, members, policy, the audit log, the export and every
+action still need a signed-in member with the right role, a visitor sees no controls, and other
+projects in the workspace stay private. A restricted project cannot be public, and restricting a
+public project takes it private. Both changes are in the audit log.
+
 ## Teams
 
 A team is a named group of people in the workspace: **Teams**, in any project's settings.

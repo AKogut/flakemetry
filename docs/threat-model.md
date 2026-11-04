@@ -42,6 +42,10 @@ Security model for a self-hosted Flakemetry instance. Scope: the ingestion API, 
 - **API** responds with `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cross-Origin-Resource-Policy: same-origin`, `Cache-Control: no-store`, and HSTS in production.
 - **Dashboard** sets a Content-Security-Policy (`frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`), `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, and HSTS in production.
 
+## Public projects
+
+A project marked public is readable without a session. The read pages accept a visitor through `requireProjectViewer`; every settings page, the export and every server action still go through `requireUser`, and `public-surface.test.ts` fails if that changes. A visitor gets the `viewer` role and is never treated as a member. The flag is off by default, only an owner or admin can set it, and it is audited. `findPublicProject` also requires `restricted = false`, so the two flags disagreeing fails closed. Publishing exposes whatever the suite reports, including error text and artifacts, and the owner is told so where the flag is set.
+
 ## Residual risks / follow-ups
 
 - The dashboard CSP still allows `'unsafe-inline'` scripts; a nonce-based strict CSP is a follow-up.
