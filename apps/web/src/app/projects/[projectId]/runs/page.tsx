@@ -1,8 +1,7 @@
 import { getPrismaClient } from '@flakemetry/db'
 import { getIngestionHealth, listRuns } from '@flakemetry/queries'
 
-import { requireUser } from '@/lib/session'
-import { requireProjectAccess } from '@/lib/tenant'
+import { requireProjectViewer } from '@/lib/viewer'
 
 const prisma = getPrismaClient()
 
@@ -41,8 +40,7 @@ export default async function RunsPage({
 }) {
   const { projectId } = await params
   const { cursor, branch } = await searchParams
-  const user = await requireUser()
-  await requireProjectAccess(user.id, projectId)
+  await requireProjectViewer(projectId)
 
   const [{ items, nextCursor }, ingestion] = await Promise.all([
     listRuns(prisma, projectId, {

@@ -5,8 +5,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { TraceWaterfall } from '@/components/trace-waterfall'
-import { requireUser } from '@/lib/session'
-import { requireProjectAccess } from '@/lib/tenant'
+import { requireProjectViewer } from '@/lib/viewer'
 
 const prisma = getPrismaClient()
 
@@ -23,8 +22,7 @@ export default async function ExecutionTracePage({
   params: Promise<{ projectId: string; testId: string; executionId: string }>
 }) {
   const { projectId, testId, executionId } = await params
-  const user = await requireUser()
-  await requireProjectAccess(user.id, projectId)
+  await requireProjectViewer(projectId)
 
   const trace = await getExecutionTrace(prisma, projectId, executionId)
   if (!trace || trace.testIdentityId !== testId) notFound()

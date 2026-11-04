@@ -165,6 +165,7 @@ model Project {
   badgeToken    String?  @unique @map("badge_token")
   codeowners    String?
   restricted    Boolean  @default(false)
+  public        Boolean  @default(false)
   createdAt     DateTime @default(now()) @map("created_at")
 
   org             Org              @relation(fields: [orgId], references: [id], onDelete: Cascade)

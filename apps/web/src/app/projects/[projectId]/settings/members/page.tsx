@@ -8,6 +8,7 @@ import {
   inviteMember,
   removeMemberFromWorkspace,
   revokeProjectAccess,
+  setProjectPublic,
   setProjectRestricted,
   updateMemberRole,
 } from '@/lib/actions'
@@ -177,6 +178,23 @@ export default async function MembersPage({ params }: { params: Promise<{ projec
               Save
             </button>
           </form>
+          {project.restricted ? null : (
+            <form
+              action={setProjectPublic}
+              className="row-between"
+              style={{ gap: '0.75rem', marginTop: '0.75rem' }}
+            >
+              <input type="hidden" name="projectId" value={projectId} />
+              <label style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input type="checkbox" name="public" defaultChecked={project.public} />
+                Public: anyone with the link can read its runs, tests, error messages and traces
+                without signing in
+              </label>
+              <button className="btn" type="submit">
+                Save
+              </button>
+            </form>
+          )}
           {project.restricted && teams.length > 0 ? (
             <table style={{ marginTop: '1rem' }}>
               <thead>
