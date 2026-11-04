@@ -29,13 +29,16 @@ export default class FlakemetryJestReporter {
       : null
   }
 
-  async onRunComplete(_contexts: unknown, results: JestAggregatedResult): Promise<void> {
+  async onRunComplete(
+    contexts: { size?: number } | undefined,
+    results: JestAggregatedResult,
+  ): Promise<void> {
     const startedAt = results.startTime != null ? new Date(results.startTime) : new Date()
     const context = resolveRunContext(this.env, this.shard)
     const recorder = new TestRunRecorder(context)
     recorder.startRun(startedAt)
 
-    const cases = mapJestResults(results, this.rootDir, startedAt)
+    const cases = mapJestResults(results, this.rootDir, startedAt, (contexts?.size ?? 0) > 1)
     for (const test of cases) recorder.record(test)
 
     const failed = cases.some((test) => test.status === 'fail')

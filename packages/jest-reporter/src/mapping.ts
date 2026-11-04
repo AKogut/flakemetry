@@ -13,6 +13,7 @@ export interface JestAssertionResult {
 export interface JestFileResult {
   testFilePath: string
   testResults: JestAssertionResult[]
+  displayName?: { name?: string } | null
 }
 
 export interface JestAggregatedResult {
@@ -61,10 +62,12 @@ export const mapJestResults = (
   results: JestAggregatedResult,
   rootDir: string,
   fallbackStart: Date,
+  severalProjects = false,
 ): RecordedTest[] => {
   const out: RecordedTest[] = []
   for (const file of results.testResults ?? []) {
     const filePath = relativize(rootDir, file.testFilePath)
+    const variant = severalProjects ? file.displayName?.name || undefined : undefined
     for (const assertion of file.testResults ?? []) {
       const retries = assertion.retryReasons?.length ?? 0
       const status = statusFromJest(assertion.status, retries)
@@ -73,6 +76,7 @@ export const mapJestResults = (
         filePath,
         suite: (assertion.ancestorTitles ?? []).filter((title) => title.length > 0).join(' > '),
         title: assertion.title,
+        variant,
         status,
         attempt: 1,
         retryOfIndex: null,

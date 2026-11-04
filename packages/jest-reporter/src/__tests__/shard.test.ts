@@ -40,3 +40,33 @@ describe('a sharded Jest run', () => {
     expect(second).toBe('github_actions-9000001-1-shard2')
   })
 })
+
+describe('a Jest config with several projects', () => {
+  const executionsWith = async (contexts: { size: number }) => {
+    const outputFile = join(tmpdir(), `flakemetry-${randomUUID()}.json`)
+    const reporter = new FlakemetryJestReporter({ rootDir: '/repo' } as never, { outputFile })
+    await reporter.onRunComplete(contexts, {
+      startTime: 1,
+      testResults: [
+        {
+          testFilePath: '/repo/a.test.js',
+          displayName: { name: 'jsdom' },
+          testResults: [{ title: 't', status: 'passed' }],
+        },
+      ],
+    })
+    return (
+      JSON.parse(readFileSync(outputFile, 'utf8')) as {
+        executions: { params?: Record<string, string> }[]
+      }
+    ).executions
+  }
+
+  it('records the project as the variant', async () => {
+    expect((await executionsWith({ size: 2 }))[0]?.params).toEqual({ variant: 'jsdom' })
+  })
+
+  it('leaves a single project on its existing identity', async () => {
+    expect((await executionsWith({ size: 1 }))[0]?.params).toBeUndefined()
+  })
+})

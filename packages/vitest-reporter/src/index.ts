@@ -18,13 +18,18 @@ export default class FlakemetryVitestReporter {
   private reported = false
   private shard: ShardInfo | null = null
   private startedAt: Date | null = null
+  private severalProjects = false
 
   constructor(options: FlakemetryVitestReporterOptions = {}) {
     this.options = options
     this.env = process.env
   }
 
-  onInit(context?: { config?: { root?: string; shard?: { index: number; count: number } } }): void {
+  onInit(context?: {
+    config?: { root?: string; shard?: { index: number; count: number } }
+    projects?: readonly unknown[]
+  }): void {
+    this.severalProjects = (context?.projects?.length ?? 0) > 1
     if (context?.config?.root) this.rootDir = context.config.root
     const shard = context?.config?.shard
     this.shard = shard ? { current: shard.index, total: shard.count } : null
@@ -68,7 +73,7 @@ export default class FlakemetryVitestReporter {
     const recorder = new TestRunRecorder(context)
     recorder.startRun(startedAt)
 
-    const cases = mapVitestFiles(files, this.rootDir, startedAt)
+    const cases = mapVitestFiles(files, this.rootDir, startedAt, this.severalProjects)
     for (const test of cases) recorder.record(test)
 
     const failed = cases.some((test) => test.status === 'fail')

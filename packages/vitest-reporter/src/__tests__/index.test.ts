@@ -168,3 +168,30 @@ describe('when a run is recorded as starting', () => {
     ).toBeGreaterThanOrEqual(50)
   })
 })
+
+describe('a Vitest config with several projects', () => {
+  const executionsWith = async (projects: unknown[]) => {
+    const outputFile = join(tmpdir(), `flakemetry-${randomUUID()}.json`)
+    const reporter = withEnv(new FlakemetryVitestReporter({ outputFile })) as unknown as {
+      onInit: (context: { config: { root: string }; projects: unknown[] }) => void
+      onTestRunEnd: (modules: unknown[]) => Promise<void>
+    }
+    reporter.onInit({ config: { root: '/repo' }, projects })
+    await reporter.onTestRunEnd([{ task: { ...sampleFile(), projectName: 'jsdom' } }])
+    const { executions } = JSON.parse(readFileSync(outputFile, 'utf8')) as {
+      executions: { params?: Record<string, string> }[]
+    }
+    rmSync(outputFile, { force: true })
+    return executions
+  }
+
+  it('records the project as the variant', async () => {
+    const executions = await executionsWith([{}, {}])
+    expect(executions.every((execution) => execution.params?.variant === 'jsdom')).toBe(true)
+  })
+
+  it('leaves a single project on its existing identity', async () => {
+    const executions = await executionsWith([{}])
+    expect(executions.every((execution) => execution.params === undefined)).toBe(true)
+  })
+})
