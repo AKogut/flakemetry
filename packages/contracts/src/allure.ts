@@ -34,14 +34,17 @@ const paramsOf = (result: AllureResult): JsonRecord | null => {
   return Object.fromEntries(included.map((parameter) => [parameter.name, parameter.value]))
 }
 
+const HOOK_SKIP_MESSAGE = /^Test skipped due to failure in hook\b/
+
 const statusOf = (result: AllureResult, failedBefore: boolean): TestStatus => {
   if (result.status === 'passed') return failedBefore ? 'flaky' : 'pass'
+  if (HOOK_SKIP_MESSAGE.test(result.statusDetails?.message ?? '')) return 'skip'
   if (result.status === 'failed' || result.status === 'broken') return 'fail'
   return 'skip'
 }
 
 const identityOf = (result: AllureResult): string =>
-  result.historyId ?? result.testCaseId ?? result.fullName ?? result.name ?? ''
+  result.historyId || result.testCaseId || result.fullName || result.name || ''
 
 export const parseAllureResults = (results: readonly AllureResult[]): JunitRun => {
   const named = results.filter((result) => Boolean(result.name))

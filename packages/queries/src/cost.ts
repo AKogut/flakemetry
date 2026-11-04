@@ -54,11 +54,11 @@ const MINUTES_PER_HOUR = 60
 const round = (value: number): number => Math.round(value * 100) / 100
 
 /**
- * Retry wall-clock is measured, not modelled: an attempt beyond the first exists only
- * because an earlier one failed, so its duration is CI time a non-flaky suite would not
- * have spent. Money is that number multiplied by rates the project sets, which is why the
- * rates travel with the result — a figure whose assumptions are off-screen is not one
- * anybody should take to a budget conversation.
+ * Retry wall-clock is measured, not modelled: an attempt counts only when an earlier attempt
+ * of the same test failed, so its duration is CI time a non-flaky suite would not have spent.
+ * Money is that number multiplied by the project's rates, which is why the rates travel with
+ * the result — a figure whose assumptions are off-screen is not one anybody should take to a
+ * budget conversation.
  */
 export const ciSpendOf = (rerunMs: number, rates: CostRates): number =>
   (rerunMs / MS_PER_MINUTE) * rates.ciMinuteCost
