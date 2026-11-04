@@ -202,3 +202,62 @@ describe('createDispatcher', () => {
     expect(errors).toHaveLength(1)
   })
 })
+
+describe('what Discord accepts', () => {
+  const embedOf = (event: NotificationEvent) =>
+    formatDiscord(event).embeds[0] as {
+      title: string
+      description: string
+      fields?: { name: string; value: string }[]
+    }
+
+  it('leaves out a field with no value, which Discord answers with a 400', () => {
+    const embed = embedOf({
+      ...flakyEvent,
+      fields: [
+        { label: 'Suite', value: '' },
+        { label: 'Note', value: '   ' },
+        { label: 'File', value: 'e2e/login.spec.ts' },
+      ],
+    })
+    expect(embed.fields?.map((field) => field.name)).toEqual(['File'])
+  })
+
+  it('sends no fields at all when none has a value', () => {
+    const embed = embedOf({ ...flakyEvent, fields: [{ label: 'Suite', value: '' }] })
+    expect(embed.fields).toBeUndefined()
+  })
+
+  it('stays inside every limit Discord enforces, however long the text', () => {
+    const long = 'x'.repeat(10_000)
+    const payload = formatDiscord({
+      ...flakyEvent,
+      heading: long,
+      summary: long,
+      fields: Array.from({ length: 40 }, () => ({ label: long, value: long })),
+    })
+    const embed = payload.embeds[0] as {
+      title: string
+      description: string
+      fields: { name: string; value: string }[]
+    }
+
+    expect(payload.content.length).toBeLessThanOrEqual(2000)
+    expect(embed.title.length).toBeLessThanOrEqual(256)
+    expect(embed.description.length).toBeLessThanOrEqual(4096)
+    expect(embed.fields.length).toBeLessThanOrEqual(25)
+    for (const field of embed.fields) {
+      expect(field.name.length).toBeLessThanOrEqual(256)
+      expect(field.value.length).toBeLessThanOrEqual(1024)
+    }
+    const total =
+      embed.title.length +
+      embed.description.length +
+      embed.fields.reduce((sum, field) => sum + field.name.length + field.value.length, 0)
+    expect(total).toBeLessThanOrEqual(6000)
+  })
+
+  it('cannot ping a server, whatever a test title says', () => {
+    expect(formatDiscord(flakyEvent).allowed_mentions).toEqual({ parse: [] })
+  })
+})

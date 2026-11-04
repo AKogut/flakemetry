@@ -67,6 +67,7 @@ export default defineConfigWithTheme<ThemeConfig>({
             { text: 'Your first insight', link: '/guide/first-insight' },
             { text: 'Cost of flakiness', link: '/guide/cost' },
             { text: 'Usage and limits', link: '/guide/usage-and-limits' },
+            { text: 'Notifications', link: '/guide/notifications' },
             { text: 'Tracker issues', link: '/guide/tracker' },
             { text: 'Which change caused it', link: '/guide/bisect' },
             { text: 'Health badges', link: '/guide/badges' },
