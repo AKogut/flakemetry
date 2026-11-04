@@ -112,6 +112,25 @@ flakemetry junit junit.xml
 Pass `--fail-on-error` to make the step exit non-zero on a delivery failure; by default it
 never breaks the build.
 
+## `flakemetry allure [directory]`
+
+Uploads a directory of Allure results, `allure-results` by default. Every attempt of a retried test
+is kept, and a test that failed and then passed is recorded as flaky.
+
+```bash
+flakemetry allure allure-results/ios
+```
+
+## `flakemetry xcresult <file>`
+
+Uploads the JSON from `xcrun xcresulttool get test-results tests`, keeping every repetition from
+`-retry-tests-on-failure`. See [Any runner](/guide/junit#xcuitest).
+
+```bash
+xcrun xcresulttool get test-results tests --path Test.xcresult > xcuitest-tests.json
+flakemetry xcresult xcuitest-tests.json
+```
+
 ## `flakemetry import <directory>`
 
 Seeds history from an archive of JUnit XML reports, so the flaky board is useful on the

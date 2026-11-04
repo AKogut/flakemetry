@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 
-import { parseJunitXml } from '@flakemetry/contracts'
+import { type JunitRun, parseJunitXml } from '@flakemetry/contracts'
 import {
   buildIdempotencyKey,
   IngestClient,
@@ -12,6 +12,59 @@ import type { CommandModule } from '../registry'
 import { describeUpload, type UploadOutcome } from './upload'
 
 export const DEFAULT_JUNIT_FILE = 'junit.xml'
+
+export interface UploadRunParams {
+  run: JunitRun
+  endpoint: string
+  token: string
+  env: Record<string, string | undefined>
+  fetchImpl?: typeof fetch
+}
+
+export const uploadParsedRun = async (params: UploadRunParams): Promise<UploadOutcome> => {
+  const { run } = params
+  const startedAt = run.startedAt ? new Date(run.startedAt) : new Date()
+  const context = resolveRunContext(params.env)
+  const recorder = new TestRunRecorder(context)
+  recorder.startRun(startedAt)
+  for (const execution of run.executions) {
+    recorder.record({
+      filePath: execution.filePath,
+      suite: execution.suite,
+      title: execution.title,
+      params: execution.params,
+      status: execution.status,
+      attempt: execution.attempt ?? 1,
+      retryOfIndex: execution.retryOfIndex,
+      startedAt: execution.startedAt ? new Date(execution.startedAt) : startedAt,
+      durationMs: execution.durationMs,
+      error: execution.error ?? null,
+    })
+  }
+  const failed = run.executions.some((execution) => execution.status === 'fail')
+  recorder.finishRun(failed ? 'failed' : 'passed', new Date())
+
+  const batch = recorder.toIngestBatch(buildIdempotencyKey(context, params.env))
+  const client = new IngestClient({
+    endpoint: params.endpoint,
+    token: params.token,
+    fetchImpl: params.fetchImpl,
+  })
+  const result = await client.send(batch)
+  if (!result.ok) {
+    return {
+      status: 'failed',
+      reason: result.error ?? `ingestion returned status ${result.status ?? 'unknown'}`,
+    }
+  }
+
+  return {
+    status: 'uploaded',
+    receiptId: result.ack?.receiptId,
+    acceptedExecutions: result.ack?.acceptedExecutions,
+    deduplicated: result.ack?.deduplicated,
+  }
+}
 
 export interface JunitUploadParams {
   file: string
@@ -50,45 +103,13 @@ export const runJunitUpload = async (params: JunitUploadParams): Promise<UploadO
     return { status: 'skipped', reason: `no test cases found in ${params.file}` }
   }
 
-  const startedAt = run.startedAt ? new Date(run.startedAt) : new Date()
-  const context = resolveRunContext(params.env)
-  const recorder = new TestRunRecorder(context)
-  recorder.startRun(startedAt)
-  for (const execution of run.executions) {
-    recorder.record({
-      filePath: execution.filePath,
-      suite: execution.suite,
-      title: execution.title,
-      status: execution.status,
-      attempt: 1,
-      startedAt,
-      durationMs: execution.durationMs,
-      error: execution.error ?? null,
-    })
-  }
-  const failed = run.executions.some((execution) => execution.status === 'fail')
-  recorder.finishRun(failed ? 'failed' : 'passed', new Date())
-
-  const batch = recorder.toIngestBatch(buildIdempotencyKey(context, params.env))
-  const client = new IngestClient({
+  return uploadParsedRun({
+    run,
     endpoint: params.endpoint,
     token: params.token,
+    env: params.env,
     fetchImpl: params.fetchImpl,
   })
-  const result = await client.send(batch)
-  if (!result.ok) {
-    return {
-      status: 'failed',
-      reason: result.error ?? `ingestion returned status ${result.status ?? 'unknown'}`,
-    }
-  }
-
-  return {
-    status: 'uploaded',
-    receiptId: result.ack?.receiptId,
-    acceptedExecutions: result.ack?.acceptedExecutions,
-    deduplicated: result.ack?.deduplicated,
-  }
 }
 
 export const junitCommand: CommandModule = {

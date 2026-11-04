@@ -1,6 +1,6 @@
 import { XMLParser } from 'fast-xml-parser'
 
-import type { TestStatus } from './common'
+import type { JsonRecord, TestStatus } from './common'
 import type { IngestResource, IngestRunBatch } from './ingestion'
 import { CONVENTIONS_VERSION } from './otel'
 
@@ -8,7 +8,11 @@ export interface JunitExecution {
   filePath: string
   suite: string
   title: string
+  params?: JsonRecord | null
   status: TestStatus
+  attempt?: number
+  retryOfIndex?: number | null
+  startedAt?: string | null
   durationMs: number
   error?: { type?: string | null; message: string; stack?: string | null } | null
 }
@@ -135,10 +139,18 @@ export const junitToIngestBatch = (run: JunitRun, params: JunitBatchParams): Ing
       filePath: execution.filePath,
       suite: execution.suite,
       title: execution.title,
-      ...(params.variant ? { params: { variant: params.variant } } : {}),
+      ...(execution.params || params.variant
+        ? {
+            params: {
+              ...execution.params,
+              ...(params.variant ? { variant: params.variant } : {}),
+            },
+          }
+        : {}),
       status: execution.status,
-      attempt: 1,
-      startedAt,
+      attempt: execution.attempt ?? 1,
+      retryOfIndex: execution.retryOfIndex ?? undefined,
+      startedAt: execution.startedAt ? new Date(execution.startedAt) : startedAt,
       durationMs: execution.durationMs,
       error: execution.error ?? null,
     })),

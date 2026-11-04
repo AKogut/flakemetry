@@ -48,6 +48,33 @@ Each `<testcase>` becomes a test execution:
 Pass `--fail-on-error` if you want the upload step itself to exit non-zero when delivery
 fails; by default it never breaks your build.
 
+## Allure results
+
+Already writing Allure results? Upload the directory. Allure keeps every attempt of a retried test
+and JUnit does not, so this also gives you the retry evidence:
+
+```bash
+npx flakemetry allure allure-results
+```
+
+A test that failed and then passed on retry is recorded as flaky, and failed and broken results
+both count as failures.
+
+## XCUITest
+
+An `.xcresult` bundle is large and binary. Xcode can write a JSON summary, which keeps every
+repetition from `-retry-tests-on-failure`:
+
+```bash
+xcrun xcresulttool get test-results tests --path Test.xcresult > xcuitest-tests.json
+npx flakemetry xcresult xcuitest-tests.json
+```
+
+The summary holds no start times, so the run is dated when it is uploaded. Upload it from the job
+that ran the tests.
+
+`FLAKEMETRY_VARIANT` works with both, the same way as with `flakemetry junit`.
+
 ## Uploading without the CLI
 
 If your CI cannot run Node at all, post the report straight to the API — the server parses it
