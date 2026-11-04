@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { restfulReporterBatch, withoutTargetIndependentTests } from '../lib/batches.mjs'
+import {
+  ownTestsBatch,
+  restfulReporterBatch,
+  withoutTargetIndependentTests,
+} from '../lib/batches.mjs'
 
 const meta = {
   slug: 'restful-booker',
@@ -60,5 +64,31 @@ describe('restfulReporterBatch', () => {
 describe('withoutTargetIndependentTests', () => {
   it('passes on an empty result', () => {
     expect(withoutTargetIndependentTests(null)).toBeNull()
+  })
+})
+
+describe('ownTestsBatch', () => {
+  const report = (classname, name) =>
+    `<testsuites><testsuite name="s"><testcase classname="${classname}" name="${name}" time="1"/></testsuite></testsuites>`
+
+  it('merges the report of every package, with paths that cannot collide', () => {
+    const batch = ownTestsBatch(
+      [
+        { directory: 'packages/core', xml: report('src/__tests__/a.test.ts', 'one') },
+        { directory: 'apps/api', xml: report('src/__tests__/a.test.ts', 'one') },
+      ],
+      { ...meta, slug: 'flakemetry' },
+      'r1',
+    )
+
+    expect(batch.executions.map((execution) => execution.filePath)).toEqual([
+      'packages/core/src/__tests__/a.test.ts',
+      'apps/api/src/__tests__/a.test.ts',
+    ])
+    expect(batch.executions[0].params).toBeUndefined()
+  })
+
+  it('returns nothing when there are no results', () => {
+    expect(ownTestsBatch([], meta, 'r1')).toBeNull()
   })
 })

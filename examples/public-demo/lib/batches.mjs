@@ -40,6 +40,22 @@ export const parsedRunBatch = (run, meta, variant, source) => {
 export const junitBatch = (xml, meta, variant, source) =>
   parsedRunBatch({ ...parseJunitXml(xml), startedAt: null }, meta, variant, source)
 
+export const ownTestsBatch = (reports, meta, source) =>
+  parsedRunBatch(
+    {
+      startedAt: null,
+      executions: reports.flatMap(({ directory, xml }) =>
+        parseJunitXml(xml).executions.map((execution) => {
+          const filePath = `${directory}/${execution.filePath}`
+          return { ...execution, filePath, suite: filePath }
+        }),
+      ),
+    },
+    meta,
+    undefined,
+    source,
+  )
+
 export const allureBatch = (results, meta, variant, source) => {
   const run = parseAllureResults(results)
   return parsedRunBatch(

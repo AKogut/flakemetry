@@ -17,6 +17,12 @@ export const PROJECTS = [
     repo: 'AKogut/mobile-task-manager-automation',
     summary: 'The same test cases on Appium for Android and iOS, XCUITest and Espresso.',
   },
+  {
+    slug: 'flakemetry',
+    name: 'Flakemetry itself',
+    repo: 'AKogut/flakemetry',
+    summary: 'The test suite of this tool, against a real database.',
+  },
 ]
 
 export const MOBILE_RUNNERS = ['appium-android', 'appium-ios', 'xcuitest', 'espresso']
