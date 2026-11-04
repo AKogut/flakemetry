@@ -112,6 +112,10 @@ with autoscaling, a migration hook, and ingress) plus an operations
 
 The [live demo](https://akogut.github.io/flakemetry/demo/) runs on the real CI history of three public suites: Playwright on three browsers, an API suite against a hosted and a local target, and one mobile app tested through Appium, XCUITest and Espresso. It is rebuilt every night and nothing in it is seeded. [How it is built](examples/public-demo/README.md).
 
+![Flakemetry on the real history of three test suites](docs/demo.gif)
+
+<sub>Recorded from the live demo · re-capture it with [docs/recording-the-demo.md](docs/recording-the-demo.md).</sub>
+
 ## See it in 60 seconds
 
 Load the demo dataset — one project's worth of history with a stable test, two flaky tests, and a
@@ -130,10 +134,6 @@ Then walk the story in the dashboard:
 Prefer to generate the data yourself? Run the sample suite in
 [`examples/playwright-demo`](examples/playwright-demo) against your instance a few times — it ships one
 of every outcome (stable, timing-race flake, retry flake, regression).
-
-![Flakemetry — flaky detection and AI root-cause, end to end](docs/demo.gif)
-
-<sub>Recorded from the walkthrough above · re-capture it with [docs/recording-the-demo.md](docs/recording-the-demo.md).</sub>
 
 Add the reporter to a Playwright project:
 
