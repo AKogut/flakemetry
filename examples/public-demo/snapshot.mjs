@@ -20,7 +20,6 @@ const projects = JSON.parse(readFileSync(provisionedFile, 'utf8'))
 
 const STYLESHEET = 'assets/style.css'
 const ICON = 'assets/icon.svg'
-const MAX_RUN_PAGES = 8
 const MAX_TRACES_PER_TEST = 2
 const CONCURRENCY = 8
 
@@ -63,18 +62,10 @@ const snapshotProject = async (project) => {
   }
 
   const done = new Set()
-  let runPages = 0
   const tracesByTest = new Map()
 
   const allowed = (url) => {
     const rest = url.pathname.slice(base.length + 1)
-    if (rest === 'runs' && url.searchParams.has('cursor')) {
-      if (!queued.has(fileOf(url))) {
-        if (runPages >= MAX_RUN_PAGES) return false
-        runPages += 1
-      }
-      return true
-    }
     const trace = /^tests\/([0-9a-f-]{36})\/executions\//.exec(rest)
     if (trace && !queued.has(fileOf(url))) {
       const seen = tracesByTest.get(trace[1]) ?? 0
@@ -171,6 +162,9 @@ for (const page of pages) {
   if (/bdg_[a-z0-9]{8,}/i.test(html)) problems.push(`${page}: has a badge token`)
   if (html.includes(web) || /\/sign-in/.test(html)) problems.push(`${page}: points at the app`)
   const $ = cheerio.load(html)
+  if ($('.pager span:contains("Next page")').length > 0) {
+    problems.push(`${page}: has a dead "Next page"`)
+  }
   for (const element of $('a[href], link[href]').toArray()) {
     const href = $(element).attr('href')
     if (/^https?:\/\//.test(href) || href.startsWith('#')) continue

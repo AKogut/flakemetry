@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  noTestsBatch,
   ownTestsBatch,
   restfulReporterBatch,
+  withJobConclusion,
   withoutTargetIndependentTests,
 } from '../lib/batches.mjs'
 
@@ -58,6 +60,40 @@ describe('restfulReporterBatch', () => {
       'r1-live',
     )
     expect(batch.executions).toHaveLength(1)
+  })
+})
+
+describe('withJobConclusion', () => {
+  const passed = { contractVersion: '0.1.0', run: { status: 'passed', startedAt: 'x' } }
+
+  it('turns a green run with a failed job red', () => {
+    expect(withJobConclusion(passed, 'failure').run.status).toBe('failed')
+  })
+
+  it('turns a red run with a successful job green', () => {
+    const failed = { ...passed, run: { ...passed.run, status: 'failed' } }
+    expect(withJobConclusion(failed, 'success').run.status).toBe('passed')
+  })
+
+  it('records a cancelled job as cancelled, whatever its tests did', () => {
+    expect(withJobConclusion(passed, 'cancelled').run.status).toBe('canceled')
+    expect(withJobConclusion(noTestsBatch(meta, 'xcuitest', 'r1'), 'cancelled').run.status).toBe(
+      'canceled',
+    )
+  })
+
+  it('leaves the status alone when the job has no verdict', () => {
+    expect(withJobConclusion(passed, null)).toBe(passed)
+    expect(withJobConclusion(passed, undefined)).toBe(passed)
+    expect(withJobConclusion(passed, 'skipped')).toBe(passed)
+  })
+
+  it('passes on an empty result', () => {
+    expect(withJobConclusion(null, 'failure')).toBeNull()
+  })
+
+  it('keeps the bytes of a batch whose status is already right', () => {
+    expect(JSON.stringify(withJobConclusion(passed, 'success'))).toBe(JSON.stringify(passed))
   })
 })
 
