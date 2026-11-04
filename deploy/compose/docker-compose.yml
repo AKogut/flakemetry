@@ -2,7 +2,8 @@
 # except Caddy, which terminates TLS and gets certificates automatically.
 #
 # Run it from the repository root:
-#   docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env up -d --build
+#   docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env pull
+#   docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env up -d
 #
 # The root docker-compose.yml is the quickstart: it publishes ports and ships development
 # passwords. This file is what you point a domain at.
@@ -117,6 +118,7 @@ services:
     restart: 'no'
 
   migrate:
+    image: ghcr.io/akogut/flakemetry-migrate:${FLAKEMETRY_IMAGE_TAG:-latest}
     build:
       context: ../..
       target: migrate
@@ -128,6 +130,7 @@ services:
 
   api:
     restart: unless-stopped
+    image: ghcr.io/akogut/flakemetry-api:${FLAKEMETRY_IMAGE_TAG:-latest}
     build:
       context: ../..
       target: api
@@ -147,6 +150,7 @@ services:
 
   worker:
     restart: unless-stopped
+    image: ghcr.io/akogut/flakemetry-worker:${FLAKEMETRY_IMAGE_TAG:-latest}
     build:
       context: ../..
       target: worker
@@ -178,6 +182,7 @@ services:
 
   web:
     restart: unless-stopped
+    image: ghcr.io/akogut/flakemetry-web:${FLAKEMETRY_IMAGE_TAG:-latest}
     build:
       context: ../..
       target: web
