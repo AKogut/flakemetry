@@ -105,6 +105,18 @@ describe('bucketWeekly', () => {
     const total = weekly.reduce((sum, week) => sum + week.introduced + week.resolved, 0)
     expect(total).toBe(3)
   })
+
+  it('counts each test that passed on a retry once per week', () => {
+    const windowStart = at('2026-07-01T00:00:00Z')
+    const now = at('2026-07-14T00:00:00Z')
+    const weekly = bucketWeekly([], windowStart, now, [
+      { testIdentityId: 'a', day: at('2026-07-01T00:00:00Z') },
+      { testIdentityId: 'a', day: at('2026-07-02T00:00:00Z') },
+      { testIdentityId: 'b', day: at('2026-07-02T00:00:00Z') },
+      { testIdentityId: 'a', day: at('2026-07-08T00:00:00Z') },
+    ])
+    expect(weekly.map((week) => week.passedOnRetry)).toEqual([2, 1, 0])
+  })
 })
 
 describe('quarantineTrendFromEvents', () => {

@@ -1,6 +1,6 @@
 import type { ReasonCode, TestStatus } from '@flakemetry/contracts'
 
-export const SCORING_MODEL_VERSION = '0.3.0'
+export const SCORING_MODEL_VERSION = '0.4.0'
 
 export interface ExecutionPoint {
   status: TestStatus

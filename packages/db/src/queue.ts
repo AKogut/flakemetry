@@ -128,22 +128,27 @@ export class IngestionQueue {
   async dequeue(limit = 1): Promise<QueuedJob[]> {
     const timeout = `${this.options.visibilityTimeoutMs} milliseconds`
     return this.prisma.$queryRaw<QueuedJob[]>`
-      UPDATE ingestion_job
-      SET status = 'processing',
-          attempts = attempts + 1,
-          visible_at = now() + ${timeout}::interval,
-          updated_at = now()
-      WHERE id IN (
+      WITH next_jobs AS MATERIALIZED (
         SELECT id FROM ingestion_job
         WHERE status IN ('pending', 'processing')
           AND visible_at <= now() + '1 millisecond'::interval
         ORDER BY visible_at ASC
         LIMIT ${limit}
         FOR UPDATE SKIP LOCKED
+      ),
+      claimed AS (
+        UPDATE ingestion_job
+        SET status = 'processing',
+            attempts = attempts + 1,
+            visible_at = now() + ${timeout}::interval,
+            updated_at = now()
+        FROM next_jobs
+        WHERE ingestion_job.id = next_jobs.id
+        RETURNING ingestion_job.id, org_id AS "orgId", project_id AS "projectId",
+                  idempotency_key AS "idempotencyKey", payload, attempts,
+                  created_at AS "createdAt"
       )
-      RETURNING id, org_id AS "orgId", project_id AS "projectId",
-                idempotency_key AS "idempotencyKey", payload, attempts,
-                created_at AS "createdAt"
+      SELECT * FROM claimed ORDER BY "createdAt" ASC
     `
   }
 

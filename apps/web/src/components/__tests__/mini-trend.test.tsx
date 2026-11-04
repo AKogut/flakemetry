@@ -22,7 +22,8 @@ describe('MiniTrend', () => {
     const bars = barsOf(renderToStaticMarkup(<MiniTrend values={[10, null, 30]} />))
 
     expect(bars).toHaveLength(2)
-    expect(bars[1]).toContain('x="24"')
+    expect(bars[0]).toContain('x="132"')
+    expect(bars[1]).toContain('x="156"')
   })
 
   it('keeps a small value visible', () => {

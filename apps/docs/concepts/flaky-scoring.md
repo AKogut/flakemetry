@@ -47,11 +47,21 @@ that also fails on its own keeps that evidence.
 
 ## Scoring policy
 
-The threshold at which a test is considered flaky, and the minimum number of samples before
-a score is surfaced, are configurable per project (and instance-wide). See the
+The score at which a test becomes a quarantine candidate, and the minimum number of samples
+before a score is surfaced, are configurable per project (and instance-wide). See the
 [Configuration reference](/reference/configuration) for the knobs, and
 [auto-quarantine](/guide/github-action) for how a high score can automatically stop a test
 from failing the build.
+
+The default bar of 0.8 is high on purpose. Crossing it can hide a test's failures, so a test has
+to flake in about every second run to reach it. The score ranks tests rather than naming the
+ones flaking today: one retry can hold a test above 0.5 for months, and the same one retry can
+score 0.34 or 0.59 depending on how many of the test's commits ran twice. The **Test health** page
+counts the tests that actually failed and then passed on a retry.
+
+A score is computed as of the test's newest execution, and health events and trends carry that
+date. Replaying or importing old results in order gives the history they would have had at the
+time. A run that arrives late changes the score from then on and does not rewrite earlier days.
 
 You can overrule it. Quarantining or releasing a test by hand — from the test page, or with
 [`flakemetry quarantine`](/guide/cli) — takes that test out of the scorer's hands until you

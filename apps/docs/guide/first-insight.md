@@ -47,7 +47,7 @@ already flake on the base branch — blocking only what the change actually brok
 ## 6. Track the trend
 
 The **Test health** page answers the executive question: is flakiness improving or
-degrading? It reports **flaky MTTR** (how long a test stays flaky before it stabilizes),
-**flaky-introduced vs -resolved per week**, the current **quarantine backlog**, and the
-overall reliability trend — over a time range up to a quarter. A net-positive week (more
-introduced than resolved) is the early warning that flakiness is winning.
+degrading? It reports the **tests that passed on a retry** each week, the tests that **crossed
+the quarantine bar** and came back under it, how long they stayed above it, the current
+**quarantine backlog**, and the overall reliability trend — over a time range up to a quarter.
+More tests passing on a retry week after week is the early warning that flakiness is winning.
