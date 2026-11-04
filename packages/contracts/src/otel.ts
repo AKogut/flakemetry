@@ -41,6 +41,7 @@ export const RESOURCE_ATTR = {
   prNumber: 'vcs.pr_number',
   shardIndex: 'test.shard.index',
   shardTotal: 'test.shard.total',
+  variant: 'test.variant',
 } as const
 
 export const SPAN_ATTR = {
@@ -375,6 +376,7 @@ export const otlpToIngestBatch = (request: OtlpTraceRequest): IngestRunBatch => 
       ...(prNumberRaw !== undefined ? { prNumber: Number(prNumberRaw) } : {}),
       ...(shardIndexRaw !== undefined ? { shardIndex: Number(shardIndexRaw) } : {}),
       ...(shardTotalRaw !== undefined ? { shardTotal: Number(shardTotalRaw) } : {}),
+      ...(pick(RESOURCE_ATTR.variant) ? { variant: pick(RESOURCE_ATTR.variant) } : {}),
     },
     run: {
       status: (runFailed ? 'failed' : 'passed') as RunStatus,

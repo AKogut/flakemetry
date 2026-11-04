@@ -28,6 +28,10 @@ failed.
 If no results file exists, it says so and does nothing. Wrapping a suite whose reporter is not
 configured yet is ordinary, not an error.
 
+If the command fails without writing results, for example because a readiness check stopped it or
+the device never started, the run is reported as failed with no tests, so the worst nights do not
+look like nights nobody ran anything. The exit code is still the command's.
+
 ## `flakemetry flaky`
 
 Lists flaky tests for the project, worst first. Needs a token with the **`read`** scope — see

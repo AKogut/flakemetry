@@ -125,7 +125,14 @@ export default async function RunsPage({
                       {run.status}
                     </span>
                   </td>
-                  <td className="mono">{run.commitSha.slice(0, 7)}</td>
+                  <td className="mono">
+                    {run.commitSha.slice(0, 7)}
+                    {run.variant ? (
+                      <span className="pill" style={{ marginLeft: '0.4rem' }}>
+                        {run.variant}
+                      </span>
+                    ) : null}
+                  </td>
                   <td>
                     <a href={`${base}?branch=${encodeURIComponent(run.branch)}`} className="mono">
                       {run.branch}
@@ -133,12 +140,16 @@ export default async function RunsPage({
                     {run.prNumber ? <span className="muted"> #{run.prNumber}</span> : null}
                   </td>
                   <td>
-                    <span className="counts">
-                      <span className="count-pass">{run.counts.passed}</span>
-                      <span className="count-fail">{run.counts.failed}</span>
-                      <span className="count-flaky">{run.counts.flaky}</span>
-                      <span className="count-skip">{run.counts.skipped}</span>
-                    </span>
+                    {run.counts.total === 0 && run.status === 'failed' ? (
+                      <span className="muted">no tests ran</span>
+                    ) : (
+                      <span className="counts">
+                        <span className="count-pass">{run.counts.passed}</span>
+                        <span className="count-fail">{run.counts.failed}</span>
+                        <span className="count-flaky">{run.counts.flaky}</span>
+                        <span className="count-skip">{run.counts.skipped}</span>
+                      </span>
+                    )}
                   </td>
                   <td className="muted">{formatDuration(run.durationMs)}</td>
                   <td className="muted">{formatWhen(run.startedAt)}</td>

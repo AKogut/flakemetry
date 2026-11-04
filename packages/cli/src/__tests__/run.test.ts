@@ -25,6 +25,79 @@ describe('parseWrappedCommand', () => {
   })
 })
 
+describe('runWrapped when the command fails before writing results', () => {
+  const capture = () => {
+    const bodies: { resource: { variant?: string }; run: { status: string }; executions: [] }[] = []
+    const fetchImpl = vi.fn(async (_url: string, init: { body: string }) => {
+      bodies.push(JSON.parse(init.body))
+      return {
+        ok: true,
+        status: 202,
+        json: async () => ({ receiptId: 'r', acceptedExecutions: 0 }),
+      }
+    }) as unknown as typeof fetch
+    return { bodies, fetchImpl }
+  }
+
+  it('reports a failed run with no tests and keeps the exit code', async () => {
+    const { bodies, fetchImpl } = capture()
+    const result = await runWrapped({
+      command,
+      spawner: async () => 3,
+      fileExists: () => false,
+      endpoint: 'http://api',
+      token: 'fmk_x',
+      env: { FLAKEMETRY_VARIANT: 'ios' },
+      fetchImpl,
+    })
+
+    expect(result.exitCode).toBe(3)
+    expect(bodies).toHaveLength(1)
+    expect(bodies[0]?.run.status).toBe('failed')
+    expect(bodies[0]?.executions).toEqual([])
+    expect(bodies[0]?.resource.variant).toBe('ios')
+  })
+
+  it('stays silent when the command passed', async () => {
+    const { bodies, fetchImpl } = capture()
+    await runWrapped({
+      command,
+      spawner: async () => 0,
+      fileExists: () => false,
+      endpoint: 'http://api',
+      token: 'fmk_x',
+      env: {},
+      fetchImpl,
+    })
+    expect(bodies).toHaveLength(0)
+  })
+
+  it('never turns a delivery problem into a different exit code', async () => {
+    const result = await runWrapped({
+      command,
+      spawner: async () => 3,
+      fileExists: () => false,
+      reportNoTests: async () => {
+        throw new Error('network down')
+      },
+    })
+    expect(result.exitCode).toBe(3)
+  })
+
+  it('does nothing without an endpoint and token', async () => {
+    const { bodies, fetchImpl } = capture()
+    const result = await runWrapped({
+      command,
+      spawner: async () => 3,
+      fileExists: () => false,
+      env: {},
+      fetchImpl,
+    })
+    expect(result.exitCode).toBe(3)
+    expect(bodies).toHaveLength(0)
+  })
+})
+
 describe('runWrapped', () => {
   it('does not call an upload at all when there is no results file', async () => {
     const upload = vi.fn(uploaded)

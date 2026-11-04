@@ -37,6 +37,7 @@ export const exportRunOverOtlp = async (
     ...(context.prNumber ? { [RESOURCE_ATTR.prNumber]: context.prNumber } : {}),
     ...(context.shardIndex ? { [RESOURCE_ATTR.shardIndex]: context.shardIndex } : {}),
     ...(context.shardTotal ? { [RESOURCE_ATTR.shardTotal]: context.shardTotal } : {}),
+    ...(context.variant ? { [RESOURCE_ATTR.variant]: context.variant } : {}),
   })
 
   const collector = new InMemorySpanExporter()

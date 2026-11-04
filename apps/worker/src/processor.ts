@@ -93,6 +93,7 @@ export const processJob = async (
         ciRunId: batch.resource.ciRunId ?? null,
         shardIndex: batch.resource.shardIndex ?? null,
         shardTotal: batch.resource.shardTotal ?? null,
+        variant: batch.resource.variant ?? null,
         trigger: batch.resource.trigger,
         status: batch.run.status,
         startedAt,
