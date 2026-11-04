@@ -8,6 +8,7 @@ const withSchema = (url: string): string => {
 }
 
 export default defineConfig({
+  esbuild: { jsx: 'automatic' },
   test: {
     fileParallelism: false,
     globalSetup: ['./test/global-setup.ts'],

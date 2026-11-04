@@ -10,6 +10,7 @@ import {
   ownTestsBatch,
   reporterBatch,
   restfulReporterBatch,
+  withJobConclusion,
   withoutTargetIndependentTests,
   xcresultBatch,
 } from './lib/batches.mjs'
@@ -158,7 +159,15 @@ let failed = 0
 
 const collectArtifacts = (project, known) => {
   const collectors = COLLECTORS[project.slug]
+  const rule = NO_TEST_RUNS[project.slug]
   const runs = new Map()
+  const jobs = new Map()
+  const jobsOf = (runId) => {
+    if (!jobs.has(runId)) {
+      jobs.set(runId, api(`repos/${project.repo}/actions/runs/${runId}/jobs?per_page=50`).jobs)
+    }
+    return jobs.get(runId)
+  }
   for (let page = 1; page <= MAX_ARTIFACT_PAGES; page += 1) {
     const { artifacts } = api(`repos/${project.repo}/actions/artifacts?per_page=100&page=${page}`)
     for (const artifact of artifacts) {
@@ -175,9 +184,13 @@ const collectArtifacts = (project, known) => {
           if (!runs.has(runId)) runs.set(runId, api(`repos/${project.repo}/actions/runs/${runId}`))
           directory = downloadArtifact(artifact)
           const meta = metaFrom(project.slug, runs.get(runId))
-          const batch = collector.build(directory, meta, collector.variant(match), source)
+          const variant = collector.variant(match)
+          const batch = collector.build(directory, meta, variant, source)
           if (batch) {
-            writeBatch(history, project.slug, batch, source)
+            const conclusion = rule
+              ? jobsOf(runId).find((job) => rule.variantOf(job) === variant)?.conclusion
+              : undefined
+            writeBatch(history, project.slug, withJobConclusion(batch, conclusion), source)
             collected += 1
           }
         } catch (error) {
@@ -200,17 +213,19 @@ const collectRunsWithoutTests = (project, known) => {
     `repos/${project.repo}/actions/workflows/${rule.workflow}/runs?branch=main&status=completed&per_page=${LOOKBACK_RUNS}`,
   )
   for (const run of runs) {
-    if (run.conclusion === 'cancelled') continue
     const { jobs } = api(`repos/${project.repo}/actions/runs/${run.id}/jobs?per_page=50`)
     for (const job of jobs) {
       const variant = rule.variantOf(job)
-      if (!variant || job.conclusion !== 'failure') continue
+      if (!variant || !['failure', 'cancelled'].includes(job.conclusion)) continue
       if (rule.alreadyHas(known, run.id, variant)) continue
       const source = `r${run.id}-${variant}`
       writeBatch(
         history,
         project.slug,
-        noTestsBatch(metaFrom(project.slug, run), variant, source),
+        withJobConclusion(
+          noTestsBatch(metaFrom(project.slug, run), variant, source),
+          job.conclusion,
+        ),
         source,
       )
       known.add(source)

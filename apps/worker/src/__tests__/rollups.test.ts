@@ -23,6 +23,23 @@ const seedProject = async () => {
   return { orgId: org.id, projectId: project.id }
 }
 
+const execution = (
+  title: string,
+  status: 'pass' | 'fail' | 'flaky' | 'skip',
+  durationMs: number,
+  over: Partial<IngestRunBatch['executions'][number]> = {},
+): IngestRunBatch['executions'][number] => ({
+  filePath: 'e2e/login.spec.ts',
+  suite: 'auth',
+  title,
+  status,
+  attempt: 1,
+  startedAt: new Date('2026-07-16T10:00:01Z'),
+  durationMs,
+  ...(status === 'fail' ? { error: { message: 'Timeout 30000ms exceeded' } } : {}),
+  ...over,
+})
+
 const batch = (over: Partial<IngestRunBatch> = {}): IngestRunBatch => ({
   contractVersion: '0.1.0',
   idempotencyKey: 'run-roll-1',
@@ -93,6 +110,87 @@ describe.skipIf(!hasDb)('trend rollups', () => {
     expect(trend.flakyCount).toBeGreaterThanOrEqual(0)
   })
 
+  it('counts a retry only when an earlier attempt of the same test failed', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    const attempt = (
+      title: string,
+      status: 'pass' | 'fail' | 'flaky' | 'skip',
+      number: number,
+    ) => ({
+      filePath: 'e2e/filters.spec.ts',
+      suite: 'filters',
+      title,
+      status,
+      attempt: number,
+      startedAt: new Date(`2026-07-16T10:0${number}:00Z`),
+      durationMs: 1000 * number,
+      ...(status === 'fail' ? { error: { message: 'Timeout 30000ms exceeded' } } : {}),
+    })
+
+    await processJob(
+      prisma,
+      batch({
+        executions: [
+          attempt('spec file rerun', 'pass', 1),
+          attempt('spec file rerun', 'pass', 2),
+          attempt('skipped by a hook', 'skip', 1),
+          attempt('skipped by a hook', 'pass', 2),
+          attempt('other test failed first', 'fail', 1),
+          attempt('real retry', 'fail', 1),
+          attempt('real retry', 'fail', 2),
+          attempt('real retry', 'flaky', 3),
+          attempt('retry never ran', 'fail', 1),
+          attempt('retry never ran', 'skip', 2),
+        ],
+      }),
+      ctx,
+    )
+
+    const reruns = await prisma.dailyTestStats.findMany({
+      select: { rerunCount: true, rerunMs: true, identity: { select: { title: true } } },
+    })
+    const byTitle = Object.fromEntries(
+      reruns.map((row) => [row.identity.title, [row.rerunCount, row.rerunMs]]),
+    )
+
+    expect(byTitle).toEqual({
+      'spec file rerun': [0, 0],
+      'skipped by a hook': [0, 0],
+      'other test failed first': [0, 0],
+      'real retry': [2, 5000],
+      'retry never ran': [0, 0],
+    })
+
+    const suite = await prisma.suiteDaily.findFirstOrThrow({ where: { suite: 'filters' } })
+    expect(suite.rerunCount).toBe(2)
+    expect(suite.rerunMs).toBe(5000)
+  })
+
+  it('counts a flaky row as a retry even when the earlier attempt was never reported', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(
+      prisma,
+      batch({
+        executions: [
+          {
+            filePath: 'e2e/login.spec.ts',
+            suite: 'auth',
+            title: 'logs in',
+            status: 'flaky',
+            attempt: 2,
+            startedAt: new Date('2026-07-16T10:00:03Z'),
+            durationMs: 1400,
+          },
+        ],
+      }),
+      ctx,
+    )
+
+    const daily = await prisma.dailyTestStats.findFirstOrThrow()
+    expect(daily.rerunCount).toBe(1)
+    expect(daily.rerunMs).toBe(1400)
+  })
+
   it('serves the rollups through the query api', async () => {
     const ctx = { ...(await seedProject()), now: NOW }
     await processJob(prisma, batch(), ctx)
@@ -124,6 +222,264 @@ describe.skipIf(!hasDb)('trend rollups', () => {
     const leaderboards = await getTestLeaderboards(prisma, ctx.projectId, 3650)
     expect(leaderboards.slowest[0]?.avgDurationMs).toBe(1600)
     expect(leaderboards.mostFailing[0]?.failRate).toBe(1)
+  })
+
+  it('leaves skipped tests out of every rate', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(
+      prisma,
+      batch({
+        run: { status: 'passed', startedAt: new Date('2026-07-16T10:00:00Z') },
+        executions: [
+          execution('one', 'pass', 100),
+          execution('two', 'pass', 100),
+          execution('three', 'skip', 0),
+        ],
+      }),
+      ctx,
+    )
+
+    const kpis = await getProjectHealthKpis(prisma, ctx.projectId, 3650)
+    expect(kpis.totalExecutions).toBe(3)
+    expect(kpis.skipped).toBe(1)
+    expect(kpis.passRate).toBe(1)
+    expect(kpis.failRate).toBe(0)
+
+    const daily = await getDailyTrend(prisma, ctx.projectId, 3650)
+    expect(daily[0]?.passRate).toBe(1)
+
+    const suites = await getSuiteHealth(prisma, ctx.projectId, 3650)
+    expect(suites[0]?.total).toBe(3)
+    expect(suites[0]?.ran).toBe(2)
+    expect(suites[0]?.failRate).toBe(0)
+  })
+
+  it('has no rate when every test was skipped', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(
+      prisma,
+      batch({
+        run: { status: 'passed', startedAt: new Date('2026-07-16T10:00:00Z') },
+        executions: [execution('one', 'skip', 0)],
+      }),
+      ctx,
+    )
+
+    const kpis = await getProjectHealthKpis(prisma, ctx.projectId, 3650)
+    expect(kpis.passRate).toBeNull()
+    expect(kpis.flakyRate).toBeNull()
+    expect(kpis.avgDurationMs).toBeNull()
+
+    const daily = await getDailyTrend(prisma, ctx.projectId, 3650)
+    expect(daily[0]?.passRate).toBeNull()
+    expect(daily[0]?.avgDurationMs).toBeNull()
+  })
+
+  it('keeps a measured 0ms and leaves out a run that recorded no durations', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(
+      prisma,
+      batch({
+        idempotencyKey: 'measured',
+        run: { status: 'passed', startedAt: new Date('2026-07-16T10:00:00Z') },
+        executions: [
+          execution('slow', 'pass', 90),
+          execution('instant', 'pass', 0),
+          execution('ignored', 'skip', 0),
+        ],
+      }),
+      ctx,
+    )
+    await processJob(
+      prisma,
+      batch({
+        idempotencyKey: 'reconstructed',
+        run: { status: 'passed', startedAt: new Date('2026-07-16T11:00:00Z') },
+        executions: [execution('slow', 'pass', 0), execution('instant', 'pass', 0)],
+      }),
+      ctx,
+    )
+
+    const suite = await prisma.suiteDaily.findFirstOrThrow({ where: { suite: 'auth' } })
+    expect(suite.total).toBe(5)
+    expect(suite.durationSamples).toBe(2)
+    expect(suite.avgDurationMs).toBe(45)
+
+    const kpis = await getProjectHealthKpis(prisma, ctx.projectId, 3650)
+    expect(kpis.avgDurationMs).toBe(45)
+
+    const { slowest } = await getTestLeaderboards(prisma, ctx.projectId, 3650)
+    expect(slowest.map((test) => [test.title, test.avgDurationMs])).toEqual([
+      ['slow', 90],
+      ['instant', 0],
+    ])
+  })
+
+  it('reports no duration for a day whose runs recorded none', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(
+      prisma,
+      batch({
+        idempotencyKey: 'reconstructed',
+        run: { status: 'failed', startedAt: new Date('2026-07-15T10:00:00Z') },
+        executions: [
+          execution('one', 'pass', 0, { startedAt: new Date('2026-07-15T10:00:01Z') }),
+          execution('two', 'fail', 0, { startedAt: new Date('2026-07-15T10:00:01Z') }),
+        ],
+      }),
+      ctx,
+    )
+    await processJob(
+      prisma,
+      batch({
+        idempotencyKey: 'measured',
+        run: { status: 'passed', startedAt: new Date('2026-07-16T10:00:00Z') },
+        executions: [execution('one', 'pass', 30), execution('two', 'pass', 10)],
+      }),
+      ctx,
+    )
+
+    const daily = await getDailyTrend(prisma, ctx.projectId, 3650)
+    expect(daily.map((point) => point.avgDurationMs)).toEqual([null, 20])
+
+    const [suite] = await getSuiteHealth(prisma, ctx.projectId, 3650)
+    expect(suite?.avgDurationMs).toBe(20)
+    expect(suite?.days.map((day) => day.avgDurationMs)).toEqual([null, 20])
+
+    const kpis = await getProjectHealthKpis(prisma, ctx.projectId, 3650)
+    expect(kpis.avgDurationMs).toBe(20)
+  })
+
+  it('rates a failing test per run on first attempts', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(prisma, batch({ idempotencyKey: 'retried' }), ctx)
+    await processJob(
+      prisma,
+      batch({
+        idempotencyKey: 'green',
+        run: { status: 'passed', startedAt: new Date('2026-07-16T11:00:00Z') },
+        executions: [execution('logs in', 'pass', 1000)],
+      }),
+      ctx,
+    )
+    await processJob(
+      prisma,
+      batch({
+        idempotencyKey: 'rerun-of-a-pass',
+        run: { status: 'passed', startedAt: new Date('2026-07-16T12:00:00Z') },
+        executions: [
+          execution('logs in', 'pass', 1000),
+          execution('logs in', 'pass', 1000, { attempt: 2, retryOfIndex: 0 }),
+        ],
+      }),
+      ctx,
+    )
+    await processJob(
+      prisma,
+      batch({
+        idempotencyKey: 'skipped',
+        run: { status: 'passed', startedAt: new Date('2026-07-16T13:00:00Z') },
+        executions: [execution('logs in', 'skip', 0)],
+      }),
+      ctx,
+    )
+
+    const { mostFailing } = await getTestLeaderboards(prisma, ctx.projectId, 3650)
+    expect(mostFailing).toHaveLength(1)
+    expect(mostFailing[0]?.runs).toBe(3)
+    expect(mostFailing[0]?.failedRuns).toBe(1)
+    expect(mostFailing[0]?.failRate).toBeCloseTo(1 / 3)
+  })
+
+  it('ranks a test seen in too few runs below one with a real sample', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    for (const [index, status] of (['fail', 'pass', 'pass', 'pass'] as const).entries()) {
+      await processJob(
+        prisma,
+        batch({
+          idempotencyKey: `sampled-${index}`,
+          run: { status: 'passed', startedAt: new Date('2026-07-16T10:00:00Z') },
+          executions: [
+            execution('sampled', status, 10),
+            ...(index === 0 ? [execution('new', 'fail' as const, 10)] : []),
+          ],
+        }),
+        ctx,
+      )
+    }
+
+    const { mostFailing } = await getTestLeaderboards(prisma, ctx.projectId, 3650)
+    expect(mostFailing.map((test) => [test.title, test.failedRuns, test.runs])).toEqual([
+      ['sampled', 1, 4],
+      ['new', 1, 1],
+    ])
+  })
+
+  it('does not list a test that only failed after its first attempt', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(
+      prisma,
+      batch({
+        executions: [
+          execution('logs in', 'pass', 1000),
+          execution('logs in', 'fail', 1000, { attempt: 2, retryOfIndex: 0 }),
+        ],
+      }),
+      ctx,
+    )
+
+    const { mostFailing } = await getTestLeaderboards(prisma, ctx.projectId, 3650)
+    expect(mostFailing).toEqual([])
+  })
+
+  it('keeps hooks off the boards and counts the failing ones', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(
+      prisma,
+      batch({
+        executions: [
+          execution('"before all" hook for "logs in"', 'fail', 40_000),
+          execution('"after each" hook', 'fail', 40_000),
+          execution('"before all" hook for "signs out"', 'fail', 40_000, { attempt: 2 }),
+          execution('a "before all" hook is not in this title', 'fail', 20),
+          execution('logs in', 'pass', 10),
+        ],
+      }),
+      ctx,
+    )
+
+    const boards = await getTestLeaderboards(prisma, ctx.projectId, 3650)
+    expect(boards.mostFailing.map((test) => test.title)).toEqual([
+      'a "before all" hook is not in this title',
+    ])
+    expect(boards.slowest.map((test) => test.title)).toEqual([
+      'a "before all" hook is not in this title',
+      'logs in',
+    ])
+    expect(boards.failingHooks).toBe(3)
+  })
+
+  it('tells the variants of a test apart', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(
+      prisma,
+      batch({
+        executions: [
+          execution('logs in', 'fail', 200, { params: { variant: 'firefox' } }),
+          execution('logs in', 'pass', 100, { params: { variant: 'webkit' } }),
+          execution('signs out', 'pass', 50),
+        ],
+      }),
+      ctx,
+    )
+
+    const { slowest, mostFailing } = await getTestLeaderboards(prisma, ctx.projectId, 3650)
+    expect(slowest.map((test) => [test.title, test.variant])).toEqual([
+      ['logs in', 'firefox'],
+      ['logs in', 'webkit'],
+      ['signs out', null],
+    ])
+    expect(mostFailing[0]?.variant).toBe('firefox')
   })
 
   it('rolls up each UTC day a midnight-straddling run touches', async () => {

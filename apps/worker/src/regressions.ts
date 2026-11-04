@@ -9,6 +9,7 @@ export interface SuiteDayRow {
   failed: number
   flaky: number
   avgDurationMs?: number
+  durationSamples?: number
 }
 
 export interface SuiteRegression {
@@ -82,6 +83,8 @@ export interface DurationRegressionOptions {
   minRatio?: number
 }
 
+const samplesOf = (row: SuiteDayRow): number => row.durationSamples ?? 0
+
 export const detectDurationRegressions = (
   rows: readonly SuiteDayRow[],
   today: string,
@@ -101,21 +104,24 @@ export const detectDurationRegressions = (
   const regressions: SuiteDurationRegression[] = []
   for (const [suite, suiteRows] of bySuite) {
     const todayRow = suiteRows.find((row) => row.day === today)
-    if (!todayRow || todayRow.total < minTotal) continue
+    if (!todayRow || samplesOf(todayRow) < minTotal) continue
     const todayAvg = todayRow.avgDurationMs ?? 0
-    const prior = suiteRows.filter((row) => row.day < today && row.total >= minTotal)
+    const prior = suiteRows.filter((row) => row.day < today && samplesOf(row) >= minTotal)
     if (prior.length === 0) continue
 
-    const priorTotal = prior.reduce((sum, row) => sum + row.total, 0)
-    const priorDuration = prior.reduce((sum, row) => sum + (row.avgDurationMs ?? 0) * row.total, 0)
-    const baseline = priorTotal > 0 ? priorDuration / priorTotal : 0
+    const priorSamples = prior.reduce((sum, row) => sum + samplesOf(row), 0)
+    const priorDuration = prior.reduce(
+      (sum, row) => sum + (row.avgDurationMs ?? 0) * samplesOf(row),
+      0,
+    )
+    const baseline = priorSamples > 0 ? priorDuration / priorSamples : 0
     if (todayAvg >= minAvgMs && baseline > 0 && todayAvg >= baseline * minRatio) {
       regressions.push({
         suite,
         day: today,
         avgDurationMs: todayAvg,
         baselineDurationMs: baseline,
-        total: todayRow.total,
+        total: samplesOf(todayRow),
       })
     }
   }
@@ -133,15 +139,25 @@ const loadSuiteDays = async (
   const since = new Date(day.getTime() - windowDays * DAY_MS)
   const rows = await prisma.suiteDaily.findMany({
     where: { projectId, day: { gte: since, lte: day } },
-    select: { suite: true, day: true, total: true, failed: true, flaky: true, avgDurationMs: true },
+    select: {
+      suite: true,
+      day: true,
+      total: true,
+      skipped: true,
+      failed: true,
+      flaky: true,
+      avgDurationMs: true,
+      durationSamples: true,
+    },
   })
   return rows.map((row) => ({
     suite: row.suite,
     day: dayString(row.day),
-    total: row.total,
+    total: row.total - row.skipped,
     failed: row.failed,
     flaky: row.flaky,
     avgDurationMs: row.avgDurationMs,
+    durationSamples: row.durationSamples,
   }))
 }
 

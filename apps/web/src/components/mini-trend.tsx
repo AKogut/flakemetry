@@ -7,18 +7,19 @@ export const MiniTrend = ({
   label,
   flatMessage,
 }: {
-  values: number[]
+  values: (number | null)[]
   tone?: string
   max?: number
   label?: string
   flatMessage?: string
 }) => {
-  if (flatMessage && values.every((value) => value === 0)) {
+  const present = values.filter((value): value is number => value !== null)
+  if (flatMessage && present.every((value) => value === 0)) {
     return <div className="muted">{flatMessage}</div>
   }
-  if (values.length === 0) return <div className="muted">No data yet.</div>
+  if (present.length === 0) return <div className="muted">No data yet.</div>
 
-  const ceiling = max ?? Math.max(...values, 1)
+  const ceiling = max ?? Math.max(...present, 1)
   const barWidth = 9
   const gap = 3
   const height = 34
@@ -37,6 +38,7 @@ export const MiniTrend = ({
       aria-label={label ?? 'trend'}
     >
       {values.map((value, index) => {
+        if (value === null) return null
         const barHeight = ceiling > 0 ? Math.max((value / ceiling) * height, 2) : 2
         return (
           <rect
@@ -46,7 +48,7 @@ export const MiniTrend = ({
             width={barWidth}
             height={barHeight}
             rx={2}
-            fill={tone}
+            fill={value === 0 ? 'var(--border)' : tone}
           />
         )
       })}

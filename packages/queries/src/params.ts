@@ -9,6 +9,7 @@ export interface ParamBucket {
   score: number | null
   quarantined: boolean
   total: number
+  skipped: number
   failed: number
   flaky: number
   lastSeenAt: Date
@@ -19,7 +20,14 @@ export interface ParamBucketGroup {
   title: string
   filePath: string
   buckets: ParamBucket[]
-  totals: { total: number; failed: number; flaky: number; passRate: number }
+  totals: {
+    total: number
+    ran: number
+    skipped: number
+    failed: number
+    flaky: number
+    passRate: number | null
+  }
 }
 
 export const variantOf = (params: unknown): string | null => {
@@ -71,7 +79,7 @@ export const getParamBuckets = async (
   const stats = await prisma.dailyTestStats.groupBy({
     by: ['testIdentityId'],
     where: { projectId, testIdentityId: { in: variants.map((variant) => variant.id) } },
-    _sum: { total: true, failed: true, flaky: true },
+    _sum: { total: true, skipped: true, failed: true, flaky: true },
   })
   const byIdentity = new Map(stats.map((row) => [row.testIdentityId, row._sum]))
 
@@ -88,6 +96,7 @@ export const getParamBuckets = async (
         score: variant.flakyScore?.score ?? null,
         quarantined: variant.quarantined,
         total: sums?.total ?? 0,
+        skipped: sums?.skipped ?? 0,
         failed: sums?.failed ?? 0,
         flaky: sums?.flaky ?? 0,
         lastSeenAt: variant.lastSeenAt,
@@ -96,6 +105,8 @@ export const getParamBuckets = async (
     .sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || a.label.localeCompare(b.label))
 
   const total = buckets.reduce((sum, bucket) => sum + bucket.total, 0)
+  const skipped = buckets.reduce((sum, bucket) => sum + bucket.skipped, 0)
+  const ran = total - skipped
   const failed = buckets.reduce((sum, bucket) => sum + bucket.failed, 0)
   const flaky = buckets.reduce((sum, bucket) => sum + bucket.flaky, 0)
 
@@ -106,9 +117,11 @@ export const getParamBuckets = async (
     buckets,
     totals: {
       total,
+      ran,
+      skipped,
       failed,
       flaky,
-      passRate: total > 0 ? (total - failed - flaky) / total : 1,
+      passRate: ran > 0 ? (ran - failed - flaky) / ran : null,
     },
   }
 }

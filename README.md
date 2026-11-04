@@ -110,9 +110,9 @@ with autoscaling, a migration hook, and ingress) plus an operations
 
 ## See it on real test suites
 
-The [live demo](https://akogut.github.io/flakemetry/demo/) runs on the real CI history of three public suites: Playwright on three browsers, an API suite against a hosted and a local target, and one mobile app tested through Appium, XCUITest and Espresso. It is rebuilt every night and nothing in it is seeded. [How it is built](examples/public-demo/README.md).
+The [live demo](https://akogut.github.io/flakemetry/demo/) runs on the real CI history of four public suites: Playwright on three browsers, an API suite against a hosted and a local target, one mobile app tested through Appium, XCUITest and Espresso, and Flakemetry's own tests. It is rebuilt every night and nothing in it is seeded. [How it is built](examples/public-demo/README.md).
 
-![Flakemetry on the real history of three test suites](docs/demo.gif)
+![Flakemetry on the real history of public test suites](docs/demo.gif)
 
 <sub>Recorded from the live demo · [watch a one-minute walkthrough](https://akogut.github.io/flakemetry/flakemetry-demo.mp4) · re-capture it with [docs/recording-the-demo.md](docs/recording-the-demo.md).</sub>
 

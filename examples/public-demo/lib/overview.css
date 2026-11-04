@@ -8,7 +8,7 @@
 }
 .overview .project-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: 1rem;
   margin-top: 1.25rem;
 }
@@ -42,6 +42,7 @@
   color: var(--warning, #a16207);
   font-weight: 600;
 }
-.overview .table-scroll {
+.overview .card {
+  min-width: 0;
   overflow-x: auto;
 }

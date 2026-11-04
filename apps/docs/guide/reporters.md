@@ -97,6 +97,22 @@ and the board and the PR comment show it next to the title.
 Adding a variant to a test that had none starts a new identity, because the evidence really is
 different. The old history stays on the old identity.
 
+### Comparing one test case across variants
+
+When several runners work through one catalogue of test cases, each names the test its own way.
+Put the id in the title and Flakemetry reads `TC-AUTH-001 — Successful login`,
+`test_TC_AUTH_001_validLogin` and `TC_AUTH_001_successfulLogin` as one test case: `TC`, letters
+and digits, separated by `-` or `_`.
+
+As soon as one id appears on two variants, the project gets a **Test cases** page. It has one row
+per test case, the most trouble first, and one column per variant, showing how many runs passed,
+failed and passed on retry, with a link to the test. A retried test counts once per run, and
+failures from runs where most of the suite failed together are left out, as they are in the score.
+
+The page reads the project's latest runs, up to 500 and up to 50,000 test executions, whichever
+comes first, so a large suite covers fewer runs. It says how many runs it covers and when older
+runs are not included.
+
 ## Sharded suites
 
 A suite split across parallel jobs sends one run per shard, and the key says which shard it

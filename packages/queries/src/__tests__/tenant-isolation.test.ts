@@ -27,6 +27,7 @@ import { planHistoricalRestitch } from '../restitch'
 import { getRun, listRuns } from '../runs'
 import { computeIdentityScore } from '../scoring'
 import { getRunSummaryByCommit } from '../summary'
+import { getTestCaseMatrix, hasTestCaseComparison } from '../test-cases'
 import { getTest } from '../tests'
 import { getExecutionTrace } from '../trace'
 import { collectTrackerCandidates } from '../tracker'
@@ -107,7 +108,8 @@ const seedTenant = async (label: string): Promise<Tenant> => {
       fingerprint: `fp-${slug}`,
       filePath: 'e2e/login.spec.ts',
       suite: 'auth',
-      title: 'logs in',
+      title: 'TC-AUTH-001 logs in',
+      params: { variant: 'ios' },
       firstSeenAt: NOW,
       lastSeenAt: NOW,
     },
@@ -330,6 +332,8 @@ describe.skipIf(!hasDb)('tenant isolation', { timeout: 180_000 }, () => {
       ['getWorkspaceUsage', () => getWorkspaceUsage(prisma, [a.orgId], { env: {} })],
       ['getRunSummaryByCommit', () => getRunSummaryByCommit(prisma, a.projectId, COMMIT)],
       ['getPrGate', () => getPrGate(prisma, a.projectId, COMMIT, { baseBranch: 'main' })],
+      ['getTestCaseMatrix', () => getTestCaseMatrix(prisma, a.projectId)],
+      ['hasTestCaseComparison', () => hasTestCaseComparison(prisma, a.projectId)],
     ]
 
     it.each(listReads)('%s', async (_name, call) => {
@@ -392,6 +396,28 @@ describe.skipIf(!hasDb)('tenant isolation', { timeout: 180_000 }, () => {
     })
   })
 
+  it('a variant in another project does not make a test case comparable here', async () => {
+    await prisma.testIdentity.create({
+      data: {
+        orgId: b.orgId,
+        projectId: b.projectId,
+        fingerprint: `fp-android-${b.projectId}`,
+        filePath: 'e2e/login.spec.ts',
+        suite: 'auth',
+        title: 'TC_AUTH_001_logsIn',
+        params: { variant: 'android' },
+        firstSeenAt: NOW,
+        lastSeenAt: NOW,
+      },
+    })
+
+    expect(await hasTestCaseComparison(prisma, b.projectId)).toBe(true)
+    expect(await hasTestCaseComparison(prisma, a.projectId)).toBe(false)
+    expect((await getTestCaseMatrix(prisma, a.projectId)).variants).toEqual([
+      { variant: 'ios', passed: 0, failed: 1, flaky: 0, cases: 1 },
+    ])
+  })
+
   it('each tenant still sees its own data', async () => {
     // Without this the file passes if every query returns nothing, which is the failure
     // mode a leak test is most likely to have.
@@ -402,8 +428,11 @@ describe.skipIf(!hasDb)('tenant isolation', { timeout: 180_000 }, () => {
     })
     const run = await getRun(prisma, a.projectId, a.runId)
     const trace = await getExecutionTrace(prisma, a.projectId, a.executionId)
+    const testCases = await getTestCaseMatrix(prisma, a.projectId)
 
     expect(JSON.stringify(board)).toContain(a.identityId)
+    expect(JSON.stringify(testCases)).toContain(a.identityId)
+    expect(testCases.coverage).toEqual({ runs: 1, olderRunsLeftOut: false })
     expect(run).not.toBeNull()
     expect(trace).not.toBeNull()
   })

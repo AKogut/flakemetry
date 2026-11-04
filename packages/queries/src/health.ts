@@ -234,13 +234,13 @@ export const getTestHealthMetrics = async (
         ? prisma.dailyTestStats.groupBy({
             by: ['day'],
             where: { projectId, day: { gte: windowStart }, testIdentityId: identityFilter },
-            _sum: { total: true, passed: true },
+            _sum: { total: true, passed: true, skipped: true },
             orderBy: { day: 'asc' },
           })
         : prisma.suiteDaily.groupBy({
             by: ['day'],
             where: { projectId, day: { gte: windowStart } },
-            _sum: { total: true, passed: true },
+            _sum: { total: true, passed: true, skipped: true },
             orderBy: { day: 'asc' },
           }),
     ])
@@ -312,10 +312,11 @@ export const getTestHealthMetrics = async (
       }))
     : []
 
-  const reliabilityTrend = reliabilityDaily.map((row) => {
+  const reliabilityTrend = reliabilityDaily.flatMap((row) => {
     const total = row._sum.total ?? 0
-    const passed = row._sum.passed ?? 0
-    return { day: row.day, passRate: total > 0 ? passed / total : 1, total }
+    const ran = total - (row._sum.skipped ?? 0)
+    if (ran <= 0) return []
+    return [{ day: row.day, passRate: (row._sum.passed ?? 0) / ran, total }]
   })
 
   return {

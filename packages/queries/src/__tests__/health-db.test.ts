@@ -142,6 +142,26 @@ describe.skipIf(!hasDb)('getTestHealthMetrics', () => {
     const weeksWithRetries = metrics.weekly.reduce((sum, week) => sum + week.passedOnRetry, 0)
     expect(weeksWithRetries).toBeGreaterThanOrEqual(1)
   })
+
+  it('leaves skipped tests out of the pass rate and a skip-only day off the trend', async () => {
+    const org = await prisma.org.create({ data: { name: 'Acme', slug: `acme-${Date.now()}` } })
+    const project = await prisma.project.create({
+      data: { orgId: org.id, name: 'Web', slug: 'web' },
+    })
+    const tenant = { orgId: org.id, projectId: project.id }
+    await prisma.suiteDaily.createMany({
+      data: [
+        { ...tenant, suite: 'auth', day: dayOnly(2), total: 10, passed: 8, skipped: 2 },
+        { ...tenant, suite: 'auth', day: dayOnly(1), total: 4, skipped: 4 },
+      ],
+    })
+
+    const metrics = await getTestHealthMetrics(prisma, project.id, 90)
+
+    expect(metrics.reliabilityTrend).toHaveLength(1)
+    expect(metrics.reliabilityTrend[0]?.passRate).toBe(1)
+    expect(metrics.reliabilityTrend[0]?.total).toBe(10)
+  })
 })
 
 describe.skipIf(!hasDb)('team-scoped health metrics', () => {

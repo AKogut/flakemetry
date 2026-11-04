@@ -22,6 +22,7 @@ const PUBLIC_PAGES = [
   'suite-health/page.tsx',
   'health/page.tsx',
   'cost/page.tsx',
+  'test-cases/page.tsx',
   'tests/[testId]/page.tsx',
   'tests/[testId]/executions/[executionId]/page.tsx',
 ].map((page) => join(PROJECT, page))
@@ -47,6 +48,17 @@ describe('what a visitor can reach', () => {
     const actions = source(join(__dirname, '..', 'actions.ts'))
     expect(actions).not.toContain('requireProjectViewer')
     expect(actions).not.toContain('resolveProjectViewer')
+  })
+
+  it('offers to change the cost rates only to someone who can open the policy page', () => {
+    const cost = source(join(PROJECT, 'cost/page.tsx'))
+
+    expect(cost).toContain("isMember && (project.role === 'owner' || project.role === 'admin')")
+    expect(cost).toMatch(/canChangeRates \? \(\s*<>\s*<a href=\{`\$\{base\}\/settings\/policy`\}/)
+  })
+
+  it('does not promise a visitor an analysis that a read-only view cannot produce', () => {
+    expect(source(join(PROJECT, 'tests/[testId]/page.tsx'))).toContain('readOnly={!isMember}')
   })
 
   it('renders no form on a read page outside the test page, where controls are guarded', () => {

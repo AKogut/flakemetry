@@ -1,3 +1,4 @@
+import { isMassFailureRun } from '@flakemetry/core'
 import type { PrismaClient } from '@flakemetry/db'
 
 export interface BisectPoint {
@@ -16,7 +17,7 @@ export interface SuspectCommit {
   distance: number
 }
 
-export type BisectVerdict = 'identified' | 'narrowed' | 'inconclusive'
+export type BisectVerdict = 'identified' | 'narrowed' | 'no-code-change' | 'inconclusive'
 
 export interface FlakeWindow {
   firstBadRun: BisectPoint
@@ -56,19 +57,19 @@ export const findFlakeOnset = (history: readonly BisectPoint[]): FlakeWindow | n
   )
 
   let stableStreak = 0
-  for (const [index, entry] of ordered.entries()) {
+  let lastPass: BisectPoint | null = null
+  for (const entry of ordered) {
     if (isBad(entry.status)) {
       if (stableStreak >= MIN_STABLE_RUNS) {
-        return {
-          firstBadRun: entry,
-          lastGoodRun: ordered[index - 1] ?? null,
-          stableRunsBefore: stableStreak,
-        }
+        return { firstBadRun: entry, lastGoodRun: lastPass, stableRunsBefore: stableStreak }
       }
       stableStreak = 0
       continue
     }
-    if (entry.status === 'pass') stableStreak += 1
+    if (entry.status === 'pass') {
+      stableStreak += 1
+      lastPass = entry
+    }
   }
 
   return null
@@ -93,6 +94,7 @@ export const rankSuspects = (
 
   const inWindow = projectRuns
     .filter((run) => run.startedAt.getTime() > from && run.startedAt.getTime() <= to)
+    .filter((run) => run.commitSha !== window.lastGoodRun?.commitSha)
     .sort((left, right) => right.startedAt.getTime() - left.startedAt.getTime())
 
   const seen = new Set<string>()
@@ -116,6 +118,7 @@ export const explainBisect = (
   suspects: readonly SuspectCommit[],
   hadFailure: boolean,
   hasHistory: boolean,
+  setAside = 0,
 ): FlakeBisect => {
   if (!window) {
     if (!hasHistory) {
@@ -130,8 +133,19 @@ export const explainBisect = (
       verdict: 'inconclusive',
       reason: hadFailure
         ? `no streak of ${MIN_STABLE_RUNS} green runs precedes a failure — this test has been unreliable for as long as its history goes back`
-        : 'this test has not failed in its retained history',
+        : setAside > 0
+          ? `its only failures, ${setAside} of them, came in runs where most of the suite failed, so they are set aside`
+          : 'this test has not failed in its retained history',
       window: null,
+      suspects: [],
+    }
+  }
+
+  if (window.lastGoodRun?.commitSha === window.firstBadRun.commitSha) {
+    return {
+      verdict: 'no-code-change',
+      reason: `the test passed ${window.stableRunsBefore} run(s) in a row, then failed on the same commit as its last green run`,
+      window,
       suspects: [],
     }
   }
@@ -139,7 +153,7 @@ export const explainBisect = (
   if (suspects.length === 1) {
     return {
       verdict: 'identified',
-      reason: `the test passed ${window.stableRunsBefore} run(s) in a row, and exactly one commit ran before it failed`,
+      reason: `the test passed ${window.stableRunsBefore} run(s) in a row, and exactly one new commit ran before it failed`,
       window,
       suspects: [...suspects],
     }
@@ -167,6 +181,39 @@ export const explainBisect = (
 
 const HISTORY_LIMIT = 200
 const SUSPECT_RUN_LIMIT = 500
+
+const findMassFailureRuns = async (
+  prisma: PrismaClient,
+  projectId: string,
+  runIds: string[],
+): Promise<Set<string>> => {
+  if (runIds.length === 0) return new Set()
+
+  const [runs, failingTests] = await Promise.all([
+    prisma.run.findMany({
+      where: { projectId, id: { in: runIds } },
+      select: { id: true, passedCount: true, flakyCount: true },
+    }),
+    prisma.testExecution.groupBy({
+      by: ['runId', 'testIdentityId'],
+      where: { projectId, runId: { in: runIds }, status: 'fail' },
+    }),
+  ])
+
+  const failedByRun = new Map<string, number>()
+  for (const { runId } of failingTests) {
+    failedByRun.set(runId, (failedByRun.get(runId) ?? 0) + 1)
+  }
+
+  return new Set(
+    runs
+      .filter((run) => {
+        const failed = failedByRun.get(run.id) ?? 0
+        return isMassFailureRun({ failed, executed: failed + run.passedCount + run.flakyCount })
+      })
+      .map((run) => run.id),
+  )
+}
 
 export const getFlakeBisect = async (
   prisma: PrismaClient,
@@ -198,10 +245,18 @@ export const getFlakeBisect = async (
     status: execution.status,
   }))
 
-  const window = findFlakeOnset(history)
-  const hadFailure = history.some((entry) => isBad(entry.status))
+  const massFailures = await findMassFailureRuns(prisma, projectId, [
+    ...new Set(history.filter((entry) => entry.status === 'fail').map((entry) => entry.runId)),
+  ])
+  const counted = history.filter(
+    (entry) => !(entry.status === 'fail' && massFailures.has(entry.runId)),
+  )
 
-  if (!window) return explainBisect(null, [], hadFailure, history.length > 0)
+  const window = findFlakeOnset(counted)
+  const hadFailure = counted.some((entry) => isBad(entry.status))
+  const setAside = history.length - counted.length
+
+  if (!window) return explainBisect(null, [], hadFailure, history.length > 0, setAside)
 
   const runs = await prisma.run.findMany({
     where: {

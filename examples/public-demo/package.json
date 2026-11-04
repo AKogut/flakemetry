@@ -2,7 +2,7 @@
   "name": "flakemetry-public-demo",
   "version": "0.0.0",
   "private": true,
-  "description": "Builds the public demo from the real CI results of three test suites.",
+  "description": "Builds the public demo from the real CI results of public test suites.",
   "type": "module",
   "scripts": {
     "backfill": "node backfill.mjs",

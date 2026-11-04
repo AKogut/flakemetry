@@ -208,6 +208,8 @@ Retention is resolved **per project**: a project can set its own execution/artif
 
 Recompute is idempotent: re-delivering a run recomputes the same day's aggregates rather than double-counting.
 
+Rates are worked out over the tests that ran, so a skipped test counts toward neither passing nor failing. Average durations leave out skipped tests and any run that recorded no duration at all, since every row of such a run reads 0 ms. A 0 ms row beside measured ones is real and stays in. **Most failing tests** rates each test on its first attempt per run, so a retried failure counts once. Hooks are left off the board, because a hook is only reported when it fails, and a test with fewer than three runs ranks below those with more.
+
 Each run also keeps its own pass, fail, skip and flaky counts, written when the worker processes it. The runs list reads those, so a run whose raw executions retention has pruned still shows what happened in it; its detail page no longer lists the executions.
 
 ### Plugins

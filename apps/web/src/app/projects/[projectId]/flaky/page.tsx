@@ -2,13 +2,12 @@ import { getPrismaClient } from '@flakemetry/db'
 import { flakyBoard, getEffectiveProjectPolicy } from '@flakemetry/queries'
 
 import { ScoreBadge, TrendArrow } from '@/components/score'
+import { formatPercent } from '@/lib/format'
 import { requireProjectViewer } from '@/lib/viewer'
 
 const prisma = getPrismaClient()
 
 const BOARD_LIMIT = 100
-
-const percent = (value: number): string => `${Math.round(value * 100)}%`
 
 const formatWhen = (date: Date | null): string =>
   date
@@ -153,8 +152,8 @@ export default async function FlakyBoardPage({
                       ))
                     )}
                   </td>
-                  <td className="muted">{percent(item.flipRate)}</td>
-                  <td className="muted">{percent(item.passOnRerunRate)}</td>
+                  <td className="muted">{formatPercent(item.flipRate)}</td>
+                  <td className="muted">{formatPercent(item.passOnRerunRate)}</td>
                   <td className="muted">{formatWhen(item.lastFlakedAt)}</td>
                   <td>
                     {item.quarantined ? (

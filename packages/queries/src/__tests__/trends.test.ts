@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import { isSuiteDurationRegressed, isSuiteRegressed } from '../trends'
 
-const day = (total: number, failed: number, flaky = 0) => ({ total, failed, flaky })
+const day = (ran: number, failed: number, flaky = 0) => ({ ran, failed, flaky })
 
-const dday = (total: number, avgDurationMs: number) => ({ total, avgDurationMs })
+const dday = (durationSamples: number, avgDurationMs: number | null) => ({
+  durationSamples,
+  avgDurationMs,
+})
 
 describe('isSuiteRegressed', () => {
   it('flags a suite whose latest day jumps above its pooled baseline', () => {
@@ -34,5 +37,13 @@ describe('isSuiteDurationRegressed', () => {
     expect(isSuiteDurationRegressed([dday(40, 1000), dday(40, 1200)])).toBe(false)
     expect(isSuiteDurationRegressed([dday(40, 100), dday(40, 400)])).toBe(false)
     expect(isSuiteDurationRegressed([dday(40, 1000), dday(5, 5000)])).toBe(false)
+  })
+
+  it('does not let a day without durations lower the baseline', () => {
+    expect(isSuiteDurationRegressed([dday(40, 1000), dday(0, null), dday(40, 1100)])).toBe(false)
+  })
+
+  it('has nothing to compare on a latest day without durations', () => {
+    expect(isSuiteDurationRegressed([dday(40, 1000), dday(0, null)])).toBe(false)
   })
 })
