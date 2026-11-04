@@ -114,6 +114,14 @@ export const parseJunitXml = (xml: string): JunitRun => {
   return { startedAt, executions }
 }
 
+export const runHasFailure = (executions: readonly JunitExecution[]): boolean => {
+  const lastStatusByTest = new Map<number, TestStatus>()
+  executions.forEach((execution, index) => {
+    lastStatusByTest.set(execution.retryOfIndex ?? index, execution.status)
+  })
+  return [...lastStatusByTest.values()].includes('fail')
+}
+
 export interface JunitBatchParams {
   idempotencyKey: string
   resource: IngestResource
@@ -124,7 +132,7 @@ export interface JunitBatchParams {
 
 export const junitToIngestBatch = (run: JunitRun, params: JunitBatchParams): IngestRunBatch => {
   const startedAt = params.startedAt ?? (run.startedAt ? new Date(run.startedAt) : new Date())
-  const failed = run.executions.some((execution) => execution.status === 'fail')
+  const failed = runHasFailure(run.executions)
 
   return {
     contractVersion: CONVENTIONS_VERSION,

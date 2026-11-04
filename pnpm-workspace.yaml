@@ -6,6 +6,7 @@ packages:
   # playwright-demo alongside it deliberately installs them from npm, which is
   # what a reader copying it would get, and must keep doing so.
   - 'examples/reporter-smoke'
+  - 'examples/public-demo'
 
 onlyBuiltDependencies:
   - '@parcel/watcher'

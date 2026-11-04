@@ -14,7 +14,7 @@ Test observability · explainable flaky-test detection · AI-assisted root-cause
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/AKogut/flakemetry/issues)
 [![Roadmap](https://img.shields.io/badge/roadmap-public-5319e7.svg)](https://github.com/users/AKogut/projects/14)
 
-[Docs](https://akogut.github.io/flakemetry/) · [Wiki](https://github.com/AKogut/flakemetry/wiki) · [Architecture](https://github.com/AKogut/flakemetry/wiki/Architecture) · [Roadmap](https://github.com/AKogut/flakemetry/wiki/Roadmap) · [Discussions](https://github.com/AKogut/flakemetry/discussions)
+[**Live demo**](https://akogut.github.io/flakemetry/demo/) · [Docs](https://akogut.github.io/flakemetry/) · [Wiki](https://github.com/AKogut/flakemetry/wiki) · [Architecture](https://github.com/AKogut/flakemetry/wiki/Architecture) · [Roadmap](https://github.com/AKogut/flakemetry/wiki/Roadmap) · [Discussions](https://github.com/AKogut/flakemetry/discussions)
 
 </div>
 
@@ -107,6 +107,10 @@ above binds its ports to loopback precisely because it is not that. For a horizo
 scaled environment, [`deploy/`](deploy) ships a Helm chart (stateless `api`/`worker`/`web`
 with autoscaling, a migration hook, and ingress) plus an operations
 [runbook](deploy/RUNBOOK.md) with SLOs — see the [deploy guide](deploy/README.md).
+
+## See it on real test suites
+
+The [live demo](https://akogut.github.io/flakemetry/demo/) runs on the real CI history of three public suites: Playwright on three browsers, an API suite against a hosted and a local target, and one mobile app tested through Appium, XCUITest and Espresso. It is rebuilt every night and nothing in it is seeded. [How it is built](examples/public-demo/README.md).
 
 ## See it in 60 seconds
 

@@ -1,0 +1,23 @@
+{
+  "name": "flakemetry-public-demo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Builds the public demo from the real CI results of three test suites.",
+  "type": "module",
+  "scripts": {
+    "backfill": "node backfill.mjs",
+    "collect": "node collect.mjs",
+    "load": "node load.mjs",
+    "snapshot": "node snapshot.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@flakemetry/contracts": "workspace:*",
+    "@flakemetry/core": "workspace:*",
+    "@flakemetry/db": "workspace:*",
+    "cheerio": "^1.1.2"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.5"
+  }
+}
