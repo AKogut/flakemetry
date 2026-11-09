@@ -5,10 +5,12 @@ raw runs to a decision.
 
 ## 1. The flaky board
 
-The flaky board ranks every test by its flaky score, worst first. The score is a
-Beta-Binomial estimate with exponential time-decay — recent behaviour counts for more than
-last month's. A test only appears once it has enough samples to be meaningful, so a single
-red run does not brand a test as flaky.
+The flaky board ranks tests that have needed a retry or failed outside a run where most of
+the suite failed, by flaky score, worst first. The score is a Beta-Binomial estimate with
+exponential time-decay — recent behaviour counts for more than last month's. A test with
+neither is not ranked, because its score only says how little history it has. A single red
+run still does not brand a test as flaky: quarantine needs enough runs and a score above the
+bar.
 
 ## 2. Reason codes
 

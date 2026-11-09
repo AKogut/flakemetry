@@ -2,6 +2,7 @@ import { getPrismaClient } from '@flakemetry/db'
 import { getEffectiveProjectPolicy, getFlakinessCost } from '@flakemetry/queries'
 
 import { MiniTrend } from '@/components/mini-trend'
+import { suiteName } from '@/lib/format'
 import { requireProjectViewer } from '@/lib/viewer'
 
 const prisma = getPrismaClient()
@@ -169,7 +170,7 @@ export default async function CostPage({
                       <a href={`${base}/tests/${offender.testIdentityId}`}>{offender.title}</a>
                       {offender.quarantined ? <span className="muted"> 🔒</span> : null}
                     </td>
-                    <td className="muted">{offender.suite}</td>
+                    <td className="muted">{suiteName(offender.suite)}</td>
                     <td>{offender.rerunCount}</td>
                     <td className="muted">{hours(offender.rerunMs)}</td>
                     <td>{offender.flakyOccurrences}</td>

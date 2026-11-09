@@ -1,6 +1,7 @@
 import { getPrismaClient } from '@flakemetry/db'
 import { getIngestionHealth, listRuns } from '@flakemetry/queries'
 
+import { formatWhen } from '@/lib/format'
 import { requireProjectViewer } from '@/lib/viewer'
 
 const prisma = getPrismaClient()
@@ -22,14 +23,8 @@ const formatDuration = (ms: number | null): string => {
   return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
 }
 
-const formatWhen = (date: Date): string =>
-  new Intl.DateTimeFormat('en', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(date)
+const ESTIMATED_DURATION_HINT =
+  'Sum of the test durations. The report does not say how long the run took.'
 
 export default async function RunsPage({
   params,
@@ -113,7 +108,7 @@ export default async function RunsPage({
                 <th>Branch</th>
                 <th>Tests</th>
                 <th>Duration</th>
-                <th>Started</th>
+                <th>Started (UTC)</th>
               </tr>
             </thead>
             <tbody>
@@ -151,7 +146,13 @@ export default async function RunsPage({
                       </span>
                     )}
                   </td>
-                  <td className="muted">{formatDuration(run.durationMs)}</td>
+                  <td className="muted">
+                    {run.durationEstimated ? (
+                      <span title={ESTIMATED_DURATION_HINT}>~{formatDuration(run.durationMs)}</span>
+                    ) : (
+                      formatDuration(run.durationMs)
+                    )}
+                  </td>
                   <td className="muted">{formatWhen(run.startedAt)}</td>
                 </tr>
               ))}

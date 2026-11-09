@@ -5,6 +5,7 @@ import {
   type PrismaClient,
   type TestStatus,
 } from '@flakemetry/db'
+import { HOOK_TITLE } from '@flakemetry/queries'
 
 export interface RollupContext {
   orgId: string
@@ -207,6 +208,7 @@ const rollupDay = async (
       WHERE e.project_id = ${ctx.projectId}::uuid
         AND e.started_at >= ${day} AND e.started_at < ${end}
         AND i.suite = ANY(${suiteNames}::text[])
+        AND i.title !~ ${HOOK_TITLE}
       GROUP BY 1, 2
     `,
       prisma.$queryRaw<RerunRow[]>`
@@ -217,6 +219,7 @@ const rollupDay = async (
         AND e.started_at >= ${day} AND e.started_at < ${end}
         AND ${IS_RETRY_AFTER_FAILURE}
         AND i.suite = ANY(${suiteNames}::text[])
+        AND i.title !~ ${HOOK_TITLE}
       GROUP BY 1
     `,
     ])

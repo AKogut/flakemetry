@@ -30,6 +30,7 @@ export const runListItemSchema = z.object({
   variant: z.string().nullable(),
   startedAt: timestampSchema,
   durationMs: z.number().int().nonnegative().nullable(),
+  durationEstimated: z.boolean(),
   counts: runCountsSchema,
 })
 
@@ -62,8 +63,11 @@ export const testHistoryPointSchema = z.object({
   status: testStatusSchema,
   attempt: z.number().int().min(1),
   durationMs: z.number().int().nonnegative(),
+  durationKnown: z.boolean(),
   errorMessage: z.string().nullable(),
   hasRca: z.boolean(),
+  hasSpans: z.boolean(),
+  hasArtifacts: z.boolean(),
 })
 
 export const identityStitchSchema = z.object({
@@ -75,6 +79,7 @@ export const identityStitchSchema = z.object({
   toTitle: z.string(),
   confidence: z.number().min(0).max(1).nullable(),
   createdAt: timestampSchema,
+  runStartedAt: timestampSchema.nullable(),
 })
 
 export const testDetailSchema = z.object({

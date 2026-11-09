@@ -84,6 +84,36 @@ describe.skipIf(!hasDb)('trend rollups', () => {
     await prisma.$disconnect()
   })
 
+  it('leaves failing hooks out of the suite rollup, because a hook only appears when it fails', async () => {
+    const ctx = { ...(await seedProject()), now: NOW }
+    await processJob(
+      prisma,
+      batch({
+        executions: [
+          execution('"before all" hook for auth', 'fail', 5000),
+          execution('"after each" hook for auth', 'fail', 5000),
+          execution('logs in', 'pass', 2000),
+        ],
+      }),
+      ctx,
+    )
+
+    const suite = await prisma.suiteDaily.findFirstOrThrow({ where: { suite: 'auth' } })
+    expect(suite.total).toBe(1)
+    expect(suite.failed).toBe(0)
+    expect(suite.avgDurationMs).toBe(2000)
+
+    await processJob(
+      prisma,
+      batch({
+        idempotencyKey: 'hooks-only',
+        executions: [execution('"before all" hook for lonely', 'fail', 100, { suite: 'lonely' })],
+      }),
+      ctx,
+    )
+    await expect(prisma.suiteDaily.count({ where: { suite: 'lonely' } })).resolves.toBe(0)
+  })
+
   it('materializes daily test, suite, and flaky-trend rollups on ingest', async () => {
     const ctx = { ...(await seedProject()), now: NOW }
     await processJob(prisma, batch(), ctx)
