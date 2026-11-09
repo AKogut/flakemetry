@@ -30,10 +30,10 @@
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.5",
     "@changesets/cli": "^3.0.3",
-    "eslint": "^10.13.0",
+    "eslint": "^10.14.0",
     "prettier": "^3.9.10",
     "publint": "^0.3.25",
-    "tsdown": "0.23.2",
+    "tsdown": "0.23.7",
     "turbo": "^2.11.10",
     "typescript": "^6.0.3",
     "vite": "^7.3.7"
