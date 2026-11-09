@@ -26,7 +26,15 @@ const runRow = (variant, status) => ({
 })
 
 const OUTAGE = { id: 'outage', passedCount: 106, failedCount: 22, flakyCount: 0 }
-const FAILED_THAT_NIGHT = ['a', 'b', 'c'].map((testIdentityId) => ({ testIdentityId }))
+const FAILED_THAT_NIGHT = [
+  ...Array.from({ length: 19 }, (_, index) => ({
+    testIdentityId: `shared-${index}`,
+    errorMessage: `AssertionError: expected ${index % 2 ? 500 : 403} to be 200`,
+  })),
+  { testIdentityId: 'a', errorMessage: 'Error: Test timed out in 45000ms.' },
+  { testIdentityId: 'b', errorMessage: 'Error: Property failed after 1 tests' },
+  { testIdentityId: 'c', errorMessage: 'AssertionError: expected undefined to be defined' },
+]
 
 const fakePrisma = ({ runCount = 3, first = FIRST, last = LAST, outage = OUTAGE } = {}) => ({
   run: {
@@ -45,8 +53,7 @@ const fakePrisma = ({ runCount = 3, first = FIRST, last = LAST, outage = OUTAGE 
   testExecution: {
     count: async () => 1,
     groupBy: async () => [],
-    findMany: async ({ where }) =>
-      where.runId === 'outage' ? FAILED_THAT_NIGHT : [{ testIdentityId: 'c' }],
+    findMany: async () => FAILED_THAT_NIGHT,
   },
   testIdentity: { count: async () => 1, findMany: async () => [] },
   flakyScore: { findMany: async () => [] },
@@ -90,14 +97,15 @@ describe('renderOverview', () => {
   it('does not claim that every outage is set aside', async () => {
     const page = text(await renderOverview(fakePrisma(), PROJECTS))
     expect(page).not.toContain('An outage is not a flake')
-    expect(page).toContain('A partial outage gets past that gate')
+    expect(page).toContain('A partial outage is set aside too')
     expect(page).toContain('On Aug 31 the hosted platform failed 22 of the 128 tests that ran')
-    expect(page).toContain('For 2 of them it is the only failure on record')
+    expect(page).toContain('19 of them failed with the same error')
+    expect(page).toContain('The other 3 failed in their own way and still count')
   })
 
   it('leaves the partial outage out when that run is not in the history', async () => {
     const page = text(await renderOverview(fakePrisma({ outage: null }), PROJECTS))
-    expect(page).not.toContain('A partial outage gets past that gate')
+    expect(page).not.toContain('A partial outage is set aside too')
   })
 
   it('sends readers to a page that links to tests, not to the runs', async () => {

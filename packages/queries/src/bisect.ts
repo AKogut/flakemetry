@@ -1,5 +1,6 @@
-import { isMassFailureRun } from '@flakemetry/core'
 import type { PrismaClient } from '@flakemetry/db'
+
+import { failureSetAside, loadRunFailures } from './run-failures'
 
 export interface BisectPoint {
   runId: string
@@ -134,7 +135,7 @@ export const explainBisect = (
       reason: hadFailure
         ? `no streak of ${MIN_STABLE_RUNS} green runs precedes a failure — this test has been unreliable for as long as its history goes back`
         : setAside > 0
-          ? `its only failures, ${setAside} of them, came in runs where most of the suite failed, so they are set aside`
+          ? `its only failures, ${setAside} of them, came in runs where most of the suite failed or many tests failed the same way, so they are set aside`
           : 'this test has not failed in its retained history',
       window: null,
       suspects: [],
@@ -182,39 +183,6 @@ export const explainBisect = (
 const HISTORY_LIMIT = 200
 const SUSPECT_RUN_LIMIT = 500
 
-const findMassFailureRuns = async (
-  prisma: PrismaClient,
-  projectId: string,
-  runIds: string[],
-): Promise<Set<string>> => {
-  if (runIds.length === 0) return new Set()
-
-  const [runs, failingTests] = await Promise.all([
-    prisma.run.findMany({
-      where: { projectId, id: { in: runIds } },
-      select: { id: true, passedCount: true, flakyCount: true },
-    }),
-    prisma.testExecution.groupBy({
-      by: ['runId', 'testIdentityId'],
-      where: { projectId, runId: { in: runIds }, status: 'fail' },
-    }),
-  ])
-
-  const failedByRun = new Map<string, number>()
-  for (const { runId } of failingTests) {
-    failedByRun.set(runId, (failedByRun.get(runId) ?? 0) + 1)
-  }
-
-  return new Set(
-    runs
-      .filter((run) => {
-        const failed = failedByRun.get(run.id) ?? 0
-        return isMassFailureRun({ failed, executed: failed + run.passedCount + run.flakyCount })
-      })
-      .map((run) => run.id),
-  )
-}
-
 export const getFlakeBisect = async (
   prisma: PrismaClient,
   projectId: string,
@@ -245,11 +213,12 @@ export const getFlakeBisect = async (
     status: execution.status,
   }))
 
-  const massFailures = await findMassFailureRuns(prisma, projectId, [
+  const runFailures = await loadRunFailures(prisma, projectId, [
     ...new Set(history.filter((entry) => entry.status === 'fail').map((entry) => entry.runId)),
   ])
   const counted = history.filter(
-    (entry) => !(entry.status === 'fail' && massFailures.has(entry.runId)),
+    (entry) =>
+      !(entry.status === 'fail' && failureSetAside(runFailures, entry.runId, testIdentityId)),
   )
 
   const window = findFlakeOnset(counted)

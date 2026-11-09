@@ -1,4 +1,4 @@
-import { isMassFailureRun } from '@flakemetry/core'
+import { findSharedFailures, isMassFailureRun } from '@flakemetry/core'
 
 import { MOBILE_RUNNERS } from '../projects.mjs'
 import { escapeHtml, testCaseIdOf } from './site.mjs'
@@ -115,35 +115,31 @@ const partialOutageOf = async (prisma, project) => {
     select: { id: true, passedCount: true, failedCount: true, flakyCount: true },
   })
   if (!run) return null
+  const ran = run.passedCount + run.failedCount + run.flakyCount
   const failures = await prisma.testExecution.findMany({
     where: { runId: run.id, status: 'fail' },
-    select: { testIdentityId: true },
+    select: { testIdentityId: true, errorMessage: true },
   })
-  const failedAgain = await prisma.testExecution.findMany({
-    where: {
-      testIdentityId: { in: failures.map((failure) => failure.testIdentityId) },
-      status: 'fail',
-      runId: { not: run.id },
-    },
-    distinct: ['testIdentityId'],
-    select: { testIdentityId: true },
-  })
-  return {
-    failed: run.failedCount,
-    ran: run.passedCount + run.failedCount + run.flakyCount,
-    onlyThatNight: failures.length - failedAgain.length,
-  }
+  const shared = findSharedFailures(
+    failures.map((failure) => ({
+      testId: failure.testIdentityId,
+      message: failure.errorMessage,
+      recoveredInRun: false,
+    })),
+    ran,
+  )
+  return { failed: run.failedCount, ran, shared: shared.size }
 }
 
 const outageParagraph = (project, outage) =>
   outage
     ? `<p>
-    A partial outage gets past that gate. On ${shortDay(PARTIAL_OUTAGE_DAY)} the hosted platform failed
-    ${number(outage.failed)} of the ${number(outage.ran)} tests that ran. A run is only set aside when
-    most of it fails, so those count as failures of each test. For ${number(outage.onlyThatNight)} of
-    them it is the only failure on record, and they stay on
-    <a href="${project.slug}/flaky.html">the board</a> as last flaked on that day, though one bad
-    night is all they show.
+    A partial outage is set aside too. On ${shortDay(PARTIAL_OUTAGE_DAY)} the hosted platform failed
+    ${number(outage.failed)} of the ${number(outage.ran)} tests that ran. ${number(outage.shared)} of them
+    failed with the same error and passed on that commit on other nights, so those failures do not count
+    against them. The other ${number(outage.failed - outage.shared)} failed in their own way and still
+    count, so they stay on <a href="${project.slug}/flaky.html">the board</a> with that night as their
+    last flake.
   </p>`
     : ''
 

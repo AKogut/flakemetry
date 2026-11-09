@@ -107,7 +107,8 @@ and digits, separated by `-` or `_`.
 As soon as one id appears on two variants, the project gets a **Test cases** page. It has one row
 per test case, the most trouble first, and one column per variant, showing how many runs passed,
 failed and passed on retry, with a link to the test. A retried test counts once per run, and
-failures from runs where most of the suite failed together are left out, as they are in the score.
+failures the score sets aside, such as those from a run where most of the suite failed together, are
+left out here too.
 
 The page reads the project's latest runs, up to 500 and up to 50,000 test executions, whichever
 comes first, so a large suite covers fewer runs. It says how many runs it covers and when older

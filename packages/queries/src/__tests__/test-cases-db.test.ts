@@ -637,7 +637,7 @@ describe.skipIf(!hasDb)('test cases across variants', { timeout: 120_000 }, () =
 
       try {
         expect(await planOf(/FROM run\b/)).toContain('run_project_id_started_at_idx')
-        for (const shape of [/count\(DISTINCT test_identity_id\)/, /test_in_run AS/]) {
+        for (const shape of [/bool_or\(e\.status IN \('pass', 'flaky'\)\)/, /test_in_run AS/]) {
           const plan = await planOf(shape)
           expect(plan).toContain('test_execution_run_id')
           expect(plan).not.toContain('Seq Scan on test_execution')

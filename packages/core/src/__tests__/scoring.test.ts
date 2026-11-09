@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   computeFlakyScore,
   type ExecutionPoint,
+  findSharedFailures,
   isMassFailureRun,
+  type RunFailure,
   type ScoringConfig,
 } from '../scoring'
 
@@ -81,6 +83,98 @@ describe('a run where most of the suite failed', () => {
     { failed: 0, executed: 0, mass: false },
   ])('$failed of $executed failing is mass: $mass', ({ failed, executed, mass }) => {
     expect(isMassFailureRun({ failed, executed })).toBe(mass)
+  })
+})
+
+describe('failures that many tests share in one run', () => {
+  const failing = (count: number, message: string | null, from = 0): RunFailure[] =>
+    Array.from({ length: count }, (_, index) => ({
+      testId: `test-${from + index}`,
+      message,
+      recoveredInRun: false,
+    }))
+
+  it('reads the same error with different numbers as one error', () => {
+    const shared = findSharedFailures(
+      [
+        ...failing(14, 'AssertionError: expected 500 to be 200 // Object.is equality'),
+        ...failing(5, 'AssertionError: expected 403 to be 202 // Object.is equality', 14),
+        ...failing(1, 'Error: Test timed out in 45000ms.', 19),
+      ],
+      128,
+    )
+
+    expect(shared.size).toBe(19)
+    expect(shared.has('test-19')).toBe(false)
+  })
+
+  it('needs at least 5 tests, so a handful of tests failing alike still counts', () => {
+    expect(findSharedFailures(failing(4, 'expected 404 to be 200'), 20).size).toBe(0)
+  })
+
+  it('needs at least a tenth of what the run executed', () => {
+    const six = failing(6, 'boom')
+    expect(findSharedFailures(six, 61).size).toBe(0)
+    expect(findSharedFailures(six, 60).size).toBe(6)
+  })
+
+  it('leaves out a test that a retry rescued in the same run', () => {
+    const rescued = failing(6, 'Add task form did not open').map((failure) => ({
+      ...failure,
+      recoveredInRun: true,
+    }))
+
+    expect(findSharedFailures(rescued, 53).size).toBe(0)
+  })
+
+  it('does not pool failures that carry no message', () => {
+    expect(findSharedFailures(failing(10, null), 20).size).toBe(0)
+  })
+
+  const nights = Array.from({ length: 20 }, (_, day) => ({
+    ...green('same-commit', day + 2),
+    runId: `run-${day}`,
+  }))
+  const outage: ExecutionPoint = {
+    ...red('same-commit', 1),
+    runId: 'outage',
+    inSharedFailure: true,
+  }
+
+  it('is not evidence that a test is flaky, and says so', () => {
+    const result = computeFlakyScore([...nights, outage], config)
+
+    expect(result.score).toBe(computeFlakyScore(nights, config).score)
+    expect(result.sameShaVariance).toBe(0)
+    expect(result.reasonCodes.map((reason) => reason.code)).toEqual(['SHARED_FAILURES_SET_ASIDE'])
+    expect(result.reasonCodes[0]?.message).toContain('1 failure(s) not counted')
+  })
+
+  it('keeps the evidence of a failure the test had on its own', () => {
+    const alone: ExecutionPoint = { ...red('same-commit', 3), runId: 'alone' }
+    const result = computeFlakyScore([...nights, alone, outage], config)
+
+    expect(result.reasonCodes.map((reason) => reason.code)).toEqual(
+      expect.arrayContaining(['SAME_SHA_VARIANCE', 'SHARED_FAILURES_SET_ASIDE']),
+    )
+    expect(result.score).toBeGreaterThan(computeFlakyScore(nights, config).score)
+  })
+
+  it('reports each kind of set-aside failure once when a test has both', () => {
+    const crash: ExecutionPoint = { ...red('same-commit', 4), runId: 'crash', inMassFailure: true }
+    const result = computeFlakyScore([...nights, crash, outage], config)
+
+    expect(result.reasonCodes.map((reason) => reason.code)).toEqual([
+      'MASS_FAILURES_SET_ASIDE',
+      'SHARED_FAILURES_SET_ASIDE',
+    ])
+  })
+
+  it('explains a test seen only in such a run instead of calling it never executed', () => {
+    const result = computeFlakyScore([outage], config)
+
+    expect(result.score).toBe(0)
+    expect(result.reasonCodes.map((reason) => reason.code)).toEqual(['SHARED_FAILURES_SET_ASIDE'])
   })
 })
 
