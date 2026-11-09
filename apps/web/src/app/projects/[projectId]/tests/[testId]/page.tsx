@@ -623,7 +623,7 @@ export default async function TestDetailPage({
         {timeline.length === 0 ? (
           <div className="empty">No executions recorded.</div>
         ) : (
-          <table>
+          <table className="table-stack">
             <thead>
               <tr>
                 <th>Status</th>

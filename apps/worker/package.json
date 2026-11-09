@@ -4,6 +4,9 @@
   "private": true,
   "description": "Processing workers: identity, scoring, clustering, RCA",
   "type": "module",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsdown --config-loader native",
     "typecheck": "tsc -p tsconfig.json",
