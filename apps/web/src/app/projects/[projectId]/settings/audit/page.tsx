@@ -14,6 +14,7 @@ const formatWhen = (date: Date): string =>
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
+    timeZone: 'UTC',
   }).format(date)
 
 const describeDetails = (details: unknown): string => {
@@ -51,7 +52,7 @@ export default async function AuditPage({ params }: { params: Promise<{ projectI
           <table>
             <thead>
               <tr>
-                <th>When</th>
+                <th>When (UTC)</th>
                 <th>Who</th>
                 <th>What</th>
                 <th>Project</th>

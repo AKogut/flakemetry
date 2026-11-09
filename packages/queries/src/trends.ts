@@ -10,6 +10,9 @@ const since = (days: number): Date => {
   return date
 }
 
+export const HOOK_TITLE = '^"(before|after)( all| each)?" hook'
+const MIN_RANKED_RUNS = 3
+
 const rateOf = (part: number, whole: number): number | null => (whole > 0 ? part / whole : null)
 
 const averageOf = (sum: number, samples: number): number | null =>
@@ -137,13 +140,17 @@ export const getSuiteHealth = async (
     bySuite.set(row.suite, entry)
   }
 
+  const hasEnoughRuns = (suite: SuiteHealthRow): number => (suite.ran >= MIN_RANKED_RUNS ? 1 : 0)
+
   return [...bySuite.values()]
     .map(({ sumDuration, durationSamples, ...suite }) => ({
       ...suite,
       failRate: rateOf(suite.failed + suite.flaky, suite.ran) ?? 0,
       avgDurationMs: averageOf(sumDuration, durationSamples),
     }))
-    .sort((a, b) => b.failRate - a.failRate || b.total - a.total)
+    .sort(
+      (a, b) => hasEnoughRuns(b) - hasEnoughRuns(a) || b.failRate - a.failRate || b.total - a.total,
+    )
 }
 
 export interface FlakyTrendPoint {
@@ -308,9 +315,6 @@ interface LeaderboardRow {
   avg_ms: bigint
   fail_rate: number
 }
-
-const HOOK_TITLE = '^"(before|after)( all| each)?" hook'
-const MIN_RANKED_RUNS = 3
 
 export const getTestLeaderboards = async (
   prisma: PrismaClient,

@@ -62,10 +62,18 @@ const trendByIdentity = async (
   return result
 }
 
+export interface FlakyBoardOptions {
+  withSignalOnly?: boolean
+}
+
+export const countTestsWithoutSignal = (prisma: PrismaClient, projectId: string): Promise<number> =>
+  prisma.flakyScore.count({ where: { projectId, lastFlakedAt: null } })
+
 export const flakyBoard = async (
   prisma: PrismaClient,
   projectId: string,
   input: FlakyBoardInput,
+  options: FlakyBoardOptions = {},
 ): Promise<FlakyBoardResult> => {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -76,8 +84,12 @@ export const flakyBoard = async (
   const where: Prisma.FlakyScoreWhereInput = {
     projectId,
     score: { gte: input.minScore },
+    ...(options.withSignalOnly ? { lastFlakedAt: { not: null } } : {}),
     ...(input.includeQuarantined ? {} : { identity: { quarantined: false } }),
   }
+  const orderBy: Prisma.FlakyScoreOrderByWithRelationInput[] = options.withSignalOnly
+    ? [{ score: 'desc' }, { lastFlakedAt: 'desc' }, { testIdentityId: 'asc' }]
+    : [{ score: 'desc' }, { testIdentityId: 'asc' }]
 
   let scores: ScoreRow[]
   if (input.owner) {
@@ -88,7 +100,7 @@ export const flakyBoard = async (
     while (collected.length < input.limit) {
       const page = await prisma.flakyScore.findMany({
         where,
-        orderBy: [{ score: 'desc' }, { testIdentityId: 'asc' }],
+        orderBy,
         take: PAGE,
         ...(cursor ? { skip: 1, cursor: { testIdentityId: cursor } } : {}),
         select: scoreSelect,
@@ -107,7 +119,7 @@ export const flakyBoard = async (
   } else {
     scores = await prisma.flakyScore.findMany({
       where,
-      orderBy: { score: 'desc' },
+      orderBy,
       take: input.limit,
       select: scoreSelect,
     })

@@ -33,6 +33,7 @@ const formatDateTime = (date: Date): string =>
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'UTC',
   }).format(date)
 
 const sourceLabel = (source: PolicySource): string =>
@@ -523,7 +524,7 @@ export default async function PolicyPage({
           <table>
             <thead>
               <tr>
-                <th>When</th>
+                <th>When (UTC)</th>
                 <th>Field</th>
                 <th>Change</th>
                 <th>By</th>

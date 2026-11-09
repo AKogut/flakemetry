@@ -23,6 +23,69 @@ const applyStatus = (counts: RunCounts, status: TestStatus, amount: number): voi
   else if (status === 'flaky') counts.flaky += amount
 }
 
+const SUSPECT_RUN_MS = 1000
+
+interface DurationEvidenceRow {
+  run_id: string
+  starts: number
+  total_ms: bigint
+  longest_ms: bigint
+  span_ms: bigint | null
+}
+
+export interface RunDurationEvidence {
+  starts: number
+  totalMs: number
+  longestMs: number
+  spanMs: number
+}
+
+const durationEvidence = async (
+  prisma: PrismaClient,
+  runIds: string[],
+): Promise<Map<string, RunDurationEvidence>> => {
+  if (runIds.length === 0) return new Map()
+  const rows = await prisma.$queryRaw<DurationEvidenceRow[]>`
+    SELECT run_id::text AS run_id,
+           count(DISTINCT started_at)::int AS starts,
+           coalesce(sum(duration_ms), 0)::bigint AS total_ms,
+           coalesce(max(duration_ms), 0)::bigint AS longest_ms,
+           (extract(epoch FROM max(started_at + duration_ms * interval '1 millisecond') - min(started_at)) * 1000)::bigint AS span_ms
+    FROM test_execution
+    WHERE run_id = ANY(${runIds}::uuid[]) AND status <> 'skip'
+    GROUP BY run_id
+  `
+  return new Map(
+    rows.map((row) => [
+      row.run_id,
+      {
+        starts: row.starts,
+        totalMs: Number(row.total_ms),
+        longestMs: Number(row.longest_ms),
+        spanMs: Number(row.span_ms ?? 0),
+      },
+    ]),
+  )
+}
+
+const needsDurationEvidence = (stored: number | null): boolean =>
+  stored === null || stored < SUSPECT_RUN_MS
+
+export const resolveRunDuration = (
+  stored: number | null,
+  evidence: RunDurationEvidence | undefined,
+): { durationMs: number | null; durationEstimated: boolean } => {
+  if (stored !== null && (!evidence || stored >= evidence.longestMs)) {
+    return { durationMs: stored, durationEstimated: false }
+  }
+  if (evidence && evidence.totalMs > 0) {
+    return evidence.starts > 1
+      ? { durationMs: evidence.spanMs, durationEstimated: false }
+      : { durationMs: evidence.totalMs, durationEstimated: true }
+  }
+  return { durationMs: stored, durationEstimated: false }
+}
+
 export const listRuns = async (
   prisma: PrismaClient,
   projectId: string,
@@ -64,6 +127,10 @@ export const listRuns = async (
 
   const page = runs.slice(0, input.limit)
   const nextCursor = runs.length > input.limit ? (page.at(-1)?.id ?? null) : null
+  const evidence = await durationEvidence(
+    prisma,
+    page.filter((run) => needsDurationEvidence(run.durationMs)).map((run) => run.id),
+  )
 
   return {
     items: page.map((run) => ({
@@ -75,7 +142,7 @@ export const listRuns = async (
       status: run.status,
       variant: run.variant,
       startedAt: run.startedAt,
-      durationMs: run.durationMs,
+      ...resolveRunDuration(run.durationMs, evidence.get(run.id)),
       counts: {
         total: run.passedCount + run.failedCount + run.skippedCount + run.flakyCount,
         passed: run.passedCount,
@@ -129,6 +196,9 @@ export const getRun = async (
 
   const counts = emptyCounts()
   for (const execution of executions) applyStatus(counts, execution.status, 1)
+  const evidence = needsDurationEvidence(run.durationMs)
+    ? await durationEvidence(prisma, [run.id])
+    : new Map<string, RunDurationEvidence>()
 
   return {
     id: run.id,
@@ -141,7 +211,7 @@ export const getRun = async (
     trigger: run.trigger,
     startedAt: run.startedAt,
     finishedAt: run.finishedAt,
-    durationMs: run.durationMs,
+    ...resolveRunDuration(run.durationMs, evidence.get(run.id)),
     counts,
     executions: executions.map((execution) => ({
       id: execution.id,

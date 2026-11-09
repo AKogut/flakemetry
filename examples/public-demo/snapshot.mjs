@@ -113,7 +113,9 @@ const snapshotProject = async (project) => {
     $('.user').html(
       `<div class="muted">Snapshot of real CI results, rebuilt nightly.</div><a href="${project.repository ?? `https://github.com/${project.repo}`}">Source repository</a>`,
     )
-    $('title').text(`${$('.page-title').first().text().trim() || project.name} · Flakemetry demo`)
+    $('head > title').text(
+      `${$('.page-title').first().text().trim() || project.name} · Flakemetry demo`,
+    )
 
     const target = join(output, file)
     mkdirSync(dirname(target), { recursive: true })

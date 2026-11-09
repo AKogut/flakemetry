@@ -10,7 +10,7 @@ import {
 } from '@flakemetry/queries'
 
 import { MiniTrend } from '@/components/mini-trend'
-import { formatPercent, formatTestDuration } from '@/lib/format'
+import { formatPercent, formatTestDuration, suiteName, testLocation } from '@/lib/format'
 import { requireProjectViewer } from '@/lib/viewer'
 
 const prisma = getPrismaClient()
@@ -154,7 +154,7 @@ export default async function SuiteHealthPage({
                             </span>
                           ) : null}
                           <div className="mono muted" style={{ fontSize: '0.72rem' }}>
-                            {test.suite}
+                            {testLocation(test.suite, test.filePath)}
                           </div>
                         </td>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>
@@ -189,7 +189,7 @@ export default async function SuiteHealthPage({
                             </span>
                           ) : null}
                           <div className="mono muted" style={{ fontSize: '0.72rem' }}>
-                            {test.suite}
+                            {testLocation(test.suite, test.filePath)}
                           </div>
                         </td>
                         <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--fail)' }}>
@@ -234,7 +234,7 @@ export default async function SuiteHealthPage({
                   {suites.map((suite) => (
                     <tr key={suite.suite}>
                       <td className="mono stack-main">
-                        {suite.suite || '(root)'}
+                        {suiteName(suite.suite)}
                         {isSuiteRegressed(suite.days) ? (
                           <span className="pill pill-candidate" style={{ marginLeft: '0.5rem' }}>
                             regressed
@@ -253,7 +253,7 @@ export default async function SuiteHealthPage({
                           color: suite.failRate > 0 ? 'var(--fail)' : undefined,
                         }}
                       >
-                        {formatPercent(suite.failRate)}
+                        {suite.ran === 0 ? '—' : formatPercent(suite.failRate)}
                       </td>
                       <td data-label="Avg duration" style={{ textAlign: 'right' }}>
                         {formatTestDuration(suite.avgDurationMs)}
@@ -268,7 +268,7 @@ export default async function SuiteHealthPage({
                           )}
                           max={1}
                           tone="var(--fail)"
-                          label={`${suite.suite} fail rate trend`}
+                          label={`${suiteName(suite.suite)} fail rate trend`}
                         />
                       </td>
                     </tr>

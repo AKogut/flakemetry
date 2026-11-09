@@ -20,6 +20,7 @@ const formatDate = (date: Date | null): string =>
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
+        timeZone: 'UTC',
       }).format(date)
     : '—'
 
@@ -157,7 +158,7 @@ export default async function DataPage({
               </td>
             </tr>
             <tr>
-              <td>Oldest execution</td>
+              <td>Oldest execution (UTC)</td>
               <td className="muted">
                 {usage.oldestExecution ? formatDate(usage.oldestExecution) : '—'}
               </td>
@@ -209,7 +210,7 @@ export default async function DataPage({
           <table>
             <thead>
               <tr>
-                <th>When</th>
+                <th>When (UTC)</th>
                 <th>What</th>
                 <th>Who</th>
                 <th>Status</th>

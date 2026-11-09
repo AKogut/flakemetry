@@ -1,20 +1,13 @@
 import { getPrismaClient } from '@flakemetry/db'
-import { flakyBoard, getEffectiveProjectPolicy } from '@flakemetry/queries'
+import { countTestsWithoutSignal, flakyBoard, getEffectiveProjectPolicy } from '@flakemetry/queries'
 
 import { ScoreBadge, TrendArrow } from '@/components/score'
-import { formatPercent } from '@/lib/format'
+import { formatPercent, formatWhen, testLocation } from '@/lib/format'
 import { requireProjectViewer } from '@/lib/viewer'
 
 const prisma = getPrismaClient()
 
 const BOARD_LIMIT = 100
-
-const formatWhen = (date: Date | null): string =>
-  date
-    ? new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: '2-digit' }).format(
-        date,
-      )
-    : '—'
 
 export default async function FlakyBoardPage({
   params,
@@ -27,14 +20,20 @@ export default async function FlakyBoardPage({
   const { filter, owner } = await searchParams
   await requireProjectViewer(projectId)
 
-  const [board, policy] = await Promise.all([
-    flakyBoard(prisma, projectId, {
-      limit: BOARD_LIMIT,
-      minScore: 0,
-      includeQuarantined: true,
-      ...(owner ? { owner } : {}),
-    }),
+  const [board, policy, withoutSignal] = await Promise.all([
+    flakyBoard(
+      prisma,
+      projectId,
+      {
+        limit: BOARD_LIMIT,
+        minScore: 0,
+        includeQuarantined: true,
+        ...(owner ? { owner } : {}),
+      },
+      { withSignalOnly: true },
+    ),
     getEffectiveProjectPolicy(prisma, projectId),
+    countTestsWithoutSignal(prisma, projectId),
   ])
 
   const items = board.items.filter((item) => {
@@ -42,6 +41,9 @@ export default async function FlakyBoardPage({
     if (filter === 'rising') return item.trend === 'rising'
     return true
   })
+
+  const showOwner = items.some((item) => item.owners.length > 0)
+  const showStatus = items.some((item) => item.quarantined || item.quarantineCandidate)
 
   const bar = policy.effective.flakyThreshold.value
   const highestScore = board.items[0]?.score ?? 0
@@ -51,6 +53,12 @@ export default async function FlakyBoardPage({
       : highestScore >= bar
         ? `No test with enough runs has reached the quarantine bar, a flaky score of ${bar.toFixed(2)}.`
         : `No test has reached the quarantine bar, a flaky score of ${bar.toFixed(2)}. The highest score here is ${highestScore.toFixed(2)}.`
+
+  const emptyBoardMessage = owner
+    ? 'No ranked test has this owner.'
+    : withoutSignal > 0
+      ? 'No test here has a retry or a failure outside a run where most of the suite failed, so there is nothing to rank.'
+      : 'No scored tests yet — ingest a few runs to build history.'
 
   const base = `/projects/${projectId}/flaky`
   const hrefWith = (patch: { filter?: string; owner?: string }): string => {
@@ -95,9 +103,7 @@ export default async function FlakyBoardPage({
       <div className="card">
         {items.length === 0 ? (
           <div className="empty">
-            {board.items.length === 0
-              ? 'No scored tests yet — ingest a few runs to build history.'
-              : emptyFilterMessage}
+            {board.items.length === 0 ? emptyBoardMessage : emptyFilterMessage}
           </div>
         ) : (
           <table className="table-stack">
@@ -105,11 +111,11 @@ export default async function FlakyBoardPage({
               <tr>
                 <th>Score</th>
                 <th>Test</th>
-                <th>Owner</th>
+                {showOwner ? <th>Owner</th> : null}
                 <th>Flip rate</th>
                 <th>Pass on rerun</th>
-                <th>Last flaked</th>
-                <th>Status</th>
+                <th>Last flaked (UTC)</th>
+                {showStatus ? <th>Status</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -132,44 +138,48 @@ export default async function FlakyBoardPage({
                         ) : null}
                       </div>
                       <div className="muted mono" style={{ fontSize: '0.8rem' }}>
-                        {item.suite} · {item.filePath}
+                        {testLocation(item.suite, item.filePath)}
                       </div>
                     </a>
                   </td>
-                  <td className="muted stack-optional" data-label="Owner">
-                    {item.owners.length === 0 ? (
-                      <span className="muted">—</span>
-                    ) : (
-                      item.owners.map((ownerHandle) => (
-                        <a
-                          key={ownerHandle}
-                          href={hrefWith({ owner: ownerHandle })}
-                          className="mono"
-                          style={{ marginRight: '0.4rem' }}
-                        >
-                          {ownerHandle}
-                        </a>
-                      ))
-                    )}
-                  </td>
+                  {showOwner ? (
+                    <td className="muted stack-optional" data-label="Owner">
+                      {item.owners.length === 0 ? (
+                        <span className="muted">—</span>
+                      ) : (
+                        item.owners.map((ownerHandle) => (
+                          <a
+                            key={ownerHandle}
+                            href={hrefWith({ owner: ownerHandle })}
+                            className="mono"
+                            style={{ marginRight: '0.4rem' }}
+                          >
+                            {ownerHandle}
+                          </a>
+                        ))
+                      )}
+                    </td>
+                  ) : null}
                   <td className="muted" data-label="Flip rate">
                     {formatPercent(item.flipRate)}
                   </td>
                   <td className="muted" data-label="Pass on rerun">
                     {formatPercent(item.passOnRerunRate)}
                   </td>
-                  <td className="muted" data-label="Last flaked">
-                    {formatWhen(item.lastFlakedAt)}
+                  <td className="muted" data-label="Last flaked (UTC)">
+                    {item.lastFlakedAt ? formatWhen(item.lastFlakedAt) : '—'}
                   </td>
-                  <td className="stack-optional" data-label="Status">
-                    {item.quarantined ? (
-                      <span className="pill pill-quarantined">quarantined</span>
-                    ) : item.quarantineCandidate ? (
-                      <span className="pill pill-candidate">candidate</span>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
+                  {showStatus ? (
+                    <td className="stack-optional" data-label="Status">
+                      {item.quarantined ? (
+                        <span className="pill pill-quarantined">quarantined</span>
+                      ) : item.quarantineCandidate ? (
+                        <span className="pill pill-candidate">candidate</span>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>
@@ -180,6 +190,13 @@ export default async function FlakyBoardPage({
       {board.items.length === BOARD_LIMIT ? (
         <p className="muted" style={{ fontSize: '0.8rem', marginTop: '0.8rem' }}>
           Showing the top {BOARD_LIMIT} scored tests.
+        </p>
+      ) : null}
+
+      {board.items.length > 0 && withoutSignal > 0 ? (
+        <p className="muted" style={{ fontSize: '0.8rem', marginTop: '0.8rem' }}>
+          {withoutSignal.toLocaleString()} {withoutSignal === 1 ? 'test is' : 'tests are'} not
+          ranked: no retry and no failure outside a run where most of the suite failed.
         </p>
       ) : null}
     </>

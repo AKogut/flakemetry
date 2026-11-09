@@ -1,6 +1,67 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatPercent, formatTestDuration } from '../format'
+import {
+  formatExecutionDuration,
+  formatPercent,
+  formatTestDuration,
+  formatWhen,
+  suiteName,
+  testLocation,
+} from '../format'
+
+describe('formatExecutionDuration', () => {
+  it('shows a measured duration', () => {
+    expect(formatExecutionDuration({ status: 'pass', durationMs: 1234, durationKnown: true })).toBe(
+      '1.2s',
+    )
+  })
+
+  it('shows a real 0 from a timed run as under a millisecond', () => {
+    expect(formatExecutionDuration({ status: 'pass', durationMs: 0, durationKnown: true })).toBe(
+      '<1ms',
+    )
+  })
+
+  it('says a duration is not known when the run measured none', () => {
+    expect(formatExecutionDuration({ status: 'pass', durationMs: 0, durationKnown: false })).toBe(
+      '—',
+    )
+  })
+
+  it('does not time a skipped test', () => {
+    expect(formatExecutionDuration({ status: 'skip', durationMs: 0, durationKnown: true })).toBe(
+      '—',
+    )
+  })
+})
+
+describe('formatWhen', () => {
+  it('prints UTC whatever the server time zone is', () => {
+    expect(formatWhen(new Date('2026-11-04T23:30:00Z'))).toBe('Nov 4, 23:30')
+    expect(formatWhen(new Date('2026-11-05T00:05:00+02:00'))).toBe('Nov 4, 22:05')
+  })
+})
+
+describe('testLocation', () => {
+  it('joins a suite and a path', () => {
+    expect(testLocation('auth', 'e2e/login.spec.ts')).toBe('auth · e2e/login.spec.ts')
+  })
+
+  it('drops an empty suite', () => {
+    expect(testLocation('', 'e2e/login.spec.ts')).toBe('e2e/login.spec.ts')
+  })
+
+  it('does not repeat a suite that is the path', () => {
+    expect(testLocation('tests/a.test.ts', 'tests/a.test.ts')).toBe('tests/a.test.ts')
+  })
+})
+
+describe('suiteName', () => {
+  it('names a suite and says when there is none', () => {
+    expect(suiteName('auth')).toBe('auth')
+    expect(suiteName('')).toBe('No suite')
+  })
+})
 
 describe('formatPercent', () => {
   it('does not round a small rate down to nothing', () => {

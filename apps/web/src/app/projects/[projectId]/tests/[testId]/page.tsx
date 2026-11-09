@@ -24,7 +24,7 @@ import {
   unmergeTestIdentity,
   updateClusterKnownIssue,
 } from '@/lib/actions'
-import { formatPercent } from '@/lib/format'
+import { formatExecutionDuration, formatPercent, formatWhen, testLocation } from '@/lib/format'
 import { describeRelatedFailures } from '@/lib/related-failures'
 import { requireProjectViewer } from '@/lib/viewer'
 
@@ -38,15 +38,6 @@ const statusTone: Record<string, string> = {
   flaky: 'var(--flaky)',
   skip: 'var(--skip)',
 }
-
-const formatWhen = (date: Date): string =>
-  new Intl.DateTimeFormat('en', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(date)
 
 export default async function TestDetailPage({
   params,
@@ -116,8 +107,7 @@ export default async function TestDetailPage({
             ) : null}
           </h1>
           <p className="page-subtitle" style={{ marginBottom: 0 }}>
-            <span className="mono">{test.suite}</span> ·{' '}
-            <span className="mono">{test.filePath}</span>
+            <span className="mono">{testLocation(test.suite, test.filePath)}</span>
             {owners.length > 0 ? (
               <>
                 {' · '}
@@ -163,6 +153,10 @@ export default async function TestDetailPage({
           ) : null}
         </div>
       </div>
+
+      <p className="muted" style={{ fontSize: '0.78rem', margin: '0.4rem 0 1rem' }}>
+        Times are UTC.
+      </p>
 
       {bisect.window ? (
         <div className="card" style={{ marginBottom: '1.25rem' }}>
@@ -440,7 +434,7 @@ export default async function TestDetailPage({
               <tbody>
                 {test.stitches.map((stitch, index) => (
                   <tr key={index}>
-                    <td className="muted">{formatWhen(stitch.createdAt)}</td>
+                    <td className="muted">{formatWhen(stitch.runStartedAt ?? stitch.createdAt)}</td>
                     <td>
                       <span className={stitch.level === 'L3' ? 'pill pill-candidate' : 'pill'}>
                         {stitch.level === 'L3'
@@ -607,7 +601,7 @@ export default async function TestDetailPage({
                 </a>
                 <span className="mono muted" style={{ fontSize: '0.8rem' }}>
                   {' '}
-                  · {related.suite} · {related.filePath}
+                  · {testLocation(related.suite, related.filePath)}
                   {related.failedInSameRun ? ' · this run' : ''}
                 </span>
               </li>
@@ -651,7 +645,7 @@ export default async function TestDetailPage({
                   <td className="muted">#{point.attempt}</td>
                   <td className="mono">{point.commitSha.slice(0, 7)}</td>
                   <td className="mono muted">{point.branch}</td>
-                  <td className="muted">{point.durationMs}ms</td>
+                  <td className="muted">{formatExecutionDuration(point)}</td>
                   <td className="muted">{formatWhen(point.startedAt)}</td>
                   <td style={{ textAlign: 'right' }}>
                     {point.status === 'fail' ? (
@@ -666,12 +660,14 @@ export default async function TestDetailPage({
                         {point.hasRca ? 'View RCA' : 'Inspect'}
                       </a>
                     ) : null}
-                    <a
-                      href={`${base}/executions/${point.executionId}`}
-                      style={{ color: 'var(--accent)', fontSize: '0.85rem' }}
-                    >
-                      Trace
-                    </a>
+                    {point.hasSpans || point.hasArtifacts ? (
+                      <a
+                        href={`${base}/executions/${point.executionId}`}
+                        style={{ color: 'var(--accent)', fontSize: '0.85rem' }}
+                      >
+                        {point.hasSpans ? 'Trace' : 'Artifacts'}
+                      </a>
+                    ) : null}
                   </td>
                 </tr>
               ))}
