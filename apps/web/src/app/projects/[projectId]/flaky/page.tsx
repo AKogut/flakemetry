@@ -106,7 +106,7 @@ export default async function FlakyBoardPage({
             {board.items.length === 0 ? emptyBoardMessage : emptyFilterMessage}
           </div>
         ) : (
-          <table>
+          <table className="table-stack">
             <thead>
               <tr>
                 <th>Score</th>
@@ -127,7 +127,7 @@ export default async function FlakyBoardPage({
                       <TrendArrow trend={item.trend} />
                     </span>
                   </td>
-                  <td>
+                  <td className="stack-main">
                     <a href={`/projects/${projectId}/tests/${item.testIdentityId}`}>
                       <div style={{ fontWeight: 600 }}>
                         {item.title}
@@ -143,7 +143,7 @@ export default async function FlakyBoardPage({
                     </a>
                   </td>
                   {showOwner ? (
-                    <td className="muted">
+                    <td className="muted stack-optional" data-label="Owner">
                       {item.owners.length === 0 ? (
                         <span className="muted">—</span>
                       ) : (
@@ -160,13 +160,17 @@ export default async function FlakyBoardPage({
                       )}
                     </td>
                   ) : null}
-                  <td className="muted">{formatPercent(item.flipRate)}</td>
-                  <td className="muted">{formatPercent(item.passOnRerunRate)}</td>
-                  <td className="muted">
+                  <td className="muted" data-label="Flip rate">
+                    {formatPercent(item.flipRate)}
+                  </td>
+                  <td className="muted" data-label="Pass on rerun">
+                    {formatPercent(item.passOnRerunRate)}
+                  </td>
+                  <td className="muted" data-label="Last flaked">
                     {item.lastFlakedAt ? formatWhen(item.lastFlakedAt) : '—'}
                   </td>
                   {showStatus ? (
-                    <td>
+                    <td className="stack-optional" data-label="Status">
                       {item.quarantined ? (
                         <span className="pill pill-quarantined">quarantined</span>
                       ) : item.quarantineCandidate ? (

@@ -220,7 +220,7 @@ export default async function SuiteHealthPage({
             {suites.length === 0 ? (
               <div className="empty">No suite data yet.</div>
             ) : (
-              <table>
+              <table className="table-stack">
                 <thead>
                   <tr>
                     <th>Suite</th>
@@ -233,7 +233,7 @@ export default async function SuiteHealthPage({
                 <tbody>
                   {suites.map((suite) => (
                     <tr key={suite.suite}>
-                      <td className="mono">
+                      <td className="mono stack-main">
                         {suiteName(suite.suite)}
                         {isSuiteRegressed(suite.days) ? (
                           <span className="pill pill-candidate" style={{ marginLeft: '0.5rem' }}>
@@ -247,6 +247,7 @@ export default async function SuiteHealthPage({
                         ) : null}
                       </td>
                       <td
+                        data-label="Fail rate"
                         style={{
                           textAlign: 'right',
                           color: suite.failRate > 0 ? 'var(--fail)' : undefined,
@@ -254,13 +255,13 @@ export default async function SuiteHealthPage({
                       >
                         {suite.ran === 0 ? '—' : formatPercent(suite.failRate)}
                       </td>
-                      <td style={{ textAlign: 'right' }}>
+                      <td data-label="Avg duration" style={{ textAlign: 'right' }}>
                         {formatTestDuration(suite.avgDurationMs)}
                       </td>
-                      <td style={{ textAlign: 'right' }} className="muted">
+                      <td data-label="Executions" style={{ textAlign: 'right' }} className="muted">
                         {suite.total}
                       </td>
-                      <td>
+                      <td className="stack-main">
                         <MiniTrend
                           values={suite.days.map((point) =>
                             point.ran > 0 ? (point.failed + point.flaky) / point.ran : null,

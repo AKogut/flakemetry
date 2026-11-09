@@ -152,7 +152,7 @@ export default async function CostPage({
 
           <div className="card">
             <h2 style={{ fontSize: '1rem', marginBottom: '0.75rem' }}>Where it went</h2>
-            <table>
+            <table className="table-stack">
               <thead>
                 <tr>
                   <th>Test</th>
@@ -166,15 +166,17 @@ export default async function CostPage({
               <tbody>
                 {cost.offenders.map((offender) => (
                   <tr key={offender.testIdentityId}>
-                    <td>
+                    <td className="stack-main">
                       <a href={`${base}/tests/${offender.testIdentityId}`}>{offender.title}</a>
                       {offender.quarantined ? <span className="muted"> 🔒</span> : null}
                     </td>
-                    <td className="muted">{suiteName(offender.suite)}</td>
-                    <td>{offender.rerunCount}</td>
-                    <td className="muted">{hours(offender.rerunMs)}</td>
-                    <td>{offender.flakyOccurrences}</td>
-                    <td>{preciseMoney(offender.spend)}</td>
+                    <td className="muted stack-main">{suiteName(offender.suite)}</td>
+                    <td data-label="Retries">{offender.rerunCount}</td>
+                    <td className="muted" data-label="CI time">
+                      {hours(offender.rerunMs)}
+                    </td>
+                    <td data-label="Interruptions">{offender.flakyOccurrences}</td>
+                    <td data-label="Cost">{preciseMoney(offender.spend)}</td>
                   </tr>
                 ))}
               </tbody>

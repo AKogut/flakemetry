@@ -622,3 +622,271 @@ label {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+@media (max-width: 899.98px) {
+  .shell {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.15rem 0.75rem;
+    padding: 0.7rem 1rem 0.35rem;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-project {
+    order: 1;
+    flex: 1 1 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.5rem;
+    min-width: 0;
+  }
+
+  .user {
+    display: contents;
+  }
+
+  .user > :first-child {
+    order: 2;
+    flex: 1 1 100%;
+    font-size: 0.75rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .user > :last-child {
+    margin-left: auto;
+    font-size: 0.8rem;
+  }
+
+  .nav {
+    order: 3;
+    flex: 1 1 100%;
+    flex-direction: row;
+    min-width: 0;
+    margin: 0.15rem -1rem 0;
+    padding: 0 0.6rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav a {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .main {
+    width: 100%;
+    max-width: none;
+    padding: 1rem;
+    overflow-wrap: break-word;
+  }
+
+  .container {
+    padding: 1rem;
+  }
+
+  .row-between,
+  .filters,
+  .pager,
+  .reasons li,
+  .card form {
+    flex-wrap: wrap;
+  }
+
+  .row-between > *,
+  .reasons li > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .card {
+    overflow-x: auto;
+    padding: 0.9rem 1rem;
+  }
+
+  .main > .card + .card,
+  .main > .card + .trend-grid {
+    margin-top: 1rem;
+  }
+
+  .card td form {
+    flex-wrap: nowrap;
+  }
+
+  td select {
+    width: auto;
+    min-width: 6rem;
+  }
+
+  input[type='checkbox'] {
+    width: auto;
+    flex: none;
+  }
+
+  .policy-field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .policy-effective {
+    text-align: left;
+    white-space: normal;
+  }
+
+  .wf-drawer {
+    position: static;
+  }
+
+  .wf-layout:has(.wf-row-active) .wf-drawer {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    max-height: 60vh;
+    overflow-y: auto;
+    border-radius: 10px 10px 0 0;
+  }
+}
+
+@media (max-width: 639.98px) {
+  th,
+  td {
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+  }
+
+  th:first-child,
+  td:first-child {
+    padding-left: 0;
+  }
+
+  th:last-child,
+  td:last-child {
+    padding-right: 0;
+  }
+
+  td a,
+  td .mono {
+    overflow-wrap: anywhere;
+  }
+
+  .row-between > :last-child {
+    text-align: left !important;
+  }
+
+  .table-stack,
+  .table-stack tbody {
+    display: block;
+  }
+
+  .table-stack thead {
+    display: none;
+  }
+
+  .table-stack tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.2rem 1rem;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .table-stack tr:first-child {
+    padding-top: 0;
+  }
+
+  .table-stack tr:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  .table-stack td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border-bottom: none;
+    text-align: left !important;
+  }
+
+  .table-stack td.stack-main {
+    flex: 1 1 100%;
+  }
+
+  .table-stack .sparkline {
+    height: 22px;
+    margin-top: 0.15rem;
+  }
+
+  .table-stack td.stack-optional:has(> span.muted:only-child) {
+    display: none;
+  }
+
+  .table-stack td[data-label]::before {
+    content: attr(data-label);
+    margin-right: 0.35rem;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 400;
+  }
+
+  .table-stack-grid tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 1rem;
+  }
+
+  .table-stack-grid td {
+    white-space: normal !important;
+  }
+
+  .table-stack-grid td:first-child {
+    grid-column: 1 / -1;
+    font-weight: 600;
+  }
+
+  .table-stack-grid td[data-label]::before {
+    display: block;
+    margin-right: 0;
+  }
+
+  .wf-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.15rem 0.6rem;
+    padding: 0.3rem 0.25rem;
+  }
+
+  .wf-name {
+    grid-column: 1;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .wf-dur {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .wf-track {
+    grid-column: 1 / -1;
+    height: 8px;
+  }
+
+  .wf-bar {
+    height: 8px;
+  }
+}

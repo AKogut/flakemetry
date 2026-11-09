@@ -100,7 +100,7 @@ export default async function RunsPage({
             </p>
           </div>
         ) : (
-          <table>
+          <table className="table-stack">
             <thead>
               <tr>
                 <th>Status</th>
@@ -128,13 +128,13 @@ export default async function RunsPage({
                       </span>
                     ) : null}
                   </td>
-                  <td>
+                  <td className="stack-main">
                     <a href={`${base}?branch=${encodeURIComponent(run.branch)}`} className="mono">
                       {run.branch}
                     </a>
                     {run.prNumber ? <span className="muted"> #{run.prNumber}</span> : null}
                   </td>
-                  <td>
+                  <td data-label="Tests">
                     {run.counts.total === 0 && run.status === 'failed' ? (
                       <span className="muted">no tests ran</span>
                     ) : (
@@ -146,7 +146,7 @@ export default async function RunsPage({
                       </span>
                     )}
                   </td>
-                  <td className="muted">
+                  <td className="muted" data-label="Duration">
                     {run.durationEstimated ? (
                       <span title={ESTIMATED_DURATION_HINT}>~{formatDuration(run.durationMs)}</span>
                     ) : (
