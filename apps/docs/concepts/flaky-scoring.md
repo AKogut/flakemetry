@@ -45,6 +45,29 @@ it executed** are not counted towards anyone's score. The run still shows its fa
 affected test carries a `MASS_FAILURES_SET_ASIDE` reason saying how many were left out. A test
 that also fails on its own keeps that evidence.
 
+## When many tests fail the same way
+
+A partial outage fails only part of a suite, so it stays under that bar. A failure is also left out
+when all of these hold:
+
+- **At least 5 tests failed with the same error in that run, and they were at least a tenth of the
+  tests it executed.** Errors are compared after numbers, ids and quoted text are removed, so
+  `expected 500 to be 200` and `expected 403 to be 202` count as one error.
+- **The test did not pass on a retry in that run.** A retry that passes is the kind of evidence
+  flakiness is made of, so those failures always count.
+- **The same test passed on the same commit in another run.** Code that did not change and passed
+  elsewhere did not cause the failure. A bug fails on every run of its commit, so it never meets
+  this condition and keeps counting, and bisect can still find it.
+
+Each failure is judged on its own. The run still shows them, each affected test carries a
+`SHARED_FAILURES_SET_ASIDE` reason saying how many were left out, and failures with a different
+error in the same run still count. A test can lose a failure only once it has passed on that commit
+elsewhere, so a score can drop on the night after an outage rather than on the night itself.
+
+Because numbers are removed, a suite whose assertions all read `expected N to be N` can group
+failures that have different causes. On a real bad night that costs one night of evidence for those
+tests, and anything else they did stays counted.
+
 ## Scoring policy
 
 The score at which a test becomes a quarantine candidate, and the minimum number of samples

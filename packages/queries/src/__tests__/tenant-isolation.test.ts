@@ -24,6 +24,7 @@ import { getEffectiveProjectPolicy, listPolicyChanges } from '../policy'
 import { setQuarantine } from '../quarantine'
 import { getRca } from '../rca'
 import { planHistoricalRestitch } from '../restitch'
+import { loadRunFailures } from '../run-failures'
 import { getRun, listRuns } from '../runs'
 import { computeIdentityScore } from '../scoring'
 import { getRunSummaryByCommit } from '../summary'
@@ -360,6 +361,12 @@ describe.skipIf(!hasDb)('tenant isolation', { timeout: 180_000 }, () => {
       // Nothing of the other tenant may come back, and the call must not throw its way
       // into a 500 either — an id from another project is a miss, not an error.
       expect(mentionsOther(result)).toEqual([])
+    })
+
+    it('loadRunFailures finds nothing for a run from another project', async () => {
+      const failures = await loadRunFailures(prisma, a.projectId, [b.runId])
+
+      expect(failures.size).toBe(0)
     })
   })
 

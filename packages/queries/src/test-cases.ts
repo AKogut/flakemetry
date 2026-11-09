@@ -1,5 +1,7 @@
-import { extractTestCaseId, isMassFailureRun, TEST_CASE_ID_PATTERN } from '@flakemetry/core'
+import { extractTestCaseId, TEST_CASE_ID_PATTERN } from '@flakemetry/core'
 import type { PrismaClient } from '@flakemetry/db'
+
+import { loadRunFailures, type RunFailures } from './run-failures'
 
 export interface TestCaseRunCounts {
   passed: number
@@ -50,9 +52,6 @@ interface CaseTest extends TestCaseTest {
 
 interface RecentRun {
   id: string
-  passed_count: number
-  failed_count: number
-  flaky_count: number
   stored_executions: number
 }
 
@@ -96,7 +95,7 @@ const loadRecentRuns = async (
   projectId: string,
 ): Promise<{ runs: RecentRun[]; olderRunsLeftOut: boolean }> => {
   const latest = await prisma.$queryRaw<RecentRun[]>`
-    SELECT id, passed_count, failed_count, flaky_count, stored_executions
+    SELECT id, stored_executions
     FROM run
     WHERE project_id = ${projectId}::uuid
     ORDER BY started_at DESC, id DESC
@@ -112,44 +111,34 @@ const loadRecentRuns = async (
   return { runs, olderRunsLeftOut: runs.length < latest.length }
 }
 
-const isMassFailure = (run: RecentRun, failed: number): boolean =>
-  isMassFailureRun({ failed, executed: failed + run.passed_count + run.flaky_count })
-
-const loadMassFailureRunIds = async (
-  prisma: PrismaClient,
-  runs: readonly RecentRun[],
-): Promise<string[]> => {
-  const candidates = new Map(
-    runs.filter((run) => isMassFailure(run, run.failed_count)).map((run) => [run.id, run]),
-  )
-  const failingTests = await prisma.$queryRaw<{ run_id: string; failing: number }[]>`
-    SELECT run_id, count(DISTINCT test_identity_id)::int AS failing
-    FROM test_execution
-    WHERE run_id = ANY(${[...candidates.keys()]}::uuid[])
-      AND status = 'fail'
-    GROUP BY run_id
-  `
-  return failingTests.flatMap(({ run_id: runId, failing }) => {
-    const run = candidates.get(runId)
-    return run && isMassFailure(run, failing) ? [runId] : []
-  })
-}
-
 const loadOutcomes = (
   prisma: PrismaClient,
   tests: readonly CaseTest[],
   runs: readonly RecentRun[],
-  massFailureRunIds: string[],
+  runFailures: ReadonlyMap<string, RunFailures>,
 ): Promise<OutcomeRow[]> => {
   const ids = tests.map((test) => test.id)
   const caseIds = tests.map((test) => test.caseId)
   const variants = tests.map((test) => test.variant)
   const runIds = runs.map((run) => run.id)
+  const massFailureRunIds = [...runFailures]
+    .filter(([, run]) => run.massFailure)
+    .map(([runId]) => runId)
+  const sharedFailures = [...runFailures].flatMap(([runId, run]) =>
+    [...run.sharedFailures].map((testIdentityId) => ({ runId, testIdentityId })),
+  )
+  const sharedRunIds = sharedFailures.map((failure) => failure.runId)
+  const sharedTestIds = sharedFailures.map((failure) => failure.testIdentityId)
   return prisma.$queryRaw<OutcomeRow[]>`
     WITH catalogue AS (
       SELECT *
       FROM unnest(${ids}::uuid[], ${caseIds}::text[], ${variants}::text[])
         AS entry(test_identity_id, case_id, variant)
+    ),
+    shared_failure AS (
+      SELECT *
+      FROM unnest(${sharedRunIds}::uuid[], ${sharedTestIds}::uuid[])
+        AS entry(run_id, test_identity_id)
     ),
     test_in_run AS (
       SELECT e.test_identity_id, e.run_id,
@@ -160,6 +149,13 @@ const loadOutcomes = (
       WHERE e.run_id = ANY(${runIds}::uuid[])
         AND e.status <> 'skip'
         AND NOT (e.status = 'fail' AND e.run_id = ANY(${massFailureRunIds}::uuid[]))
+        AND NOT (
+          e.status = 'fail'
+          AND EXISTS (
+            SELECT 1 FROM shared_failure s
+            WHERE s.run_id = e.run_id AND s.test_identity_id = e.test_identity_id
+          )
+        )
       GROUP BY e.run_id, e.test_identity_id
     ),
     case_in_run AS (
@@ -196,8 +192,12 @@ export const getTestCaseMatrix = async (
   }
 
   const { runs, olderRunsLeftOut } = await loadRecentRuns(prisma, projectId)
-  const massFailureRunIds = await loadMassFailureRunIds(prisma, runs)
-  const outcomes = await loadOutcomes(prisma, tests, runs, massFailureRunIds)
+  const runFailures = await loadRunFailures(
+    prisma,
+    projectId,
+    runs.map((run) => run.id),
+  )
+  const outcomes = await loadOutcomes(prisma, tests, runs, runFailures)
   const outcomeOf = new Map(outcomes.map((row) => [cellKey(row.case_id, row.variant), row]))
 
   const cellsByCase = new Map<string, Map<string, TestCaseCell>>()

@@ -1,6 +1,8 @@
 import type { ReasonCode, TestStatus } from '@flakemetry/contracts'
 
-export const SCORING_MODEL_VERSION = '0.4.0'
+import { computeErrorSignature } from './error-signature'
+
+export const SCORING_MODEL_VERSION = '0.5.0'
 
 export interface ExecutionPoint {
   status: TestStatus
@@ -10,6 +12,7 @@ export interface ExecutionPoint {
   runId?: string
   runFailureCount?: number
   inMassFailure?: boolean
+  inSharedFailure?: boolean
 }
 
 export interface ScoringConfig {
@@ -57,6 +60,36 @@ export const MASS_FAILURE = { minFailures: 5, minShare: 0.5 } as const
 
 export const isMassFailureRun = (run: { failed: number; executed: number }): boolean =>
   run.failed >= MASS_FAILURE.minFailures && run.failed / run.executed >= MASS_FAILURE.minShare
+
+export const SHARED_FAILURE = { minTests: 5, minShare: 0.1 } as const
+
+export interface RunFailure {
+  testId: string
+  message: string | null
+  recoveredInRun: boolean
+}
+
+export const findSharedFailures = (
+  failures: readonly RunFailure[],
+  executed: number,
+): Set<string> => {
+  const testsByError = new Map<string, string[]>()
+  for (const { testId, message, recoveredInRun } of failures) {
+    if (recoveredInRun || !message) continue
+    const { template } = computeErrorSignature(message)
+    const tests = testsByError.get(template) ?? []
+    tests.push(testId)
+    testsByError.set(template, tests)
+  }
+
+  const shared = new Set<string>()
+  for (const tests of testsByError.values()) {
+    if (tests.length < SHARED_FAILURE.minTests) continue
+    if (tests.length / executed < SHARED_FAILURE.minShare) continue
+    for (const testId of tests) shared.add(testId)
+  }
+  return shared
+}
 
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value))
 
@@ -139,10 +172,35 @@ const computeEntropy = (green: number, red: number): number => {
   return term(pGreen) + term(pRed)
 }
 
-const massFailuresSetAside = (setAside: number): ReasonCode => ({
-  code: 'MASS_FAILURES_SET_ASIDE',
-  message: `${setAside} failure(s) not counted, because most of the suite failed in the same run`,
-})
+interface SetAsideCounts {
+  mass: number
+  shared: number
+}
+
+const setAsideAs = (point: ExecutionPoint): keyof SetAsideCounts | null => {
+  if (!isRed(point.status)) return null
+  if (point.inMassFailure) return 'mass'
+  return point.inSharedFailure ? 'shared' : null
+}
+
+const setAsideReasons = ({ mass, shared }: SetAsideCounts): ReasonCode[] => [
+  ...(mass > 0
+    ? [
+        {
+          code: 'MASS_FAILURES_SET_ASIDE',
+          message: `${mass} failure(s) not counted, because most of the suite failed in the same run`,
+        },
+      ]
+    : []),
+  ...(shared > 0
+    ? [
+        {
+          code: 'SHARED_FAILURES_SET_ASIDE',
+          message: `${shared} failure(s) not counted, because many tests failed with the same error in one run and this test passed on that commit in another`,
+        },
+      ]
+    : []),
+]
 
 const buildReasonCodes = (signals: {
   passOnRerunRate: number
@@ -153,7 +211,7 @@ const buildReasonCodes = (signals: {
   entropy: number
   failIsolation: number
   failures: number
-  setAside: number
+  setAside: SetAsideCounts
   sampleSize: number
 }): ReasonCode[] => {
   const codes: ReasonCode[] = []
@@ -193,9 +251,7 @@ const buildReasonCodes = (signals: {
       message: `failed alone in ${percent(signals.failIsolation)}% of failing runs, pointing at the test not the environment`,
     })
   }
-  if (signals.setAside > 0) {
-    codes.push(massFailuresSetAside(signals.setAside))
-  }
+  codes.push(...setAsideReasons(signals.setAside))
   if (codes.length === 0) {
     codes.push({
       code: 'STABLE',
@@ -214,8 +270,11 @@ export const computeFlakyScore = (
   const windowed = [...graded]
     .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime())
     .slice(-settings.windowSize)
-  const ordered = windowed.filter((point) => !(isRed(point.status) && point.inMassFailure))
-  const setAside = windowed.length - ordered.length
+  const ordered = windowed.filter((point) => setAsideAs(point) === null)
+  const setAside = {
+    mass: windowed.filter((point) => setAsideAs(point) === 'mass').length,
+    shared: windowed.filter((point) => setAsideAs(point) === 'shared').length,
+  }
 
   if (ordered.length === 0) {
     return {
@@ -225,14 +284,15 @@ export const computeFlakyScore = (
       sameShaVariance: 0,
       entropy: 0,
       failIsolation: 0,
-      reasonCodes: [
-        setAside > 0
-          ? massFailuresSetAside(setAside)
-          : {
-              code: 'NEVER_EXECUTED',
-              message: `skipped in all ${history.length} run(s), so there is nothing to score`,
-            },
-      ],
+      reasonCodes:
+        windowed.length > 0
+          ? setAsideReasons(setAside)
+          : [
+              {
+                code: 'NEVER_EXECUTED',
+                message: `skipped in all ${history.length} run(s), so there is nothing to score`,
+              },
+            ],
       quarantineCandidate: false,
       modelVersion: SCORING_MODEL_VERSION,
       sampleSize: 0,
