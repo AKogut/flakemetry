@@ -166,7 +166,7 @@ export default async function FlakyBoardPage({
                   <td className="muted" data-label="Pass on rerun">
                     {formatPercent(item.passOnRerunRate)}
                   </td>
-                  <td className="muted" data-label="Last flaked">
+                  <td className="muted" data-label="Last flaked (UTC)">
                     {item.lastFlakedAt ? formatWhen(item.lastFlakedAt) : '—'}
                   </td>
                   {showStatus ? (
