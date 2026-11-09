@@ -36,16 +36,24 @@ function RunCounts({ runs }: { runs: TestCaseRunCounts }) {
   )
 }
 
-function VariantCell({ cell, base }: { cell: TestCaseCell | undefined; base: string }) {
+function VariantCell({
+  variant,
+  cell,
+  base,
+}: {
+  variant: string
+  cell: TestCaseCell | undefined
+  base: string
+}) {
   if (!cell) {
     return (
-      <td className="muted" style={{ textAlign: 'right' }}>
+      <td className="muted" data-label={variant} style={{ textAlign: 'right' }}>
         —
       </td>
     )
   }
   return (
-    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+    <td data-label={variant} style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
       {cell.tests.map((test, index) => (
         <a key={test.id} href={`${base}/tests/${test.id}`} title={test.title}>
           {index === 0 ? <RunCounts runs={cell} /> : <span className="muted">+{index} </span>}
@@ -95,7 +103,7 @@ export default async function TestCasesPage({
             suite failed together are left out, as they are in the score.
           </p>
           <div className="card" style={{ overflowX: 'auto' }}>
-            <table>
+            <table className="table-stack table-stack-grid">
               <thead>
                 <tr>
                   <th>Test case</th>
@@ -114,7 +122,11 @@ export default async function TestCasesPage({
                 <tr>
                   <td style={{ fontWeight: 600 }}>All {testCases(matrix.cases.length)}</td>
                   {matrix.variants.map((totals) => (
-                    <td key={totals.variant} style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <td
+                      key={totals.variant}
+                      data-label={totals.variant}
+                      style={{ textAlign: 'right', whiteSpace: 'nowrap' }}
+                    >
                       <div style={{ fontWeight: 600 }}>{testCases(totals.cases)}</div>
                       <RunCounts runs={totals} />
                     </td>
@@ -126,6 +138,7 @@ export default async function TestCasesPage({
                     {matrix.variants.map(({ variant }) => (
                       <VariantCell
                         key={variant}
+                        variant={variant}
                         cell={row.cells.find((cell) => cell.variant === variant)}
                         base={base}
                       />
