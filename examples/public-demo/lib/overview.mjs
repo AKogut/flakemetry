@@ -329,8 +329,8 @@ export const renderOverview = async (prisma, projects) => {
   <p>
     <a href="${playwright.slug}/flaky.html">${escapeHtml(playwright.name)}</a> runs on three
     browsers, and each browser is scored on its own, so a failure on WebKit alone reads as a
-    failure there and not as a flake everywhere. Open any test on
-    <a href="${playwright.slug}/flaky.html">the board</a>, then a trace to see its steps.
+    failure there and not as a flake everywhere. Open a test from
+    <a href="${playwright.slug}/suite-health.html">suite health</a>, then a trace to see its steps.
   </p>
   <div class="card">${topTests(playwright, stats.get('playwright'))}</div>
 

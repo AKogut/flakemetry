@@ -110,7 +110,7 @@ describe('renderOverview', () => {
 
   it('sends readers to a page that links to tests, not to the runs', async () => {
     const html = await renderOverview(fakePrisma(), PROJECTS)
-    expect(html).toContain('<a href="playwright/flaky.html">the board</a>')
+    expect(html).toContain('<a href="playwright/suite-health.html">suite health</a>')
     expect(text(html)).not.toContain('then a test to see')
   })
 
