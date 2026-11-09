@@ -25,7 +25,7 @@ export default async function ProjectLayout({
           flake<span>metry</span>
         </div>
 
-        <div>
+        <div className="sidebar-project">
           <div className="muted" style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}>
             {project.orgName}
           </div>
