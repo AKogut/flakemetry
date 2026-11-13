@@ -74,7 +74,7 @@ jobs:
         with:
           version: v4.3.1
 
-      - uses: helm/kind-action@v1.15.1
+      - uses: helm/kind-action@v1.15.2
         with:
           cluster_name: flakemetry
 
