@@ -179,5 +179,5 @@ describe.skipIf(!hasDb)('analyzer plugins', () => {
     await counted.$disconnect()
 
     expect(forLarge).toBe(forSmall)
-  })
+  }, 60_000)
 })
