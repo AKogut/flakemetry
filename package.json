@@ -31,10 +31,10 @@
     "@arethetypeswrong/core": "^0.18.5",
     "@changesets/cli": "^3.0.3",
     "eslint": "^10.14.0",
-    "prettier": "^3.9.10",
+    "prettier": "^3.10.1",
     "publint": "^0.3.25",
     "tsdown": "0.23.7",
-    "turbo": "^2.11.10",
+    "turbo": "^2.11.11",
     "typescript": "^6.0.3",
     "vite": "^8.3.6"
   },
