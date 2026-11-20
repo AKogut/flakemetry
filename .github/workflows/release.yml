@@ -16,6 +16,9 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Only main may deploy to this environment, so the release secrets kept in it
+    # never reach a workflow on any other branch, whoever pushed it.
+    environment: release
     steps:
       - uses: actions/checkout@v7
         with:
